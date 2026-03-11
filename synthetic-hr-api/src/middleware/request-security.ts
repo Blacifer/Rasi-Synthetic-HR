@@ -32,15 +32,6 @@ export function protectMutationsFromCsrf(req: Request, res: Response, next: Next
     return;
   }
 
-  const secFetchSite = (req.headers['sec-fetch-site'] as string | undefined)?.toLowerCase();
-  if (secFetchSite === 'cross-site') {
-    res.status(403).json({
-      success: false,
-      error: 'Cross-site requests are not allowed for this operation',
-    });
-    return;
-  }
-
   const originHeader = normalizeOrigin(req.headers.origin as string | undefined);
   const refererHeader = normalizeOrigin(req.headers.referer as string | undefined);
   const requestOrigin = originHeader || refererHeader;
