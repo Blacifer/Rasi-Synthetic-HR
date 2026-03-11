@@ -199,7 +199,7 @@ app.use((req, res, next) => {
 app.use(metricsMiddleware);
 
 // Health check with dependency validation (no auth required)
-app.get('/health', async (req, res) => {
+const healthHandler = async (req: express.Request, res: express.Response) => {
   const metrics = getMetricsSnapshot();
   const supabaseHealth = await checkSupabaseHealth();
   const allHealthy = supabaseHealth.ok;
@@ -229,7 +229,11 @@ app.get('/health', async (req, res) => {
   };
 
   res.status(allHealthy ? 200 : 503).json(response);
-});
+};
+
+app.get('/health', healthHandler);
+// Convenience alias for frontends configured with VITE_API_URL ending in `/api`.
+app.get('/api/health', healthHandler);
 
 app.use('/api', apiLimiter);
 app.use('/api', writeLimiter);
