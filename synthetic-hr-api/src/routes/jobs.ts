@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { requirePermission } from '../middleware/rbac';
+import { hasPermission, requirePermission, type Role } from '../middleware/rbac';
 import { logger } from '../lib/logger';
 import { SupabaseRestError, eq, supabaseRestAsUser } from '../lib/supabase-rest';
 import { runtimeSchemas, validateRequestBody } from '../schemas/validation';
@@ -25,6 +25,19 @@ function safeError(res: Response, err: any, statusCode = 500) {
   const message = err instanceof SupabaseRestError ? err.responseBody : (err?.message || 'Internal error');
   logger.error('Jobs route error', { status: resolved, message });
   return res.status(resolved).json({ success: false, error: message });
+}
+
+function roleRank(role: string): number {
+  if (role === 'super_admin') return 4;
+  if (role === 'admin') return 3;
+  if (role === 'manager') return 2;
+  return 1; // viewer/unknown
+}
+
+function requireRoleForConnectorAction(action: string): Role {
+  if (action.startsWith('it.')) return 'admin';
+  if (action.startsWith('sales.') || action.startsWith('support.')) return 'manager';
+  return 'admin';
 }
 
 // Create job + approval (pending)
@@ -151,6 +164,20 @@ router.post('/:id/decision', requirePermission('agents.update'), async (req: Req
     const jobs = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', jobQuery)) as any[];
     const job = jobs?.[0];
     if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
+
+    // Extra governance: connector actions require work-items permission and higher role depending on action.
+    if (String(job.type) === 'connector_action') {
+      const userRole = String((req.user as any)?.role || 'viewer');
+      if (!hasPermission(userRole, 'workitems.manage')) {
+        return res.status(403).json({ success: false, error: 'Insufficient permissions', required_permission: 'workitems.manage' });
+      }
+
+      const action = String(job?.input?.connector?.action || '');
+      const requiredRole = requireRoleForConnectorAction(action);
+      if (roleRank(userRole) < roleRank(requiredRole)) {
+        return res.status(403).json({ success: false, error: 'Insufficient role privileges', required_role: requiredRole });
+      }
+    }
 
     // Load approval row
     const apprQuery = new URLSearchParams();

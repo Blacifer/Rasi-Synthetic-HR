@@ -38,6 +38,7 @@ const POLL_INTERVAL_MS = Math.max(750, Number(env('SYNTHETICHR_POLL_INTERVAL_MS'
 const HEARTBEAT_INTERVAL_MS = Math.max(5000, Number(env('SYNTHETICHR_HEARTBEAT_INTERVAL_MS', '15000')));
 const DEFAULT_MODEL = env('SYNTHETICHR_MODEL', 'openai/gpt-4o-mini')!;
 const STREAM_MODE = env('SYNTHETICHR_STREAM_MODE', 'poll')!; // poll | stream
+const WEBHOOK_ALLOWLIST = env('SYNTHETICHR_WEBHOOK_ALLOWLIST', '')!;
 
 if (!RUNTIME_ID) {
   console.error('Missing required env: SYNTHETICHR_RUNTIME_ID');
@@ -372,34 +373,72 @@ async function executeJob(job: JobRow) {
       throw new Error('connector_action requires connector.service and connector.action');
     }
 
-    if (service !== 'internal') {
-      await logJob(job.id, `Unsupported connector service: ${service}`, 'error');
-      await completeJob(job.id, { status: 'failed', error: `Unsupported connector service: ${service}` });
+    if (service === 'internal') {
+      await logJob(job.id, `Executing internal connector action=${action}`, 'info');
+      const jwt = signRuntimeJwt();
+      const response = await fetch(`${CONTROL_PLANE_URL}/api/runtimes/actions/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({
+          job_id: job.id,
+          agent_id: job.agent_id || undefined,
+          action,
+          payload,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({} as any));
+      if (!response.ok || result?.success !== true) {
+        const errMsg = result?.error || `Internal action failed (${response.status})`;
+        await logJob(job.id, errMsg, 'error');
+        await completeJob(job.id, { status: 'failed', error: errMsg, output: { result } });
+        return;
+      }
+
+      await completeJob(job.id, { status: 'succeeded', output: result?.data || result });
       return;
     }
 
-    await logJob(job.id, `Executing internal connector action=${action}`, 'info');
-    const jwt = signRuntimeJwt();
-    const response = await fetch(`${CONTROL_PLANE_URL}/api/runtimes/actions/execute`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
-      body: JSON.stringify({
-        job_id: job.id,
-        agent_id: job.agent_id || undefined,
-        action,
-        payload,
-      }),
-    });
+    if (service === 'webhook') {
+      const url = typeof (payload as any).url === 'string' ? (payload as any).url : '';
+      if (!url) {
+        await completeJob(job.id, { status: 'failed', error: 'webhook connector requires payload.url' });
+        return;
+      }
 
-    const result = await response.json().catch(() => ({} as any));
-    if (!response.ok || result?.success !== true) {
-      const errMsg = result?.error || `Internal action failed (${response.status})`;
-      await logJob(job.id, errMsg, 'error');
-      await completeJob(job.id, { status: 'failed', error: errMsg, output: { result } });
+      const parsedUrl = new URL(url);
+      const allowlist = WEBHOOK_ALLOWLIST.split(',').map((v) => v.trim()).filter(Boolean);
+      if (allowlist.length > 0 && !allowlist.includes(parsedUrl.host)) {
+        await completeJob(job.id, { status: 'failed', error: `Webhook host not in allowlist: ${parsedUrl.host}` });
+        return;
+      }
+
+      const method = typeof (payload as any).method === 'string' ? String((payload as any).method).toUpperCase() : 'POST';
+      const headers = ((payload as any).headers && typeof (payload as any).headers === 'object') ? (payload as any).headers : {};
+      const body = (payload as any).body ?? (payload as any).data ?? {};
+
+      await logJob(job.id, `Calling webhook ${method} ${parsedUrl.host}`, 'info');
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers,
+        },
+        body: method === 'GET' || method === 'HEAD' ? undefined : JSON.stringify(body),
+      });
+
+      const text = await response.text().catch(() => '');
+      if (!response.ok) {
+        await completeJob(job.id, { status: 'failed', error: `Webhook error (${response.status})`, output: { status: response.status, body: text } });
+        return;
+      }
+
+      await completeJob(job.id, { status: 'succeeded', output: { status: response.status, body: text } });
       return;
     }
 
-    await completeJob(job.id, { status: 'succeeded', output: result?.data || result });
+    await logJob(job.id, `Unsupported connector service: ${service}`, 'error');
+    await completeJob(job.id, { status: 'failed', error: `Unsupported connector service: ${service}` });
     return;
   }
 

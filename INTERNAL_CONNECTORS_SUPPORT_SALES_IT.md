@@ -14,6 +14,11 @@ All of these run through the same control-plane flow:
 
 Apply: `synthetic-hr-database/migration_006_internal_work_items.sql`
 Then apply RLS: `synthetic-hr-database/migration_007_internal_work_items_rls.sql`
+Then apply links (Job ↔ Work Item): `synthetic-hr-database/migration_008_internal_work_item_links.sql`
+
+Optional (DB-backed Playbook enable/disable):
+- `synthetic-hr-database/migration_009_playbook_settings.sql`
+- `synthetic-hr-database/migration_010_playbook_settings_rls.sql`
 
 ## 2) API endpoints (user auth)
 
@@ -33,6 +38,17 @@ Runtime uses:
 This writes:
 - the target work item row
 - an `agent_action_runs` record for audit and traceability
+
+Supported internal actions:
+- `support.ticket.create`
+- `support.ticket.update_status`
+- `sales.lead.create`
+- `sales.lead.update_stage`
+- `it.access_request.create`
+- `it.access_request.decide`
+
+External baseline:
+- `service=webhook` (runtime-only) supports calling `payload.url` with an allowlist via `SYNTHETICHR_WEBHOOK_ALLOWLIST` (comma-separated hosts).
 
 ## 4) UI
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, RefreshCw } from 'lucide-react';
 import type { AIAgent } from '../../types';
 import { api } from '../../lib/api-client';
@@ -28,11 +28,33 @@ export default function PlaybooksPage({
   })();
 
   const [pack, setPack] = useState<PlaybookPackId>(initialPack);
+  const [showDisabled, setShowDisabled] = useState(false);
+  const [manageMode, setManageMode] = useState(false);
+  const [enabledByPlaybookId, setEnabledByPlaybookId] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    (async () => {
+      const res = await api.playbooks.listSettings();
+      if (!res.success) return;
+      const map: Record<string, boolean> = {};
+      for (const row of res.data || []) {
+        if (row?.playbook_id) map[row.playbook_id] = Boolean(row.enabled);
+      }
+      setEnabledByPlaybookId(map);
+    })().catch(() => void 0);
+  }, []);
 
   const packPlaybooks = useMemo(() => {
-    if (pack === 'all') return allPlaybooks;
-    return allPlaybooks.filter((p) => p.pack === pack);
-  }, [allPlaybooks, pack]);
+    const filtered = pack === 'all'
+      ? allPlaybooks
+      : allPlaybooks.filter((p) => p.pack === pack);
+
+    if (manageMode && showDisabled) return filtered;
+    if (!manageMode && showDisabled) return filtered;
+
+    // Default view: hide disabled (if setting exists); otherwise show.
+    return filtered.filter((p) => enabledByPlaybookId[p.id] !== false);
+  }, [allPlaybooks, enabledByPlaybookId, manageMode, pack, showDisabled]);
 
   const [selectedPlaybookId, setSelectedPlaybookId] = useState(() => packPlaybooks[0]?.id || allPlaybooks[0]?.id || '');
   const selectedPlaybook: Playbook | undefined =
@@ -112,6 +134,18 @@ export default function PlaybooksPage({
     setLastStatus(null);
   };
 
+  const setPlaybookEnabled = async (playbookId: string, enabled: boolean) => {
+    setEnabledByPlaybookId((prev) => ({ ...prev, [playbookId]: enabled }));
+    const res = await api.playbooks.updateSetting(playbookId, { enabled });
+    if (!res.success) {
+      // revert
+      setEnabledByPlaybookId((prev) => ({ ...prev, [playbookId]: !enabled }));
+      toast.error(res.error || 'Failed to update playbook setting');
+      return;
+    }
+    toast.success(enabled ? 'Playbook enabled' : 'Playbook disabled');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -130,7 +164,8 @@ export default function PlaybooksPage({
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
         {([
           { id: 'all', label: 'All' },
           ...PLAYBOOK_PACKS.map((p) => ({ id: p.id, label: p.label })),
@@ -147,6 +182,31 @@ export default function PlaybooksPage({
             {item.label}
           </button>
         ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowDisabled((v) => !v)}
+            className={`px-3 py-1.5 rounded-full text-xs border ${
+              showDisabled
+                ? 'bg-slate-700 text-slate-100 border-slate-600'
+                : 'bg-slate-800/30 text-slate-300 border-slate-700 hover:bg-slate-800/60'
+            }`}
+            title="Show disabled playbooks"
+          >
+            {showDisabled ? 'Showing disabled' : 'Hide disabled'}
+          </button>
+          <button
+            onClick={() => setManageMode((v) => !v)}
+            className={`px-3 py-1.5 rounded-full text-xs border ${
+              manageMode
+                ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                : 'bg-slate-800/30 text-slate-300 border-slate-700 hover:bg-slate-800/60'
+            }`}
+            title="Enable/disable playbooks (requires permission)"
+          >
+            {manageMode ? 'Managing' : 'Manage'}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -154,13 +214,14 @@ export default function PlaybooksPage({
           {packPlaybooks.map((pb) => {
             const Icon = pb.icon;
             const selected = pb.id === selectedPlaybookId;
+            const enabled = enabledByPlaybookId[pb.id] !== false;
             return (
               <button
                 key={pb.id}
                 onClick={() => setSelectedPlaybookId(pb.id)}
                 className={`w-full text-left p-4 rounded-xl border transition-colors ${
                   selected ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-slate-800/40 border-slate-700 hover:bg-slate-800/60'
-                }`}
+                } ${!enabled ? 'opacity-70' : ''}`}
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-slate-900/40 border border-slate-700 flex items-center justify-center">
@@ -171,6 +232,26 @@ export default function PlaybooksPage({
                     <div className="text-xs text-slate-400 mt-1 line-clamp-2">{pb.description}</div>
                     <div className="text-[10px] text-slate-500 mt-2 uppercase tracking-wide">{pb.pack}</div>
                   </div>
+                  {manageMode ? (
+                    <div className="ml-auto flex items-center gap-2">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                        enabled ? 'border-emerald-500/30 text-emerald-300 bg-emerald-500/10' : 'border-slate-600 text-slate-300 bg-slate-900/20'
+                      }`}>
+                        {enabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void setPlaybookEnabled(pb.id, !enabled);
+                        }}
+                        className="px-2 py-1 rounded-md bg-slate-900/40 hover:bg-slate-900/60 border border-slate-700 text-xs text-slate-200"
+                      >
+                        {enabled ? 'Disable' : 'Enable'}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </button>
             );

@@ -4,6 +4,8 @@ import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 import type { AgentJob } from '../../types';
 
+const WORK_ITEMS_FOCUS_KEY = 'synthetic_hr.work_items_focus';
+
 const STATUS_LABELS: Record<string, string> = {
   pending_approval: 'Pending approval',
   queued: 'Queued',
@@ -27,6 +29,19 @@ function prettyJson(value: any): string {
   } catch {
     return String(value);
   }
+}
+
+function detectWorkItemFocus(job: AgentJob): { tab: 'support' | 'sales' | 'it'; id: string } | null {
+  const output: any = (job as any)?.output || {};
+  const actionRun = output?.action_run;
+  const resourceType = String(actionRun?.output?.resource_type || '');
+  const resourceId = String(actionRun?.output?.resource_id || output?.resource?.id || '');
+
+  if (!resourceId) return null;
+  if (resourceType === 'support_ticket') return { tab: 'support', id: resourceId };
+  if (resourceType === 'sales_lead') return { tab: 'sales', id: resourceId };
+  if (resourceType === 'it_access_request') return { tab: 'it', id: resourceId };
+  return null;
 }
 
 export default function JobsInboxPage({ agents }: { agents: { id: string; name: string }[] }) {
@@ -58,6 +73,7 @@ export default function JobsInboxPage({ agents }: { agents: { id: string; name: 
   }, [statusFilter]);
 
   const selectedJob = jobs.find((j) => j.id === selectedJobId) || null;
+  const focus = selectedJob ? detectWorkItemFocus(selectedJob) : null;
 
   const decide = async (jobId: string, decision: 'approved' | 'rejected') => {
     try {
@@ -213,6 +229,28 @@ export default function JobsInboxPage({ agents }: { agents: { id: string; name: 
               ) : null}
 
               <div className="grid grid-cols-1 gap-3">
+                {focus ? (
+                  <div className="flex items-center justify-between gap-3 bg-slate-900/30 border border-slate-700 rounded-lg p-3">
+                    <div className="text-xs text-slate-300">
+                      Created resource: <span className="text-slate-100">{focus.tab}</span> ·{' '}
+                      <span className="text-slate-100">{focus.id}</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        try {
+                          localStorage.setItem(WORK_ITEMS_FOCUS_KEY, JSON.stringify(focus));
+                        } catch {
+                          // ignore
+                        }
+                        window.dispatchEvent(new Event('storage'));
+                      }}
+                      className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm border border-slate-700"
+                      title="Open Work Items and highlight the created record"
+                    >
+                      View in Work Items
+                    </button>
+                  </div>
+                ) : null}
                 <div>
                   <div className="text-xs text-slate-400 mb-2">Input</div>
                   <pre className="text-xs text-slate-200 bg-slate-900/40 border border-slate-700 rounded-lg p-3 overflow-auto max-h-[220px]">
@@ -233,4 +271,3 @@ export default function JobsInboxPage({ agents }: { agents: { id: string; name: 
     </div>
   );
 }
-

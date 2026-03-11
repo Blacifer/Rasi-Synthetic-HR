@@ -6,6 +6,8 @@ import type { SupportTicket, SalesLead, AccessRequest } from '../../types';
 
 type TabId = 'support' | 'sales' | 'it';
 
+const WORK_ITEMS_FOCUS_KEY = 'synthetic_hr.work_items_focus';
+
 function classNames(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(' ');
 }
@@ -13,6 +15,7 @@ function classNames(...values: Array<string | false | null | undefined>) {
 export default function WorkItemsPage() {
   const [tab, setTab] = useState<TabId>('support');
   const [busy, setBusy] = useState(false);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
 
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
   const [salesLeads, setSalesLeads] = useState<SalesLead[]>([]);
@@ -50,6 +53,27 @@ export default function WorkItemsPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const applyFocus = () => {
+      try {
+        const raw = localStorage.getItem(WORK_ITEMS_FOCUS_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as { tab?: TabId; id?: string };
+        if (!parsed?.tab || !parsed?.id) return;
+        setTab(parsed.tab);
+        setHighlightId(parsed.id);
+        localStorage.removeItem(WORK_ITEMS_FOCUS_KEY);
+        window.setTimeout(() => setHighlightId(null), 6000);
+      } catch {
+        localStorage.removeItem(WORK_ITEMS_FOCUS_KEY);
+      }
+    };
+
+    applyFocus();
+    window.addEventListener('storage', applyFocus);
+    return () => window.removeEventListener('storage', applyFocus);
   }, []);
 
   return (
@@ -96,7 +120,13 @@ export default function WorkItemsPage() {
             {supportTickets.length === 0 ? (
               <div className="p-4 text-sm text-slate-400">No tickets yet.</div>
             ) : supportTickets.map((t) => (
-              <div key={t.id} className="p-4">
+              <div
+                key={t.id}
+                className={classNames(
+                  'p-4',
+                  highlightId === t.id && 'ring-2 ring-cyan-400/60 bg-cyan-500/5'
+                )}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="text-white font-semibold truncate">{t.title}</div>
@@ -126,7 +156,13 @@ export default function WorkItemsPage() {
             {salesLeads.length === 0 ? (
               <div className="p-4 text-sm text-slate-400">No leads yet.</div>
             ) : salesLeads.map((l) => (
-              <div key={l.id} className="p-4">
+              <div
+                key={l.id}
+                className={classNames(
+                  'p-4',
+                  highlightId === l.id && 'ring-2 ring-cyan-400/60 bg-cyan-500/5'
+                )}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="text-white font-semibold truncate">{l.company_name}</div>
@@ -158,7 +194,13 @@ export default function WorkItemsPage() {
             {accessRequests.length === 0 ? (
               <div className="p-4 text-sm text-slate-400">No access requests yet.</div>
             ) : accessRequests.map((a) => (
-              <div key={a.id} className="p-4">
+              <div
+                key={a.id}
+                className={classNames(
+                  'p-4',
+                  highlightId === a.id && 'ring-2 ring-cyan-400/60 bg-cyan-500/5'
+                )}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="text-white font-semibold truncate">{a.subject}</div>
@@ -186,4 +228,3 @@ export default function WorkItemsPage() {
     </div>
   );
 }
-

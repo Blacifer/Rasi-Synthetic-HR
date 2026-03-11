@@ -2713,6 +2713,29 @@ export const workItemsApi = {
   },
 };
 
+export type PlaybookSettingRow = {
+  id: string;
+  organization_id: string;
+  playbook_id: string;
+  enabled: boolean;
+  overrides: Record<string, any>;
+  updated_by: string | null;
+  updated_at: string;
+};
+
+export const playbooksApi = {
+  async listSettings(): Promise<ApiResponse<PlaybookSettingRow[]>> {
+    return authenticatedFetch('/playbooks/settings', { method: 'GET' });
+  },
+
+  async updateSetting(playbookId: string, payload: { enabled?: boolean; overrides?: Record<string, any> }): Promise<ApiResponse<PlaybookSettingRow>> {
+    return authenticatedFetch(`/playbooks/settings/${encodeURIComponent(playbookId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+};
+
 /**
  * Export all API methods
  */
@@ -2743,6 +2766,7 @@ export const api = {
   runtimes: runtimesApi,
   jobs: jobsApi,
   workItems: workItemsApi,
+  playbooks: playbooksApi,
 };
 
 export default api;
