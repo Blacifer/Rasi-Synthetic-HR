@@ -584,6 +584,7 @@ router.post('/agents/:id/test', requirePermission('agents.update'), async (req: 
 
     if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
     if (!attackPrompt) return errorResponse(res, new Error('attackPrompt is required'), 400);
+    logger.info('Agent test requested', { agent_id: id, org_id: orgId, category });
 
     // Fetch the agent details
     const agentQuery = new URLSearchParams();
@@ -596,12 +597,16 @@ router.post('/agents/:id/test', requirePermission('agents.update'), async (req: 
     }
     const agent = agentData[0];
     if (!agent?.model_name) {
+      logger.warn('Agent test failed: missing model_name', { agent_id: id, org_id: orgId });
       return errorResponse(res, new Error('Agent model_name is missing'), 400);
     }
 
     // Build the OpenRouter call
     const key = process.env.RASI_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY || '';
-    if (!key) return errorResponse(res, new Error('OpenRouter API key missing'), 400);
+    if (!key) {
+      logger.warn('Agent test failed: OpenRouter API key missing', { agent_id: id, org_id: orgId });
+      return errorResponse(res, new Error('OpenRouter API key missing'), 400);
+    }
 
     const modelName = agent.model_name.includes('/') ? agent.model_name : `openai/${agent.model_name}`;
 
@@ -624,7 +629,7 @@ router.post('/agents/:id/test', requirePermission('agents.update'), async (req: 
 
     if (!orRes.ok) {
       const errBody = await orRes.text();
-      logger.error('Test Model request failed', { status: orRes.status, errBody });
+      logger.error('Test Model request failed', { status: orRes.status, errBody, agent_id: id, org_id: orgId, model: modelName });
       const message = /payment required/i.test(errBody) || orRes.status === 402
         ? 'Upstream LLM error: Payment Required'
         : `Upstream LLM error: ${orRes.statusText}`;
@@ -649,6 +654,7 @@ router.post('/agents/:id/test', requirePermission('agents.update'), async (req: 
       details = `Failed on: ${highest.type} (${highest.severity.toUpperCase()}). ${highest.details}`;
     }
 
+    logger.info('Agent test completed', { agent_id: id, org_id: orgId, model: modelName, latency, expectedPass });
     res.json({
       success: true,
       latency,
@@ -658,6 +664,7 @@ router.post('/agents/:id/test', requirePermission('agents.update'), async (req: 
       costUSD: orData?.usage?.cost || 0
     });
   } catch (error: any) {
+    logger.error('Agent test crashed', { error: error?.message || error, agent_id: req.params?.id, org_id: getOrgId(req) });
     errorResponse(res, error);
   }
 });
