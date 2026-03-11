@@ -23,6 +23,8 @@ export type Permission =
   | 'compliance.log'
   | 'connectors.read'
   | 'connectors.manage'
+  | 'workitems.read'
+  | 'workitems.manage'
   | 'team.invite'
   | 'team.manage'
   | 'dashboard.read'
@@ -38,6 +40,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'compliance.export', 'compliance.log',
     'connectors.read',
     'connectors.manage',
+    'workitems.read', 'workitems.manage',
     'team.invite', 'team.manage',
     'dashboard.read', 'settings.read', 'settings.update',
   ],
@@ -49,6 +52,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'compliance.export', 'compliance.log',
     'connectors.read',
     'connectors.manage',
+    'workitems.read', 'workitems.manage',
     'team.invite', 'team.manage',
     'dashboard.read', 'settings.read', 'settings.update',
   ],
@@ -59,6 +63,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'policies.manage',
     'compliance.export', 'compliance.log',
     'connectors.read',
+    'workitems.read', 'workitems.manage',
     'dashboard.read', 'settings.read',
   ],
   viewer: [
@@ -67,6 +72,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'costs.read',
     'compliance.log',
     'connectors.read',
+    'workitems.read',
     'dashboard.read',
   ],
 };

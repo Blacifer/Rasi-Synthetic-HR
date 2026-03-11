@@ -123,6 +123,8 @@ export const getPermissionLabel = (permission: Permission): string => {
     'costs.update': 'Edit Costs',
     'costs.delete': 'Delete Costs',
     'dashboard.read': 'View Dashboard',
+    'workitems.read': 'View Work Items',
+    'workitems.manage': 'Manage Work Items',
     'settings.read': 'View Settings',
     'settings.update': 'Modify Settings'
   };

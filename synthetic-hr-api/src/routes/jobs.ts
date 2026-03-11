@@ -4,6 +4,7 @@ import { requirePermission } from '../middleware/rbac';
 import { logger } from '../lib/logger';
 import { SupabaseRestError, eq, supabaseRestAsUser } from '../lib/supabase-rest';
 import { runtimeSchemas, validateRequestBody } from '../schemas/validation';
+import { auditLog } from '../lib/audit-logger';
 
 const router = Router();
 
@@ -90,6 +91,22 @@ router.post('/', requirePermission('agents.update'), async (req: Request, res: R
 
     const approval = approvals?.[0] || null;
 
+    await auditLog.log({
+      user_id: userId,
+      action: 'job.created',
+      resource_type: 'agent_job',
+      resource_id: job.id,
+      organization_id: orgId,
+      ip_address: req.ip || (req.socket as any)?.remoteAddress,
+      user_agent: req.get('user-agent') || undefined,
+      metadata: {
+        agent_id: data.agent_id,
+        type: data.type,
+        status: job.status,
+        approval_id: approval?.id || null,
+      },
+    });
+
     return res.status(201).json({ success: true, data: { job, approval } });
   } catch (err: any) {
     return safeError(res, err);
@@ -171,6 +188,23 @@ router.post('/:id/decision', requirePermission('agents.update'), async (req: Req
       },
     })) as any[];
 
+    await auditLog.log({
+      user_id: userId,
+      action: 'job.decision',
+      resource_type: 'agent_job',
+      resource_id: id,
+      organization_id: orgId,
+      ip_address: req.ip || (req.socket as any)?.remoteAddress,
+      user_agent: req.get('user-agent') || undefined,
+      metadata: {
+        decision,
+        previous_status: job.status,
+        new_status: newJobStatus,
+        approval_id: approval.id,
+        agent_id: job.agent_id || null,
+      },
+    });
+
     return res.json({
       success: true,
       data: {
@@ -184,4 +218,3 @@ router.post('/:id/decision', requirePermission('agents.update'), async (req: Req
 });
 
 export default router;
-

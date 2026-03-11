@@ -25,6 +25,7 @@ import webhooksRoutes from './routes/webhooks';
 import gatewayRoutes, { initializeIdempotencyCache } from './routes/gateway';
 import runtimesRoutes from './routes/runtimes';
 import jobsRoutes from './routes/jobs';
+import workItemsRoutes from './routes/work-items';
 import { initializeObservability, shutdownObservability, tracingMiddleware } from './lib/observability';
 import { validateEnvironment } from './lib/env-validation';
 import { authenticateToken, authErrorHandler, checkOrgAccess } from './middleware/auth';
@@ -298,6 +299,7 @@ app.use('/api', performanceReviewsRoutes);
 app.use('/api', apiKeysRoutes);
 app.use('/api/runtimes', runtimesRoutes);
 app.use('/api/jobs', jobsRoutes);
+app.use('/api/work-items', workItemsRoutes);
 app.use('/api', escalationsRoutes);
 app.use('/api', invitesRoutes);
 if (process.env.LEGACY_CONNECTORS_ENABLED === 'true') {
