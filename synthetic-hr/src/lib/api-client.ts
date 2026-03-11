@@ -2696,7 +2696,7 @@ export const workItemsApi = {
   salesLeads: {
     async list(params?: { stage?: string; limit?: number }): Promise<ApiResponse<SalesLead[]>> {
       const query = new URLSearchParams();
-      if (params?.stage) query.set('status', params.stage); // backend uses status->stage mapping
+      if (params?.stage) query.set('stage', params.stage);
       if (typeof params?.limit === 'number') query.set('limit', String(params.limit));
       const suffix = query.toString() ? `?${query.toString()}` : '';
       return authenticatedFetch(`/work-items/sales-leads${suffix}`, { method: 'GET' });

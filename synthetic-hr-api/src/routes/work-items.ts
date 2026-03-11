@@ -28,6 +28,7 @@ function nowIso() {
 
 const listQuerySchema = z.object({
   status: z.string().optional(),
+  stage: z.string().optional(),
   limit: z.coerce.number().min(1).max(200).optional(),
 });
 
@@ -144,7 +145,8 @@ router.get('/sales-leads', requirePermission('workitems.read'), async (req: Requ
     const query = new URLSearchParams();
     query.set('organization_id', eq(orgId));
     query.set('order', 'created_at.desc');
-    if (parsed.data.status) query.set('stage', eq(parsed.data.status));
+    const stage = parsed.data.stage || parsed.data.status;
+    if (stage) query.set('stage', eq(stage));
     if (parsed.data.limit) query.set('limit', String(parsed.data.limit));
 
     const rows = (await supabaseRestAsUser(getUserJwt(req), 'sales_leads', query)) as any[];
@@ -277,4 +279,3 @@ router.post('/access-requests', requirePermission('workitems.manage'), async (re
 });
 
 export default router;
-

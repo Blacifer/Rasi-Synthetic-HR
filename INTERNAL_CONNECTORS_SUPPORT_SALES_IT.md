@@ -13,6 +13,7 @@ All of these run through the same control-plane flow:
 ## 1) Database migration
 
 Apply: `synthetic-hr-database/migration_006_internal_work_items.sql`
+Then apply RLS: `synthetic-hr-database/migration_007_internal_work_items_rls.sql`
 
 ## 2) API endpoints (user auth)
 
@@ -38,4 +39,3 @@ This writes:
 - **Playbooks**: filter packs (Support / Sales / IT) and submit connector actions for approval.
 - **Jobs & Approvals**: approve connector actions and review output.
 - **Work Items**: view created tickets/leads/access requests.
-
