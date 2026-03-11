@@ -31,6 +31,9 @@ export type Permission =
   | 'costs.update'
   | 'costs.delete'
   | 'dashboard.read'
+  | 'policies.manage'
+  | 'workitems.read'
+  | 'workitems.manage'
   | 'settings.read'
   | 'settings.update';
 
@@ -40,25 +43,32 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'agents.create', 'agents.read', 'agents.update', 'agents.delete', 'agents.kill',
     'incidents.create', 'incidents.read', 'incidents.update', 'incidents.resolve', 'incidents.delete',
     'costs.create', 'costs.read', 'costs.update', 'costs.delete',
-    'dashboard.read', 'settings.read', 'settings.update'
+    'dashboard.read', 'settings.read', 'settings.update',
+    'policies.manage',
+    'workitems.read', 'workitems.manage',
   ],
   admin: [
     'agents.create', 'agents.read', 'agents.update', 'agents.delete', 'agents.kill',
     'incidents.create', 'incidents.read', 'incidents.update', 'incidents.resolve',
     'costs.create', 'costs.read', 'costs.update',
-    'dashboard.read', 'settings.read', 'settings.update'
+    'dashboard.read', 'settings.read', 'settings.update',
+    'policies.manage',
+    'workitems.read', 'workitems.manage',
   ],
   manager: [
     'agents.create', 'agents.read', 'agents.update',
     'incidents.create', 'incidents.read', 'incidents.update', 'incidents.resolve',
     'costs.read',
-    'dashboard.read', 'settings.read'
+    'dashboard.read', 'settings.read',
+    'policies.manage',
+    'workitems.read', 'workitems.manage',
   ],
   viewer: [
     'agents.read',
     'incidents.read',
     'costs.read',
-    'dashboard.read'
+    'dashboard.read',
+    'workitems.read',
   ]
 };
 
@@ -432,4 +442,101 @@ export interface ComplianceEvent {
   details: Record<string, any>;
   remediation_status: RemediationStatus;
   created_at: string;
+}
+
+// ==================== RUNTIME JOB TYPES ====================
+export type AgentJobType = 'chat_turn' | 'workflow_run' | 'connector_action';
+export type AgentJobStatus =
+  | 'pending_approval'
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'canceled'
+  | string;
+
+export interface AgentJob {
+  id: string;
+  organization_id: string;
+  agent_id: string | null;
+  runtime_instance_id: string | null;
+  type: AgentJobType;
+  status: AgentJobStatus;
+  input: Record<string, any>;
+  output: Record<string, any>;
+  error?: string | null;
+  created_by: string | null;
+  created_at: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+}
+
+export type AgentJobApprovalStatus = 'pending' | 'approved' | 'rejected' | string;
+
+export interface AgentJobApproval {
+  id: string;
+  job_id: string;
+  requested_by: string | null;
+  approved_by: string | null;
+  status: AgentJobApprovalStatus;
+  policy_snapshot: any;
+  created_at: string;
+  decided_at: string | null;
+}
+
+// ==================== INTERNAL WORK ITEM TYPES ====================
+export type SupportTicketStatus = 'open' | 'pending' | 'resolved' | 'closed' | string;
+export type SupportTicketPriority = 'low' | 'medium' | 'high' | 'urgent' | string;
+
+export interface SupportTicket {
+  id: string;
+  organization_id: string;
+  title: string;
+  description?: string | null;
+  status: SupportTicketStatus;
+  priority: SupportTicketPriority;
+  customer_email?: string | null;
+  source?: string | null;
+  tags?: string[] | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export type SalesLeadStage = 'new' | 'qualified' | 'discovery' | 'demo' | 'proposal' | 'won' | 'lost' | string;
+
+export interface SalesLead {
+  id: string;
+  organization_id: string;
+  company_name: string;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  stage: SalesLeadStage;
+  score?: number | null;
+  tags?: string[] | null;
+  notes?: Record<string, any> | null;
+  source?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export type AccessRequestStatus = 'pending' | 'approved' | 'rejected' | 'completed' | 'canceled' | string;
+
+export interface AccessRequest {
+  id: string;
+  organization_id: string;
+  subject: string;
+  requestor_email?: string | null;
+  system_name?: string | null;
+  requested_access?: Record<string, any> | null;
+  justification?: string | null;
+  status: AccessRequestStatus;
+  approved_by?: string | null;
+  decided_at?: string | null;
+  source?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at?: string | null;
 }

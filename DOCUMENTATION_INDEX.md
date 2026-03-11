@@ -32,6 +32,20 @@
 - **Read Time:** 20 minutes
 - **Who:** Code reviewers, architects
 
+### 4. **ORGANIZATION_AGENT_ROLLOUT.md** (How To Use Agents Org-Wide)
+- Recommended roles (Viewer/Manager/Admin)
+- Playbooks → Jobs & Approvals → Runtime execution flow
+- Governance defaults and metrics to track value
+- **Read Time:** 5 minutes
+- **Who:** HR ops leads, managers, implementers
+
+### 5. **INTERNAL_CONNECTORS_SUPPORT_SALES_IT.md** (Support/Sales/IT Connectors)
+- Internal “connector actions” that create tickets/leads/access requests inside the app
+- Required DB migration + API endpoints
+- Runtime execution path and what gets audited
+- **Read Time:** 5 minutes
+- **Who:** Implementers, ops leads
+
 ---
 
 ## Implementation Guides (How-To)

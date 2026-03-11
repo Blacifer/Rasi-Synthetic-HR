@@ -60,6 +60,24 @@ function safeError(res: Response, err: any, statusCode = 500) {
   return res.status(resolved).json({ success: false, error: message });
 }
 
+const internalActionSchema = z.object({
+  job_id: z.string().uuid().optional(),
+  agent_id: z.string().uuid().optional(),
+  action: z.string().min(1).max(200),
+  payload: z.record(z.any()).optional(),
+});
+
+const actionPolicyQuerySchema = z.object({
+  service: z.string().min(1).max(50),
+  action: z.string().min(1).max(200),
+});
+
+function pickText(value: any, max = 20000): string | null {
+  if (value == null) return null;
+  const s = typeof value === 'string' ? value : JSON.stringify(value);
+  return s.length > max ? s.slice(0, max) : s;
+}
+
 // =========================
 // Runtime instance management (user auth)
 // =========================
@@ -504,6 +522,345 @@ router.post('/jobs/:id/log', requireRuntimeAuth(), async (req: Request, res: Res
     })) as any[];
 
     return res.json({ success: true, data: patched?.[0] || null });
+  } catch (err: any) {
+    return safeError(res, err);
+  }
+});
+
+// =========================
+// Runtime internal connector actions (runtime auth)
+// =========================
+
+router.get('/actions/policy', requireRuntimeAuth(), async (req: Request, res: Response) => {
+  try {
+    const ctx = (req as any).runtime as RuntimeAuthContext;
+    const parsed = actionPolicyQuerySchema.safeParse(req.query || {});
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, errors: parsed.error.errors.map((e) => e.message) });
+    }
+
+    const q = new URLSearchParams();
+    q.set('organization_id', eq(ctx.organization_id));
+    q.set('service', eq(parsed.data.service));
+    q.set('action', eq(parsed.data.action));
+    q.set('select', '*');
+    q.set('limit', '1');
+
+    const rows = (await supabaseRestAsService('action_policies', q)) as any[];
+    const row = rows?.[0] || null;
+
+    return res.json({ success: true, data: row });
+  } catch (err: any) {
+    return safeError(res, err);
+  }
+});
+
+router.post('/actions/execute', requireRuntimeAuth(), async (req: Request, res: Response) => {
+  try {
+    const ctx = (req as any).runtime as RuntimeAuthContext;
+    const parsed = internalActionSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, errors: parsed.error.errors.map((e) => e.message) });
+    }
+
+    const action = parsed.data.action;
+    const payload = parsed.data.payload || {};
+    const now = nowIso();
+
+    // Enforce action policy (runtime-side defense-in-depth).
+    {
+      const polQ = new URLSearchParams();
+      polQ.set('organization_id', eq(ctx.organization_id));
+      polQ.set('service', eq('internal'));
+      polQ.set('action', eq(action));
+      polQ.set('select', '*');
+      polQ.set('limit', '1');
+      const polRows = (await supabaseRestAsService('action_policies', polQ)) as any[];
+      const policy = polRows?.[0] || null;
+      if (policy && policy.enabled === false) {
+        const created = (await supabaseRestAsService('agent_action_runs', '', {
+          method: 'POST',
+          body: {
+            organization_id: ctx.organization_id,
+            agent_id: parsed.data.agent_id || null,
+            job_id: parsed.data.job_id || null,
+            action_type: action,
+            status: 'failed',
+            input: payload,
+            output: {},
+            error: 'Action disabled by policy',
+            created_at: now,
+          },
+        })) as any[];
+        return res.status(403).json({ success: false, error: 'Action disabled by policy', action_run: created?.[0] || null });
+      }
+    }
+
+    const makeActionRun = async (result: { status: 'ok' | 'failed'; input: any; output: any; error?: string | null }) => {
+      const created = (await supabaseRestAsService('agent_action_runs', '', {
+        method: 'POST',
+        body: {
+          organization_id: ctx.organization_id,
+          agent_id: parsed.data.agent_id || null,
+          job_id: parsed.data.job_id || null,
+          action_type: action,
+          status: result.status,
+          input: result.input || {},
+          output: result.output || {},
+          error: result.error || null,
+          created_at: now,
+        },
+      })) as any[];
+      return created?.[0] || null;
+    };
+
+    // support.ticket.create
+    if (action === 'support.ticket.create') {
+      const title = pickText(payload.title ?? payload.subject ?? 'Support ticket', 200) || 'Support ticket';
+      const description = pickText(payload.description ?? payload.body ?? payload.ticket_text ?? null, 20000);
+      const priority = pickText(payload.priority ?? 'medium', 20) || 'medium';
+      const customer_email = pickText(payload.customer_email ?? null, 320);
+      const tags = Array.isArray(payload.tags) ? payload.tags.map((t: any) => String(t)).slice(0, 20) : [];
+
+      const createdTickets = (await supabaseRestAsService('support_tickets', '', {
+        method: 'POST',
+        body: {
+          organization_id: ctx.organization_id,
+          title,
+          description,
+          priority,
+          status: 'open',
+          customer_email,
+          tags,
+          source: 'agent',
+          created_by: null,
+          created_at: now,
+          updated_at: now,
+        },
+      })) as any[];
+
+      const ticket = createdTickets?.[0] || null;
+      if (!ticket) {
+        const run = await makeActionRun({ status: 'failed', input: payload, output: {}, error: 'Failed to create support ticket' });
+        return res.status(500).json({ success: false, error: 'Failed to create support ticket', action_run: run });
+      }
+
+      const run = await makeActionRun({ status: 'ok', input: payload, output: { ticket_id: ticket.id, resource_type: 'support_ticket', resource_id: ticket.id } });
+      if (run?.id) {
+        const patchQ = new URLSearchParams();
+        patchQ.set('id', eq(ticket.id));
+        patchQ.set('organization_id', eq(ctx.organization_id));
+        await supabaseRestAsService('support_tickets', patchQ, {
+          method: 'PATCH',
+          body: { job_id: parsed.data.job_id || null, action_run_id: run.id, updated_at: now },
+        }).catch(() => void 0);
+      }
+      return res.json({ success: true, data: { resource: ticket, action_run: run } });
+    }
+
+    // support.ticket.update_status
+    if (action === 'support.ticket.update_status') {
+      const ticketId = pickText(payload.ticket_id ?? payload.id ?? null, 60);
+      const status = pickText(payload.status ?? null, 20);
+      if (!ticketId || !status) {
+        const run = await makeActionRun({ status: 'failed', input: payload, output: {}, error: 'ticket_id and status are required' });
+        return res.status(400).json({ success: false, error: 'ticket_id and status are required', action_run: run });
+      }
+
+      const patchQuery = new URLSearchParams();
+      patchQuery.set('id', eq(ticketId));
+      patchQuery.set('organization_id', eq(ctx.organization_id));
+
+      const patched = (await supabaseRestAsService('support_tickets', patchQuery, {
+        method: 'PATCH',
+        body: { status, updated_at: now },
+      })) as any[];
+
+      const updated = patched?.[0] || null;
+      if (!updated) {
+        const run = await makeActionRun({ status: 'failed', input: payload, output: {}, error: 'Support ticket not found' });
+        return res.status(404).json({ success: false, error: 'Support ticket not found', action_run: run });
+      }
+
+      const run = await makeActionRun({ status: 'ok', input: payload, output: { ticket_id: updated.id, status: updated.status, resource_type: 'support_ticket', resource_id: updated.id } });
+      if (run?.id) {
+        await supabaseRestAsService('support_tickets', patchQuery, {
+          method: 'PATCH',
+          body: { job_id: parsed.data.job_id || updated.job_id || null, action_run_id: run.id, updated_at: now },
+        }).catch(() => void 0);
+      }
+      return res.json({ success: true, data: { resource: updated, action_run: run } });
+    }
+
+    // sales.lead.create
+    if (action === 'sales.lead.create') {
+      const company_name = pickText(payload.company_name ?? payload.company ?? payload.account ?? 'Lead', 200) || 'Lead';
+      const contact_name = pickText(payload.contact_name ?? payload.name ?? null, 200);
+      const contact_email = pickText(payload.contact_email ?? payload.email ?? null, 320);
+      const contact_phone = pickText(payload.contact_phone ?? payload.phone ?? null, 50);
+      const stage = pickText(payload.stage ?? 'new', 20) || 'new';
+      const score = Number.isFinite(Number(payload.score)) ? Math.max(0, Math.min(10, Number(payload.score))) : 0;
+      const tags = Array.isArray(payload.tags) ? payload.tags.map((t: any) => String(t)).slice(0, 20) : [];
+      const notes = payload.notes && typeof payload.notes === 'object' ? payload.notes : { raw: payload };
+
+      const createdLeads = (await supabaseRestAsService('sales_leads', '', {
+        method: 'POST',
+        body: {
+          organization_id: ctx.organization_id,
+          company_name,
+          contact_name,
+          contact_email,
+          contact_phone,
+          stage,
+          score,
+          tags,
+          notes,
+          source: 'agent',
+          created_by: null,
+          created_at: now,
+          updated_at: now,
+        },
+      })) as any[];
+
+      const lead = createdLeads?.[0] || null;
+      if (!lead) {
+        const run = await makeActionRun({ status: 'failed', input: payload, output: {}, error: 'Failed to create sales lead' });
+        return res.status(500).json({ success: false, error: 'Failed to create sales lead', action_run: run });
+      }
+
+      const run = await makeActionRun({ status: 'ok', input: payload, output: { lead_id: lead.id, resource_type: 'sales_lead', resource_id: lead.id } });
+      if (run?.id) {
+        const patchQ = new URLSearchParams();
+        patchQ.set('id', eq(lead.id));
+        patchQ.set('organization_id', eq(ctx.organization_id));
+        await supabaseRestAsService('sales_leads', patchQ, {
+          method: 'PATCH',
+          body: { job_id: parsed.data.job_id || null, action_run_id: run.id, updated_at: now },
+        }).catch(() => void 0);
+      }
+      return res.json({ success: true, data: { resource: lead, action_run: run } });
+    }
+
+    // sales.lead.update_stage
+    if (action === 'sales.lead.update_stage') {
+      const leadId = pickText(payload.lead_id ?? payload.id ?? null, 60);
+      const stage = pickText(payload.stage ?? null, 20);
+      if (!leadId || !stage) {
+        const run = await makeActionRun({ status: 'failed', input: payload, output: {}, error: 'lead_id and stage are required' });
+        return res.status(400).json({ success: false, error: 'lead_id and stage are required', action_run: run });
+      }
+
+      const patchQuery = new URLSearchParams();
+      patchQuery.set('id', eq(leadId));
+      patchQuery.set('organization_id', eq(ctx.organization_id));
+
+      const patched = (await supabaseRestAsService('sales_leads', patchQuery, {
+        method: 'PATCH',
+        body: { stage, updated_at: now },
+      })) as any[];
+
+      const updated = patched?.[0] || null;
+      if (!updated) {
+        const run = await makeActionRun({ status: 'failed', input: payload, output: {}, error: 'Sales lead not found' });
+        return res.status(404).json({ success: false, error: 'Sales lead not found', action_run: run });
+      }
+
+      const run = await makeActionRun({ status: 'ok', input: payload, output: { lead_id: updated.id, stage: updated.stage, resource_type: 'sales_lead', resource_id: updated.id } });
+      if (run?.id) {
+        await supabaseRestAsService('sales_leads', patchQuery, {
+          method: 'PATCH',
+          body: { job_id: parsed.data.job_id || updated.job_id || null, action_run_id: run.id, updated_at: now },
+        }).catch(() => void 0);
+      }
+      return res.json({ success: true, data: { resource: updated, action_run: run } });
+    }
+
+    // it.access_request.create
+    if (action === 'it.access_request.create') {
+      const subject = pickText(payload.subject ?? payload.title ?? 'Access request', 200) || 'Access request';
+      const requestor_email = pickText(payload.requestor_email ?? payload.email ?? null, 320);
+      const system_name = pickText(payload.system_name ?? payload.system ?? null, 200);
+      const requested_access = payload.requested_access && typeof payload.requested_access === 'object'
+        ? payload.requested_access
+        : { raw: payload.requested_access ?? payload.access ?? payload };
+      const justification = pickText(payload.justification ?? payload.reason ?? null, 20000);
+
+      const createdRequests = (await supabaseRestAsService('it_access_requests', '', {
+        method: 'POST',
+        body: {
+          organization_id: ctx.organization_id,
+          subject,
+          requestor_email,
+          system_name,
+          requested_access,
+          justification,
+          status: 'pending',
+          source: 'agent',
+          created_by: null,
+          created_at: now,
+          updated_at: now,
+        },
+      })) as any[];
+
+      const accessRequest = createdRequests?.[0] || null;
+      if (!accessRequest) {
+        const run = await makeActionRun({ status: 'failed', input: payload, output: {}, error: 'Failed to create access request' });
+        return res.status(500).json({ success: false, error: 'Failed to create access request', action_run: run });
+      }
+
+      const run = await makeActionRun({ status: 'ok', input: payload, output: { access_request_id: accessRequest.id, resource_type: 'it_access_request', resource_id: accessRequest.id } });
+      if (run?.id) {
+        const patchQ = new URLSearchParams();
+        patchQ.set('id', eq(accessRequest.id));
+        patchQ.set('organization_id', eq(ctx.organization_id));
+        await supabaseRestAsService('it_access_requests', patchQ, {
+          method: 'PATCH',
+          body: { job_id: parsed.data.job_id || null, action_run_id: run.id, updated_at: now },
+        }).catch(() => void 0);
+      }
+      return res.json({ success: true, data: { resource: accessRequest, action_run: run } });
+    }
+
+    // it.access_request.decide
+    if (action === 'it.access_request.decide') {
+      const requestId = pickText(payload.access_request_id ?? payload.id ?? null, 60);
+      const decision = pickText(payload.decision ?? null, 20);
+      if (!requestId || !decision || !['approved', 'rejected'].includes(decision)) {
+        const run = await makeActionRun({ status: 'failed', input: payload, output: {}, error: 'access_request_id and decision (approved|rejected) are required' });
+        return res.status(400).json({ success: false, error: 'access_request_id and decision (approved|rejected) are required', action_run: run });
+      }
+
+      const patchQuery = new URLSearchParams();
+      patchQuery.set('id', eq(requestId));
+      patchQuery.set('organization_id', eq(ctx.organization_id));
+
+      const patched = (await supabaseRestAsService('it_access_requests', patchQuery, {
+        method: 'PATCH',
+        body: {
+          status: decision,
+          decided_at: now,
+          updated_at: now,
+        },
+      })) as any[];
+
+      const updated = patched?.[0] || null;
+      if (!updated) {
+        const run = await makeActionRun({ status: 'failed', input: payload, output: {}, error: 'Access request not found' });
+        return res.status(404).json({ success: false, error: 'Access request not found', action_run: run });
+      }
+
+      const run = await makeActionRun({ status: 'ok', input: payload, output: { access_request_id: updated.id, status: updated.status, resource_type: 'it_access_request', resource_id: updated.id } });
+      if (run?.id) {
+        await supabaseRestAsService('it_access_requests', patchQuery, {
+          method: 'PATCH',
+          body: { job_id: parsed.data.job_id || updated.job_id || null, action_run_id: run.id, updated_at: now },
+        }).catch(() => void 0);
+      }
+      return res.json({ success: true, data: { resource: updated, action_run: run } });
+    }
+
+    const run = await makeActionRun({ status: 'failed', input: payload, output: {}, error: `Unsupported internal action: ${action}` });
+    return res.status(400).json({ success: false, error: `Unsupported internal action: ${action}`, action_run: run });
   } catch (err: any) {
     return safeError(res, err);
   }

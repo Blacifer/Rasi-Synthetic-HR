@@ -4,7 +4,7 @@
  */
 
 import { getSupabaseClient } from './supabase';
-import type { AIAgent, Incident, CostData } from '../types';
+import type { AIAgent, Incident, CostData, SupportTicket, SalesLead, AccessRequest } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -2683,6 +2683,103 @@ export const jobsApi = {
   },
 };
 
+export const workItemsApi = {
+  supportTickets: {
+    async list(params?: { status?: string; limit?: number }): Promise<ApiResponse<SupportTicket[]>> {
+      const query = new URLSearchParams();
+      if (params?.status) query.set('status', params.status);
+      if (typeof params?.limit === 'number') query.set('limit', String(params.limit));
+      const suffix = query.toString() ? `?${query.toString()}` : '';
+      return authenticatedFetch(`/work-items/support-tickets${suffix}`, { method: 'GET' });
+    },
+  },
+  salesLeads: {
+    async list(params?: { stage?: string; limit?: number }): Promise<ApiResponse<SalesLead[]>> {
+      const query = new URLSearchParams();
+      if (params?.stage) query.set('stage', params.stage);
+      if (typeof params?.limit === 'number') query.set('limit', String(params.limit));
+      const suffix = query.toString() ? `?${query.toString()}` : '';
+      return authenticatedFetch(`/work-items/sales-leads${suffix}`, { method: 'GET' });
+    },
+  },
+  accessRequests: {
+    async list(params?: { status?: string; limit?: number }): Promise<ApiResponse<AccessRequest[]>> {
+      const query = new URLSearchParams();
+      if (params?.status) query.set('status', params.status);
+      if (typeof params?.limit === 'number') query.set('limit', String(params.limit));
+      const suffix = query.toString() ? `?${query.toString()}` : '';
+      return authenticatedFetch(`/work-items/access-requests${suffix}`, { method: 'GET' });
+    },
+  },
+};
+
+export type PlaybookSettingRow = {
+  id: string;
+  organization_id: string;
+  playbook_id: string;
+  enabled: boolean;
+  overrides: Record<string, any>;
+  updated_by: string | null;
+  updated_at: string;
+};
+
+export const playbooksApi = {
+  async listSettings(): Promise<ApiResponse<PlaybookSettingRow[]>> {
+    return authenticatedFetch('/playbooks/settings', { method: 'GET' });
+  },
+
+  async updateSetting(playbookId: string, payload: { enabled?: boolean; overrides?: Record<string, any> }): Promise<ApiResponse<PlaybookSettingRow>> {
+    return authenticatedFetch(`/playbooks/settings/${encodeURIComponent(playbookId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+};
+
+export type ActionPolicyRow = {
+  id: string;
+  organization_id: string;
+  service: string;
+  action: string;
+  enabled: boolean;
+  require_approval: boolean;
+  required_role: 'viewer' | 'manager' | 'admin' | 'super_admin';
+  webhook_allowlist: string[];
+  notes?: string | null;
+  updated_by: string | null;
+  updated_at: string;
+};
+
+export const actionPoliciesApi = {
+  async list(params?: { service?: string; action?: string; limit?: number }): Promise<ApiResponse<ActionPolicyRow[]>> {
+    const query = new URLSearchParams();
+    if (params?.service) query.set('service', params.service);
+    if (params?.action) query.set('action', params.action);
+    if (typeof params?.limit === 'number') query.set('limit', String(params.limit));
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return authenticatedFetch(`/action-policies${suffix}`, { method: 'GET' });
+  },
+
+  async upsert(payload: {
+    service: string;
+    action: string;
+    enabled?: boolean;
+    require_approval?: boolean;
+    required_role?: 'viewer' | 'manager' | 'admin' | 'super_admin';
+    webhook_allowlist?: string[];
+    notes?: string;
+  }): Promise<ApiResponse<ActionPolicyRow>> {
+    return authenticatedFetch('/action-policies', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async remove(id: string): Promise<ApiResponse<{ id: string }>> {
+    return authenticatedFetch(`/action-policies/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+};
+
 /**
  * Export all API methods
  */
@@ -2712,6 +2809,9 @@ export const api = {
   gateway: gatewayApi,
   runtimes: runtimesApi,
   jobs: jobsApi,
+  workItems: workItemsApi,
+  playbooks: playbooksApi,
+  actionPolicies: actionPoliciesApi,
 };
 
 export default api;

@@ -20,6 +20,7 @@ type JobRow = {
   type: string;
   status: string;
   input: any;
+  created_by?: string | null;
 };
 
 const env = (key: string, fallback?: string) => (process.env[key] && String(process.env[key]).trim().length > 0)
@@ -37,6 +38,7 @@ const POLL_INTERVAL_MS = Math.max(750, Number(env('SYNTHETICHR_POLL_INTERVAL_MS'
 const HEARTBEAT_INTERVAL_MS = Math.max(5000, Number(env('SYNTHETICHR_HEARTBEAT_INTERVAL_MS', '15000')));
 const DEFAULT_MODEL = env('SYNTHETICHR_MODEL', 'openai/gpt-4o-mini')!;
 const STREAM_MODE = env('SYNTHETICHR_STREAM_MODE', 'poll')!; // poll | stream
+const WEBHOOK_ALLOWLIST = env('SYNTHETICHR_WEBHOOK_ALLOWLIST', '')!;
 
 if (!RUNTIME_ID) {
   console.error('Missing required env: SYNTHETICHR_RUNTIME_ID');
@@ -230,6 +232,120 @@ async function runChatTurn(job: JobRow) {
   };
 }
 
+function getByPath(obj: any, dottedPath: string): any {
+  const parts = dottedPath.split('.').map((p) => p.trim()).filter(Boolean);
+  let cur: any = obj;
+  for (const part of parts) {
+    if (cur == null) return undefined;
+    cur = cur[part];
+  }
+  return cur;
+}
+
+function renderTemplate(value: string, context: any): string {
+  return value.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_match, exprRaw) => {
+    const expr = String(exprRaw || '').trim();
+    const resolved = getByPath(context, expr);
+    if (resolved == null) return '';
+    if (typeof resolved === 'string') return resolved;
+    try {
+      return JSON.stringify(resolved);
+    } catch {
+      return String(resolved);
+    }
+  });
+}
+
+async function runWorkflow(job: JobRow) {
+  const input = job.input && typeof job.input === 'object' ? job.input : {};
+  const wf = input.workflow && typeof input.workflow === 'object' ? input.workflow : null;
+  if (!wf || !Array.isArray(wf.steps) || wf.steps.length === 0) {
+    throw new Error('Invalid workflow input: expected input.workflow.steps[]');
+  }
+
+  const steps = wf.steps as Array<{
+    id: string;
+    kind: string;
+    model?: string;
+    temperature?: number;
+    messages?: any[];
+  }>;
+
+  const stepResults: Record<string, { message: string; model: string; raw: any }> = {};
+
+  for (const step of steps) {
+    if (!step?.id || typeof step.id !== 'string') {
+      throw new Error('Invalid workflow step: missing id');
+    }
+    if (step.kind !== 'llm') {
+      throw new Error(`Unsupported workflow step kind: ${String(step.kind)}`);
+    }
+
+    const model = typeof step.model === 'string' ? step.model : (typeof input.model === 'string' ? input.model : DEFAULT_MODEL);
+    const temperature = typeof step.temperature === 'number' ? step.temperature : (typeof input.temperature === 'number' ? input.temperature : 0.2);
+
+    const ctx = {
+      input,
+      steps: Object.fromEntries(Object.entries(stepResults).map(([id, r]) => [id, { message: r.message, model: r.model }])),
+    };
+
+    const rawMessages = Array.isArray(step.messages) ? step.messages : [];
+    const messages = rawMessages.map((m) => {
+      const role = typeof m?.role === 'string' ? m.role : 'user';
+      const contentRaw = typeof m?.content === 'string' ? m.content : '';
+      const content = renderTemplate(contentRaw, ctx);
+      return { role, content };
+    });
+
+    if (messages.length === 0) {
+      throw new Error(`Workflow step ${step.id} has no messages`);
+    }
+
+    await logJob(job.id, `Workflow step=${step.id} model=${model}`, 'info');
+
+    const response = await fetch(`${GATEWAY_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${API_KEY}`,
+        'x-rasi-agent-id': job.agent_id || '',
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature,
+        stream: false,
+        agent_id: job.agent_id || undefined,
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({} as any));
+    if (!response.ok) {
+      const msg = payload?.error?.message || payload?.error || `Gateway error ${response.status}`;
+      throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    }
+
+    const content = payload?.choices?.[0]?.message?.content || '';
+    stepResults[step.id] = { message: content, model: payload?.model || model, raw: payload };
+  }
+
+  const finalStepId = typeof wf.final_step === 'string' ? wf.final_step : steps[steps.length - 1].id;
+  const final = stepResults[finalStepId] || stepResults[steps[steps.length - 1].id];
+
+  return {
+    workflow: {
+      version: wf.version || 1,
+      final_step: finalStepId,
+    },
+    steps: Object.entries(stepResults).map(([id, r]) => ({ id, model: r.model, message: r.message })),
+    final: {
+      step_id: finalStepId,
+      model: final?.model || DEFAULT_MODEL,
+      message: final?.message || '',
+    },
+  };
+}
+
 async function executeJob(job: JobRow) {
   if (job.type === 'chat_turn') {
     const result = await runChatTurn(job);
@@ -237,16 +353,135 @@ async function executeJob(job: JobRow) {
     return;
   }
 
-  // Placeholder implementations (MVP)
   if (job.type === 'workflow_run') {
-    await logJob(job.id, 'Workflow execution placeholder (MVP)', 'warn');
-    await completeJob(job.id, { status: 'succeeded', output: { ok: true, note: 'workflow_run placeholder', input: job.input } });
+    const result = await runWorkflow(job);
+    await completeJob(job.id, { status: 'succeeded', output: result });
     return;
   }
 
   if (job.type === 'connector_action') {
-    await logJob(job.id, 'Connector action placeholder (MVP)', 'warn');
-    await completeJob(job.id, { status: 'succeeded', output: { ok: true, note: 'connector_action placeholder', input: job.input } });
+    const input = job.input && typeof job.input === 'object' ? job.input : {};
+    const connector = input.connector && typeof input.connector === 'object' ? input.connector : null;
+    if (!connector) {
+      throw new Error('connector_action requires input.connector');
+    }
+    const service = typeof connector.service === 'string' ? connector.service : '';
+    const action = typeof connector.action === 'string' ? connector.action : '';
+    const payload = connector.payload && typeof connector.payload === 'object' ? connector.payload : {};
+
+    if (!service || !action) {
+      throw new Error('connector_action requires connector.service and connector.action');
+    }
+
+    if (service === 'internal') {
+      // Check policy (enabled) before executing.
+      try {
+        const jwt = signRuntimeJwt();
+        const qs = new URLSearchParams({ service: 'internal', action });
+        const polRes = await fetch(`${CONTROL_PLANE_URL}/api/runtimes/actions/policy?${qs.toString()}`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${jwt}` },
+        });
+        const pol = await polRes.json().catch(() => ({} as any));
+        if (polRes.ok && pol?.success && pol?.data && pol.data.enabled === false) {
+          await completeJob(job.id, { status: 'failed', error: 'Action disabled by policy', output: { policy: pol.data } });
+          return;
+        }
+      } catch {
+        // ignore policy lookup failures; approval path should still enforce.
+      }
+
+      await logJob(job.id, `Executing internal connector action=${action}`, 'info');
+      const jwt = signRuntimeJwt();
+      const response = await fetch(`${CONTROL_PLANE_URL}/api/runtimes/actions/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({
+          job_id: job.id,
+          agent_id: job.agent_id || undefined,
+          action,
+          payload,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({} as any));
+      if (!response.ok || result?.success !== true) {
+        const errMsg = result?.error || `Internal action failed (${response.status})`;
+        await logJob(job.id, errMsg, 'error');
+        await completeJob(job.id, { status: 'failed', error: errMsg, output: { result } });
+        return;
+      }
+
+      await completeJob(job.id, { status: 'succeeded', output: result?.data || result });
+      return;
+    }
+
+    if (service === 'webhook') {
+      const url = typeof (payload as any).url === 'string' ? (payload as any).url : '';
+      if (!url) {
+        await completeJob(job.id, { status: 'failed', error: 'webhook connector requires payload.url' });
+        return;
+      }
+
+      const parsedUrl = new URL(url);
+      // Prefer DB policy allowlist; fall back to env allowlist.
+      let allowlist: string[] = [];
+      try {
+        const jwt = signRuntimeJwt();
+        const qs = new URLSearchParams({ service: 'webhook', action });
+        const polRes = await fetch(`${CONTROL_PLANE_URL}/api/runtimes/actions/policy?${qs.toString()}`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${jwt}` },
+        });
+        const pol = await polRes.json().catch(() => ({} as any));
+        if (polRes.ok && pol?.success && pol?.data) {
+          if (pol.data.enabled === false) {
+            await completeJob(job.id, { status: 'failed', error: 'Action disabled by policy', output: { policy: pol.data } });
+            return;
+          }
+          if (Array.isArray(pol.data.webhook_allowlist)) {
+            allowlist = pol.data.webhook_allowlist.map((h: any) => String(h));
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      if (allowlist.length === 0) {
+        allowlist = WEBHOOK_ALLOWLIST.split(',').map((v) => v.trim()).filter(Boolean);
+      }
+
+      if (allowlist.length > 0 && !allowlist.includes(parsedUrl.host)) {
+        await completeJob(job.id, { status: 'failed', error: `Webhook host not in allowlist: ${parsedUrl.host}`, output: { host: parsedUrl.host, allowlist } });
+        return;
+      }
+
+      const method = typeof (payload as any).method === 'string' ? String((payload as any).method).toUpperCase() : 'POST';
+      const headers = ((payload as any).headers && typeof (payload as any).headers === 'object') ? (payload as any).headers : {};
+      const body = (payload as any).body ?? (payload as any).data ?? {};
+
+      await logJob(job.id, `Calling webhook ${method} ${parsedUrl.host}`, 'info');
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers,
+        },
+        body: method === 'GET' || method === 'HEAD' ? undefined : JSON.stringify(body),
+      });
+
+      const text = await response.text().catch(() => '');
+      if (!response.ok) {
+        await completeJob(job.id, { status: 'failed', error: `Webhook error (${response.status})`, output: { status: response.status, body: text } });
+        return;
+      }
+
+      await completeJob(job.id, { status: 'succeeded', output: { status: response.status, body: text } });
+      return;
+    }
+
+    await logJob(job.id, `Unsupported connector service: ${service}`, 'error');
+    await completeJob(job.id, { status: 'failed', error: `Unsupported connector service: ${service}` });
     return;
   }
 
