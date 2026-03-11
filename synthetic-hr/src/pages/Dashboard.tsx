@@ -2,7 +2,7 @@ import { useState, useEffect, lazy, Suspense, useCallback, useRef } from 'react'
 import {
   Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
   DollarSign, Eye, Database, Building2, Key, CreditCard, Scale, Settings, X, Play, Link2,
-  TrendingUp, Sparkles, Webhook, ChevronLeft, MessageSquare, AlertTriangle, PlugZap, ClipboardList, ListChecks, ListTodo
+  TrendingUp, Sparkles, Webhook, ChevronLeft, MessageSquare, AlertTriangle, PlugZap, ClipboardList, ListChecks, ListTodo, Shield
 } from 'lucide-react';
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
 import { useApp } from '../context/AppContext';
@@ -17,6 +17,7 @@ const AgentTemplatesPage = lazy(() => import('./dashboard/AgentTemplatesPage'));
 const PlaybooksPage = lazy(() => import('./dashboard/PlaybooksPage'));
 const JobsInboxPage = lazy(() => import('./dashboard/JobsInboxPage'));
 const WorkItemsPage = lazy(() => import('./dashboard/WorkItemsPage'));
+const ActionPoliciesPage = lazy(() => import('./dashboard/ActionPoliciesPage'));
 const IncidentsPage = lazy(() => import('./dashboard/IncidentsPage'));
 const IntegrationsPage = lazy(() => import('./dashboard/IntegrationsPage'));
 const PersonaPage = lazy(() => import('./dashboard/PersonaPage'));
@@ -678,6 +679,7 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
               { id: 'jobs', icon: ListChecks, label: 'Jobs & Approvals' },
               { id: 'work-items', icon: ListTodo, label: 'Work Items' },
               { id: 'connect', icon: PlugZap, label: 'Connect Agent' },
+              { id: 'action-policies', icon: Shield, label: 'Action Policies' },
               { id: 'incidents', icon: AlertTriangle, label: 'Incidents' },
               { id: 'blackbox', icon: Database, label: 'Black Box' },
               { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
@@ -909,6 +911,9 @@ export default function Dashboard({ retentionDays, updateRetentionDays, exportDa
                 )}
                 {currentPage === 'work-items' && (
                   <WorkItemsPage />
+                )}
+                {currentPage === 'action-policies' && (
+                  <ActionPoliciesPage />
                 )}
 	                {currentPage === 'incidents' && (
 	                  <IncidentsPage incidents={incidents} setIncidents={saveIncidents} agents={agents} onNavigate={navigateTo} />

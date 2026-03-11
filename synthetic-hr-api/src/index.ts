@@ -27,6 +27,7 @@ import runtimesRoutes from './routes/runtimes';
 import jobsRoutes from './routes/jobs';
 import workItemsRoutes from './routes/work-items';
 import playbooksRoutes from './routes/playbooks';
+import actionPoliciesRoutes from './routes/action-policies';
 import { initializeObservability, shutdownObservability, tracingMiddleware } from './lib/observability';
 import { validateEnvironment } from './lib/env-validation';
 import { authenticateToken, authErrorHandler, checkOrgAccess } from './middleware/auth';
@@ -302,6 +303,7 @@ app.use('/api/runtimes', runtimesRoutes);
 app.use('/api/jobs', jobsRoutes);
 app.use('/api/work-items', workItemsRoutes);
 app.use('/api/playbooks', playbooksRoutes);
+app.use('/api/action-policies', actionPoliciesRoutes);
 app.use('/api', escalationsRoutes);
 app.use('/api', invitesRoutes);
 if (process.env.LEGACY_CONNECTORS_ENABLED === 'true') {

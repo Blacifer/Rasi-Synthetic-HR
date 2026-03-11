@@ -374,6 +374,23 @@ async function executeJob(job: JobRow) {
     }
 
     if (service === 'internal') {
+      // Check policy (enabled) before executing.
+      try {
+        const jwt = signRuntimeJwt();
+        const qs = new URLSearchParams({ service: 'internal', action });
+        const polRes = await fetch(`${CONTROL_PLANE_URL}/api/runtimes/actions/policy?${qs.toString()}`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${jwt}` },
+        });
+        const pol = await polRes.json().catch(() => ({} as any));
+        if (polRes.ok && pol?.success && pol?.data && pol.data.enabled === false) {
+          await completeJob(job.id, { status: 'failed', error: 'Action disabled by policy', output: { policy: pol.data } });
+          return;
+        }
+      } catch {
+        // ignore policy lookup failures; approval path should still enforce.
+      }
+
       await logJob(job.id, `Executing internal connector action=${action}`, 'info');
       const jwt = signRuntimeJwt();
       const response = await fetch(`${CONTROL_PLANE_URL}/api/runtimes/actions/execute`, {
@@ -407,9 +424,35 @@ async function executeJob(job: JobRow) {
       }
 
       const parsedUrl = new URL(url);
-      const allowlist = WEBHOOK_ALLOWLIST.split(',').map((v) => v.trim()).filter(Boolean);
+      // Prefer DB policy allowlist; fall back to env allowlist.
+      let allowlist: string[] = [];
+      try {
+        const jwt = signRuntimeJwt();
+        const qs = new URLSearchParams({ service: 'webhook', action });
+        const polRes = await fetch(`${CONTROL_PLANE_URL}/api/runtimes/actions/policy?${qs.toString()}`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${jwt}` },
+        });
+        const pol = await polRes.json().catch(() => ({} as any));
+        if (polRes.ok && pol?.success && pol?.data) {
+          if (pol.data.enabled === false) {
+            await completeJob(job.id, { status: 'failed', error: 'Action disabled by policy', output: { policy: pol.data } });
+            return;
+          }
+          if (Array.isArray(pol.data.webhook_allowlist)) {
+            allowlist = pol.data.webhook_allowlist.map((h: any) => String(h));
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      if (allowlist.length === 0) {
+        allowlist = WEBHOOK_ALLOWLIST.split(',').map((v) => v.trim()).filter(Boolean);
+      }
+
       if (allowlist.length > 0 && !allowlist.includes(parsedUrl.host)) {
-        await completeJob(job.id, { status: 'failed', error: `Webhook host not in allowlist: ${parsedUrl.host}` });
+        await completeJob(job.id, { status: 'failed', error: `Webhook host not in allowlist: ${parsedUrl.host}`, output: { host: parsedUrl.host, allowlist } });
         return;
       }
 

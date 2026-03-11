@@ -2736,6 +2736,50 @@ export const playbooksApi = {
   },
 };
 
+export type ActionPolicyRow = {
+  id: string;
+  organization_id: string;
+  service: string;
+  action: string;
+  enabled: boolean;
+  require_approval: boolean;
+  required_role: 'viewer' | 'manager' | 'admin' | 'super_admin';
+  webhook_allowlist: string[];
+  notes?: string | null;
+  updated_by: string | null;
+  updated_at: string;
+};
+
+export const actionPoliciesApi = {
+  async list(params?: { service?: string; action?: string; limit?: number }): Promise<ApiResponse<ActionPolicyRow[]>> {
+    const query = new URLSearchParams();
+    if (params?.service) query.set('service', params.service);
+    if (params?.action) query.set('action', params.action);
+    if (typeof params?.limit === 'number') query.set('limit', String(params.limit));
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return authenticatedFetch(`/action-policies${suffix}`, { method: 'GET' });
+  },
+
+  async upsert(payload: {
+    service: string;
+    action: string;
+    enabled?: boolean;
+    require_approval?: boolean;
+    required_role?: 'viewer' | 'manager' | 'admin' | 'super_admin';
+    webhook_allowlist?: string[];
+    notes?: string;
+  }): Promise<ApiResponse<ActionPolicyRow>> {
+    return authenticatedFetch('/action-policies', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async remove(id: string): Promise<ApiResponse<{ id: string }>> {
+    return authenticatedFetch(`/action-policies/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+};
+
 /**
  * Export all API methods
  */
@@ -2767,6 +2811,7 @@ export const api = {
   jobs: jobsApi,
   workItems: workItemsApi,
   playbooks: playbooksApi,
+  actionPolicies: actionPoliciesApi,
 };
 
 export default api;

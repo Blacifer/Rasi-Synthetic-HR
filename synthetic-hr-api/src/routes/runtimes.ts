@@ -67,6 +67,11 @@ const internalActionSchema = z.object({
   payload: z.record(z.any()).optional(),
 });
 
+const actionPolicyQuerySchema = z.object({
+  service: z.string().min(1).max(50),
+  action: z.string().min(1).max(200),
+});
+
 function pickText(value: any, max = 20000): string | null {
   if (value == null) return null;
   const s = typeof value === 'string' ? value : JSON.stringify(value);
@@ -526,6 +531,30 @@ router.post('/jobs/:id/log', requireRuntimeAuth(), async (req: Request, res: Res
 // Runtime internal connector actions (runtime auth)
 // =========================
 
+router.get('/actions/policy', requireRuntimeAuth(), async (req: Request, res: Response) => {
+  try {
+    const ctx = (req as any).runtime as RuntimeAuthContext;
+    const parsed = actionPolicyQuerySchema.safeParse(req.query || {});
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, errors: parsed.error.errors.map((e) => e.message) });
+    }
+
+    const q = new URLSearchParams();
+    q.set('organization_id', eq(ctx.organization_id));
+    q.set('service', eq(parsed.data.service));
+    q.set('action', eq(parsed.data.action));
+    q.set('select', '*');
+    q.set('limit', '1');
+
+    const rows = (await supabaseRestAsService('action_policies', q)) as any[];
+    const row = rows?.[0] || null;
+
+    return res.json({ success: true, data: row });
+  } catch (err: any) {
+    return safeError(res, err);
+  }
+});
+
 router.post('/actions/execute', requireRuntimeAuth(), async (req: Request, res: Response) => {
   try {
     const ctx = (req as any).runtime as RuntimeAuthContext;
@@ -537,6 +566,35 @@ router.post('/actions/execute', requireRuntimeAuth(), async (req: Request, res: 
     const action = parsed.data.action;
     const payload = parsed.data.payload || {};
     const now = nowIso();
+
+    // Enforce action policy (runtime-side defense-in-depth).
+    {
+      const polQ = new URLSearchParams();
+      polQ.set('organization_id', eq(ctx.organization_id));
+      polQ.set('service', eq('internal'));
+      polQ.set('action', eq(action));
+      polQ.set('select', '*');
+      polQ.set('limit', '1');
+      const polRows = (await supabaseRestAsService('action_policies', polQ)) as any[];
+      const policy = polRows?.[0] || null;
+      if (policy && policy.enabled === false) {
+        const created = (await supabaseRestAsService('agent_action_runs', '', {
+          method: 'POST',
+          body: {
+            organization_id: ctx.organization_id,
+            agent_id: parsed.data.agent_id || null,
+            job_id: parsed.data.job_id || null,
+            action_type: action,
+            status: 'failed',
+            input: payload,
+            output: {},
+            error: 'Action disabled by policy',
+            created_at: now,
+          },
+        })) as any[];
+        return res.status(403).json({ success: false, error: 'Action disabled by policy', action_run: created?.[0] || null });
+      }
+    }
 
     const makeActionRun = async (result: { status: 'ok' | 'failed'; input: any; output: any; error?: string | null }) => {
       const created = (await supabaseRestAsService('agent_action_runs', '', {

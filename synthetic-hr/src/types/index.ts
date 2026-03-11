@@ -31,6 +31,7 @@ export type Permission =
   | 'costs.update'
   | 'costs.delete'
   | 'dashboard.read'
+  | 'policies.manage'
   | 'workitems.read'
   | 'workitems.manage'
   | 'settings.read'
@@ -43,6 +44,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'incidents.create', 'incidents.read', 'incidents.update', 'incidents.resolve', 'incidents.delete',
     'costs.create', 'costs.read', 'costs.update', 'costs.delete',
     'dashboard.read', 'settings.read', 'settings.update',
+    'policies.manage',
     'workitems.read', 'workitems.manage',
   ],
   admin: [
@@ -50,6 +52,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'incidents.create', 'incidents.read', 'incidents.update', 'incidents.resolve',
     'costs.create', 'costs.read', 'costs.update',
     'dashboard.read', 'settings.read', 'settings.update',
+    'policies.manage',
     'workitems.read', 'workitems.manage',
   ],
   manager: [
@@ -57,6 +60,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'incidents.create', 'incidents.read', 'incidents.update', 'incidents.resolve',
     'costs.read',
     'dashboard.read', 'settings.read',
+    'policies.manage',
     'workitems.read', 'workitems.manage',
   ],
   viewer: [

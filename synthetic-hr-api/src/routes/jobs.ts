@@ -40,6 +40,40 @@ function requireRoleForConnectorAction(action: string): Role {
   return 'admin';
 }
 
+async function getActionPolicy(
+  userJwt: string,
+  orgId: string,
+  service: string,
+  action: string
+): Promise<null | {
+  id: string;
+  enabled: boolean;
+  require_approval: boolean;
+  required_role: Role;
+}> {
+  const q = new URLSearchParams();
+  q.set('organization_id', eq(orgId));
+  q.set('service', eq(service));
+  q.set('action', eq(action));
+  q.set('select', 'id,enabled,require_approval,required_role');
+  q.set('limit', '1');
+
+  const rows = (await supabaseRestAsUser(userJwt, 'action_policies', q)) as any[];
+  const row = rows?.[0];
+  if (!row) return null;
+
+  const requiredRole = (['super_admin', 'admin', 'manager', 'viewer'].includes(String(row.required_role))
+    ? String(row.required_role)
+    : 'manager') as Role;
+
+  return {
+    id: String(row.id),
+    enabled: row.enabled !== false,
+    require_approval: row.require_approval !== false,
+    required_role: requiredRole,
+  };
+}
+
 // Create job + approval (pending)
 router.post('/', requirePermission('agents.update'), async (req: Request, res: Response) => {
   try {
@@ -66,6 +100,34 @@ router.post('/', requirePermission('agents.update'), async (req: Request, res: R
     }
 
     const now = nowIso();
+
+    const isConnectorAction = data.type === 'connector_action';
+    const connectorService = isConnectorAction ? String((data.input as any)?.connector?.service || '') : '';
+    const connectorAction = isConnectorAction ? String((data.input as any)?.connector?.action || '') : '';
+    const userRole = String((req.user as any)?.role || 'viewer');
+
+    let policy = null as Awaited<ReturnType<typeof getActionPolicy>>;
+    if (isConnectorAction && connectorService && connectorAction) {
+      policy = await getActionPolicy(getUserJwt(req), orgId, connectorService, connectorAction);
+    }
+
+    if (isConnectorAction) {
+      if (!hasPermission(userRole, 'workitems.manage')) {
+        return res.status(403).json({ success: false, error: 'Insufficient permissions', required_permission: 'workitems.manage' });
+      }
+
+      const requiredRole = policy?.required_role || requireRoleForConnectorAction(connectorAction);
+      if (roleRank(userRole) < roleRank(requiredRole)) {
+        return res.status(403).json({ success: false, error: 'Insufficient role privileges', required_role: requiredRole });
+      }
+
+      if (policy && policy.enabled === false) {
+        return res.status(403).json({ success: false, error: 'Action disabled by policy' });
+      }
+    }
+
+    const initialStatus = (isConnectorAction && policy && policy.require_approval === false) ? 'queued' : 'pending_approval';
+
     const createdJobs = (await supabaseRestAsUser(getUserJwt(req), 'agent_jobs', '', {
       method: 'POST',
       body: {
@@ -73,7 +135,7 @@ router.post('/', requirePermission('agents.update'), async (req: Request, res: R
         agent_id: data.agent_id,
         runtime_instance_id: deployment.runtime_instance_id,
         type: data.type,
-        status: 'pending_approval',
+        status: initialStatus,
         input: data.input || {},
         output: {},
         created_by: userId,
@@ -90,15 +152,17 @@ router.post('/', requirePermission('agents.update'), async (req: Request, res: R
       secrets: { mode: 'mixed' },
     };
 
+    const autoApproved = initialStatus === 'queued';
     const approvals = (await supabaseRestAsUser(getUserJwt(req), 'agent_job_approvals', '', {
       method: 'POST',
       body: {
         job_id: job.id,
         requested_by: userId,
-        approved_by: null,
-        status: 'pending',
+        approved_by: autoApproved ? userId : null,
+        status: autoApproved ? 'approved' : 'pending',
         policy_snapshot: policySnapshot,
         created_at: now,
+        ...(autoApproved ? { decided_at: now } : {}),
       },
     })) as any[];
 
@@ -117,6 +181,7 @@ router.post('/', requirePermission('agents.update'), async (req: Request, res: R
         type: data.type,
         status: job.status,
         approval_id: approval?.id || null,
+        connector: isConnectorAction ? { service: connectorService, action: connectorAction, policy_id: policy?.id || null } : null,
       },
     });
 
@@ -172,8 +237,17 @@ router.post('/:id/decision', requirePermission('agents.update'), async (req: Req
         return res.status(403).json({ success: false, error: 'Insufficient permissions', required_permission: 'workitems.manage' });
       }
 
+      const service = String(job?.input?.connector?.service || '');
       const action = String(job?.input?.connector?.action || '');
-      const requiredRole = requireRoleForConnectorAction(action);
+      const policy = (service && action)
+        ? await getActionPolicy(getUserJwt(req), orgId, service, action)
+        : null;
+
+      if (policy && policy.enabled === false) {
+        return res.status(403).json({ success: false, error: 'Action disabled by policy' });
+      }
+
+      const requiredRole = policy?.required_role || requireRoleForConnectorAction(action);
       if (roleRank(userRole) < roleRank(requiredRole)) {
         return res.status(403).json({ success: false, error: 'Insufficient role privileges', required_role: requiredRole });
       }
