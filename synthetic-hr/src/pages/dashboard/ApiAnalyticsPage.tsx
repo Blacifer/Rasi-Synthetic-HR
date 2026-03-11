@@ -216,6 +216,16 @@ export default function ApiAnalyticsPage({ isDemoMode }: ApiAnalyticsPageProps) 
         </div>
       </div>
 
+      <div className="mb-6 flex items-start gap-3 rounded-xl border border-[#3f3f46] bg-[#141417] px-4 py-3 text-sm text-zinc-300">
+        <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-300" />
+        <div>
+          <p className="font-medium text-white">Organization-level usage</p>
+          <p className="text-zinc-400">
+            This view aggregates traffic across the workspace. Per-key usage and limits live in the API Keys section.
+          </p>
+        </div>
+      </div>
+
       {(isDemoMode || errorMessage) && (
         <div className="mb-6 flex items-center gap-3 rounded-xl border border-[#3f3f46] bg-[#141417] px-4 py-3 text-sm text-zinc-300">
           <AlertTriangle className="h-4 w-4 text-amber-300" />

@@ -489,6 +489,15 @@ export default function WebhooksPage() {
               <p className="mt-1 text-sm text-slate-400">Prepare the exact payload, signature header, and curl command for endpoint verification.</p>
             </div>
           </div>
+          <div className="mb-5 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
+            <p className="font-semibold text-white">Manual test checklist</p>
+            <ol className="mt-2 list-decimal space-y-1 pl-5 text-slate-400">
+              <li>Create an endpoint and pick at least one event.</li>
+              <li>Select the webhook below and click “Send Test Delivery”.</li>
+              <li>Validate the signature using the signing secret.</li>
+            </ol>
+            <p className="mt-2 text-xs text-slate-500">If your receiver is local, expose it with a public HTTPS tunnel (ngrok/Cloudflare Tunnel), then retry.</p>
+          </div>
 
           {!selectedWebhook ? (
             <EmptyState

@@ -201,6 +201,12 @@ export default function ModelComparisonPage() {
         </h1>
         <p className="text-slate-400 mt-2">Search our directory of <strong className="text-white">{totalSimulatedModels}</strong> curated models. Evaluate against cost, speed, and capabilities.</p>
       </div>
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300">
+        <p className="font-semibold text-white">About these scores</p>
+        <p className="mt-1 text-slate-400">
+          Speed/accuracy are heuristic indicators based on published specs. Run real benchmarks on your prompts to validate production performance.
+        </p>
+      </div>
 
       {/* Model Selection Rack (Library Style) */}
       <div className="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-6 shadow-xl flex flex-col h-[500px]">

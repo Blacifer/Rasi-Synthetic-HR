@@ -353,8 +353,8 @@ export default function ApiKeysPage({
               <h2 className="mt-3 text-4xl font-semibold tracking-tight text-white">{VIEW_OPTIONS.find((view) => view.id === viewMode)?.label}</h2>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-400">
                 {viewMode === 'keys' && 'Create and manage secret keys for backend services, automations, and integrations. Full secrets appear once after creation and are never shown again.'}
-                {viewMode === 'usage' && 'Review real API-key traffic across the last 30 days. This page reflects request activity only after keys are actually used.'}
-                {viewMode === 'limits' && 'Set request-per-minute guardrails per key so backend services stay inside predictable operational boundaries.'}
+                {viewMode === 'usage' && 'Review real API-key traffic across the last 30 days. This page reflects request activity only after keys are actually used. For organization-wide usage, see the Usage page.'}
+                {viewMode === 'limits' && 'Set request-per-minute guardrails per key so backend services stay inside predictable operational boundaries. These are per-key controls, not billing budgets.'}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
@@ -529,6 +529,7 @@ export default function ApiKeysPage({
                   <p className="mt-1 max-w-4xl text-sm leading-7 text-amber-100/80">
                     This page shows request activity seen on RASI-issued keys. It does not import provider billing dashboards automatically, so OpenAI or Anthropic console totals may be higher if traffic bypasses RASI.
                   </p>
+                  <p className="mt-2 text-xs text-amber-100/70">Need org-wide usage? Open the Usage page for aggregated traffic across the workspace.</p>
                 </div>
                 <div className="rounded-2xl border border-amber-400/20 bg-slate-950/40 px-4 py-3 text-sm text-amber-100">
                   Source of truth: requests observed through RASI
@@ -625,6 +626,11 @@ export default function ApiKeysPage({
 
         {viewMode === 'limits' && (
           <>
+            <div className="rounded-[34px] border border-slate-800 bg-slate-900/70 px-6 py-5">
+              <p className="text-sm text-slate-300">
+                Limits here apply to individual API keys only. They do not change org-wide usage metrics or billing totals.
+              </p>
+            </div>
             <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
               <section className="rounded-[34px] border border-slate-800 bg-slate-900/70">
                 <div className="border-b border-slate-800 px-6 py-5">

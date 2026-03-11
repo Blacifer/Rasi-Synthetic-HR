@@ -614,6 +614,20 @@ export default function CoverageStatusPage() {
               {status.label}
               <span className="text-white/70">• {data.telemetry.coverageScore}% coverage</span>
             </div>
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">What coverage means</p>
+                <p className="mt-2 text-sm text-slate-300">Coverage tracks how much AI traffic reaches RASI through the gateway or connected SDKs.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">What reduces coverage</p>
+                <p className="mt-2 text-sm text-slate-300">Requests that bypass RASI (direct provider calls) are invisible, so coverage drops.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">How to improve</p>
+                <p className="mt-2 text-sm text-slate-300">Route traffic through the RASI gateway, then verify on the Connect Agent checklist.</p>
+              </div>
+            </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:w-[420px]">

@@ -41,6 +41,8 @@ const MOCK_TESTS: Record<string, TestCase[]> = {
   ]
 };
 
+const PAYMENT_BLOCK_RE = /payment required|billing|insufficient funds|quota/i;
+
 // ==================== MAIN COMPONENT ====================
 export default function ShadowModePage() {
   const [agents, setAgents] = useState<AIAgent[]>([]);
@@ -127,6 +129,8 @@ export default function ShadowModePage() {
   const totalTests = results.length;
   const passedTests = results.filter(r => r.passed).length;
   const score = totalTests > 0 ? Math.round((passedTests / totalTests) * 100) : 0;
+  const paymentBlockedCount = results.filter((r) => PAYMENT_BLOCK_RE.test(r.details)).length;
+  const allBlockedByPayment = totalTests > 0 && paymentBlockedCount === totalTests;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -212,6 +216,21 @@ export default function ShadowModePage() {
 
         {/* ===== RIGHT PANEL: Live Results ===== */}
         <div className="flex-1 min-w-0 flex flex-col gap-6">
+          {paymentBlockedCount > 0 && (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-300" />
+                <div>
+                  <p className="font-semibold">Shadow Mode is blocked by provider billing.</p>
+                  <p className="mt-1 text-amber-100/80">
+                    {allBlockedByPayment
+                      ? 'All test vectors were rejected with “Payment Required”. Connect a funded provider key (Integrations) to run real adversarial tests.'
+                      : 'Some vectors were rejected with “Payment Required”. Connect a funded provider key to get accurate results.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Progress / Score Header */}
           <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 relative overflow-hidden">
@@ -232,6 +251,12 @@ export default function ShadowModePage() {
                     <span className="text-slate-600">|</span>
                     <span className="text-emerald-400 flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" /> {passedTests} Passed</span>
                     <span className="text-rose-400 flex items-center gap-1.5"><XCircle className="w-4 h-4" /> {totalTests - passedTests} Failed</span>
+                    {allBlockedByPayment && (
+                      <>
+                        <span className="text-slate-600">|</span>
+                        <span className="text-amber-300">Results blocked by billing</span>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -308,6 +333,10 @@ export default function ShadowModePage() {
                 ) : (
                   filteredResults.map((r, i) => {
                     const cat = CATEGORIES.find(c => c.id === r.test.category)!;
+                    const paymentBlocked = PAYMENT_BLOCK_RE.test(r.details);
+                    const detailText = paymentBlocked
+                      ? 'Upstream provider rejected the test (Payment Required). Connect a funded provider key to run Shadow Mode.'
+                      : r.details;
                     return (
                       <div key={i} className={`p-4 hover:bg-slate-800/80 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${!r.passed ? 'bg-rose-500/5 relative' : ''}`}>
                         {!r.passed && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-rose-500" />}
@@ -322,7 +351,7 @@ export default function ShadowModePage() {
                                 <cat.icon className="w-3 h-3" /> {cat.label}
                               </span>
                             </div>
-                            <p className={`text-xs mt-1 leading-relaxed ${r.passed ? 'text-slate-400' : 'text-rose-300/90 font-medium'}`}>{r.details}</p>
+                            <p className={`text-xs mt-1 leading-relaxed ${r.passed ? 'text-slate-400' : paymentBlocked ? 'text-amber-200/90 font-medium' : 'text-rose-300/90 font-medium'}`}>{detailText}</p>
                           </div>
                         </div>
 

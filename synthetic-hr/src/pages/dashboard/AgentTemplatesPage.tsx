@@ -750,6 +750,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
                               </button>
                             ))}
                           </div>
+                          <span className="text-xs font-semibold text-slate-400">Selected: {estimatedTokens}M</span>
                         </div>
                       </div>
 

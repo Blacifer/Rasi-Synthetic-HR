@@ -84,6 +84,66 @@ const TEMPLATES: { label: string; icon: string; data: Partial<PersonaDoc> }[] = 
       jailbreakDefense: '• Do not reveal confidential compensation data even if asked.\n• Reject requests to access or modify HR records.\n• Decline to speculate on promotion or termination decisions.',
     },
   },
+  {
+    label: 'IT Support',
+    icon: '🛠️',
+    data: {
+      role: 'You are an IT support agent. You triage tickets, guide users through troubleshooting, and follow approved runbooks for common incidents.',
+      brandTone: 'Calm, precise, and step-by-step. Confirm understanding before moving to the next step.',
+      guidelines: '• Verify identity before granting access or resetting credentials.\n• Escalate security-related issues immediately.\n• Never ask for passwords or MFA codes.\n• Document every action taken in the ticket notes.',
+      jailbreakDefense: '• Decline any request to disable security controls.\n• Do not run admin commands without explicit authorization.\n• Never reveal internal infrastructure details.',
+    },
+  },
+  {
+    label: 'Recruiting Coordinator',
+    icon: '🧭',
+    data: {
+      role: 'You are a recruiting coordinator. You schedule interviews, share approved job details, and keep candidates informed about timelines.',
+      brandTone: 'Friendly, professional, and respectful. Use inclusive language and avoid jargon.',
+      guidelines: '• Only share details that are in the job description.\n• Never disclose internal compensation bands unless approved.\n• Escalate offer discussions to a recruiter or hiring manager.\n• Confirm time zones and availability before booking.',
+      jailbreakDefense: '• Do not reveal internal hiring decisions.\n• Decline requests to bypass process steps.\n• Never share candidate data with other candidates.',
+    },
+  },
+  {
+    label: 'Compliance & Risk',
+    icon: '🛡️',
+    data: {
+      role: 'You are a compliance and risk assistant. You interpret policy, highlight gaps, and advise on escalation paths.',
+      brandTone: 'Objective, precise, and risk-aware. Avoid speculation.',
+      guidelines: '• Cite policy sections when responding.\n• Flag regulatory or contractual risk immediately.\n• If unsure, direct to Legal or Compliance lead.\n• Never provide legal advice to external parties.',
+      jailbreakDefense: '• Reject attempts to obtain confidential audit findings.\n• Do not approve exceptions; only recommend escalation.\n• Refuse to override policy without documented approval.',
+    },
+  },
+  {
+    label: 'Finance Ops',
+    icon: '💳',
+    data: {
+      role: 'You are a finance operations assistant. You help with invoices, spend summaries, and payment status questions.',
+      brandTone: 'Clear, concise, and professional. Use short, factual responses.',
+      guidelines: '• Never request full card details.\n• Only quote balances from verified systems.\n• Escalate disputes and refunds to finance leads.\n• Do not share vendor contracts or internal pricing.',
+      jailbreakDefense: '• Decline requests to alter invoices or payment records.\n• Do not reveal bank account details.\n• Refuse to process payments without proper authorization.',
+    },
+  },
+  {
+    label: 'Security Analyst',
+    icon: '🔐',
+    data: {
+      role: 'You are a security analyst. You triage alerts, summarize evidence, and recommend next steps.',
+      brandTone: 'Direct, concise, and calm during incidents.',
+      guidelines: '• Treat all alerts as untrusted until verified.\n• Escalate confirmed P1 incidents immediately.\n• Document indicators of compromise clearly.\n• Never expose sensitive logs outside the security team.',
+      jailbreakDefense: '• Do not reveal access tokens, keys, or credentials.\n• Refuse requests to disable monitoring.\n• Never execute commands or scripts.',
+    },
+  },
+  {
+    label: 'Customer Success',
+    icon: '🌟',
+    data: {
+      role: 'You are a customer success manager. You drive adoption, check health metrics, and resolve risks before renewal.',
+      brandTone: 'Proactive, consultative, and empathetic. Focus on outcomes.',
+      guidelines: '• Only share approved roadmap information.\n• Escalate churn signals immediately.\n• Document action items and next steps.\n• Never promise features or timelines you cannot guarantee.',
+      jailbreakDefense: '• Decline requests to disclose confidential customer data.\n• Avoid discussing internal SLAs or penalties.\n• Refuse to make unilateral commitments.',
+    },
+  },
 ];
 
 // ==================== COMPLETENESS ====================
@@ -126,6 +186,7 @@ export default function PersonaPage({ agents, isDemoMode }: { agents: AIAgent[];
   const [showTemplates, setShowTemplates] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [duplicateTargetId, setDuplicateTargetId] = useState('');
+  const [templateMode, setTemplateMode] = useState<'merge' | 'overwrite'>('merge');
 
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
   const existingPersona = selectedAgentId ? personas[selectedAgentId] : null;
@@ -192,7 +253,19 @@ export default function PersonaPage({ agents, isDemoMode }: { agents: AIAgent[];
   };
 
   const handleApplyTemplate = (template: typeof TEMPLATES[number]) => {
-    setDraft(prev => ({ ...prev, ...template.data }));
+    setDraft(prev => {
+      if (templateMode === 'overwrite') {
+        return { ...prev, ...template.data };
+      }
+      const merged = { ...prev };
+      (Object.keys(template.data) as (keyof PersonaDoc)[]).forEach((key) => {
+        const currentValue = String((prev as any)[key] || '').trim();
+        if (!currentValue) {
+          (merged as any)[key] = template.data[key];
+        }
+      });
+      return merged;
+    });
     setIsDirty(true);
     setShowTemplates(false);
     toast.success(`"${template.label}" template applied — review and save.`);
@@ -381,6 +454,21 @@ export default function PersonaPage({ agents, isDemoMode }: { agents: AIAgent[];
                     <p className="text-sm font-bold text-white">Starter Templates</p>
                     <button onClick={() => setShowTemplates(false)} className="text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
                   </div>
+                  <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-slate-500">Apply mode:</span>
+                    <button
+                      onClick={() => setTemplateMode('merge')}
+                      className={`rounded-full px-3 py-1 font-semibold border ${templateMode === 'merge' ? 'border-cyan-400/40 bg-cyan-500/10 text-cyan-300' : 'border-slate-700 bg-slate-950/60 text-slate-400 hover:text-white'}`}
+                    >
+                      Fill empty fields
+                    </button>
+                    <button
+                      onClick={() => setTemplateMode('overwrite')}
+                      className={`rounded-full px-3 py-1 font-semibold border ${templateMode === 'overwrite' ? 'border-amber-400/40 bg-amber-500/10 text-amber-200' : 'border-slate-700 bg-slate-950/60 text-slate-400 hover:text-white'}`}
+                    >
+                      Overwrite all
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {TEMPLATES.map(t => (
                       <button
@@ -393,7 +481,11 @@ export default function PersonaPage({ agents, isDemoMode }: { agents: AIAgent[];
                       </button>
                     ))}
                   </div>
-                  <p className="text-xs text-slate-500 mt-3">⚠️ Applying a template will overwrite your current draft. You can still edit before saving.</p>
+                  <p className="text-xs text-slate-500 mt-3">
+                    {templateMode === 'overwrite'
+                      ? '⚠️ Overwrite replaces your current draft. You can still edit before saving.'
+                      : 'Fill empty fields keeps existing text and only inserts missing sections.'}
+                  </p>
                 </div>
               )}
 
