@@ -16,6 +16,9 @@ export const ANTHROPIC_PRICING = {
   'claude-3-sonnet': { input: 3, output: 15 },
   'claude-3-haiku': { input: 0.25, output: 1.25 },
   'claude-3-5-sonnet': { input: 3, output: 15 },
+  'claude-sonnet-4-0': { input: 3, output: 15 },
+  'claude-sonnet-4-20250514': { input: 3, output: 15 },
+  'claude-3-haiku-20240307': { input: 0.25, output: 1.25 },
 };
 
 export interface AIResponse {

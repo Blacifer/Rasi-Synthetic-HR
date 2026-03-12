@@ -26,9 +26,11 @@ const GATEWAY_MODELS: GatewayModel[] = [
   { id: 'openai/gpt-3.5-turbo', provider: 'openai', upstreamModel: 'gpt-3.5-turbo', ownedBy: 'openai' },
   { id: 'openai/text-embedding-3-small', provider: 'openai', upstreamModel: 'text-embedding-3-small', ownedBy: 'openai' },
   { id: 'openai/text-embedding-3-large', provider: 'openai', upstreamModel: 'text-embedding-3-large', ownedBy: 'openai' },
-  { id: 'anthropic/claude-3-5-sonnet', provider: 'anthropic', upstreamModel: 'claude-3-5-sonnet', ownedBy: 'anthropic' },
-  { id: 'anthropic/claude-3-sonnet', provider: 'anthropic', upstreamModel: 'claude-3-sonnet', ownedBy: 'anthropic' },
-  { id: 'anthropic/claude-3-haiku', provider: 'anthropic', upstreamModel: 'claude-3-haiku', ownedBy: 'anthropic' },
+  // Anthropic model IDs evolve quickly; route legacy names to currently-supported upstream IDs.
+  { id: 'anthropic/claude-3-5-sonnet', provider: 'anthropic', upstreamModel: 'claude-sonnet-4-0', ownedBy: 'anthropic' },
+  { id: 'anthropic/claude-3-sonnet', provider: 'anthropic', upstreamModel: 'claude-sonnet-4-0', ownedBy: 'anthropic' },
+  { id: 'anthropic/claude-3-haiku', provider: 'anthropic', upstreamModel: 'claude-3-haiku-20240307', ownedBy: 'anthropic' },
+  { id: 'anthropic/claude-sonnet-4', provider: 'anthropic', upstreamModel: 'claude-sonnet-4-0', ownedBy: 'anthropic' },
   { id: 'google/gemini-2.0-flash', provider: 'openrouter', upstreamModel: 'google/gemini-2.0-flash', ownedBy: 'google' },
   { id: 'meta-llama/llama-3.1-70b-instruct', provider: 'openrouter', upstreamModel: 'meta-llama/llama-3.1-70b-instruct', ownedBy: 'meta' },
 ];
@@ -155,7 +157,10 @@ const normalizeModel = (model: string): GatewayModel | null => {
     const normalizedUpstream = upstream
       .replace('claude-3.5-sonnet', 'claude-3-5-sonnet')
       .replace('claude-3.5-haiku', 'claude-3-haiku');
-    return { id: `anthropic/${normalizedUpstream}`, provider: 'anthropic', upstreamModel: normalizedUpstream, ownedBy: 'anthropic' };
+    const id = `anthropic/${normalizedUpstream}`;
+    const known = GATEWAY_MODELS.find((m) => m.id === id);
+    if (known) return known;
+    return { id, provider: 'anthropic', upstreamModel: normalizedUpstream, ownedBy: 'anthropic' };
   }
 
   if (model.startsWith('openrouter/')) {
