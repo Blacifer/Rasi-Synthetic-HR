@@ -9,7 +9,7 @@ import { validateRequestBody, agentSchemas, incidentSchemas, costSchemas } from 
 import { z } from 'zod';
 import { requirePermission, requireRole } from '../middleware/rbac';
 import { auditLog } from '../lib/audit-logger';
-import { SupabaseRestError, supabaseRestAsService, supabaseRestAsUser, eq, gte } from '../lib/supabase-rest';
+import { SupabaseRestError, supabaseRestAsService, supabaseRestAsUser, eq, gte, in_ } from '../lib/supabase-rest';
 import { fireAndForgetWebhookEvent, getWebhookRelaySettings } from '../lib/webhook-relay';
 import { getPromptCachingState, updatePromptCachingPolicy } from '../lib/prompt-caching';
 import { deletePricingQuote, getPricingState, savePricingQuote, updatePricingConfig } from '../lib/pricing';
@@ -93,12 +93,46 @@ router.get('/agents', requirePermission('agents.read'), async (req: Request, res
 
     const rawData = await supabaseRestAsUser(getUserJwt(req), 'ai_agents', query) as any[];
 
+    // Conversations in the UI are treated as governed runtime interactions.
+    // We approximate this by summing `request_count` from cost_tracking per-agent over the last 30 days.
+    const conversationCounts = new Map<string, number>();
+    try {
+      const agentIds = (rawData || [])
+        .map((agent) => agent?.id)
+        .filter((id) => typeof id === 'string' && id.length > 0);
+
+      if (agentIds.length > 0) {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+
+        const costQuery = new URLSearchParams();
+        costQuery.set('organization_id', eq(orgId));
+        costQuery.set('date', gte(thirtyDaysAgoStr));
+        costQuery.set('agent_id', in_(agentIds));
+        costQuery.set('select', 'agent_id,request_count');
+        costQuery.set('limit', '10000');
+
+        const rows = (await supabaseRestAsUser(getUserJwt(req), 'cost_tracking', costQuery)) as any[];
+        for (const row of rows || []) {
+          const agentId = row?.agent_id;
+          if (typeof agentId !== 'string' || agentId.length === 0) continue;
+          const requests = Number(row?.request_count || 0);
+          if (!Number.isFinite(requests) || requests <= 0) continue;
+          conversationCounts.set(agentId, (conversationCounts.get(agentId) || 0) + requests);
+        }
+      }
+    } catch (err: any) {
+      logger.warn('Failed to compute agent conversation counts', { error: err?.message || err, org_id: orgId });
+    }
+
     // Map config fields to top-level properties as expected by the frontend
     const data = rawData?.map((agent) => ({
       ...agent,
       budget_limit: agent.config?.budget_limit ?? 0,
       current_spend: agent.config?.current_spend ?? 0,
       auto_throttle: agent.config?.auto_throttle ?? false,
+      conversations: conversationCounts.get(agent.id) || 0,
     })) || [];
 
     logger.info('Agents fetched successfully', { count: data?.length, org_id: orgId });
@@ -133,11 +167,32 @@ router.get('/agents/:id', requirePermission('agents.read'), async (req: Request,
     }
 
     const agent = rawData[0];
+    let conversations = 0;
+    try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+
+      const costQuery = new URLSearchParams();
+      costQuery.set('organization_id', eq(orgId));
+      costQuery.set('date', gte(thirtyDaysAgoStr));
+      costQuery.set('agent_id', eq(id));
+      costQuery.set('select', 'request_count');
+      costQuery.set('limit', '10000');
+
+      const rows = (await supabaseRestAsUser(getUserJwt(req), 'cost_tracking', costQuery)) as any[];
+      conversations = (rows || []).reduce((sum, row) => sum + Number(row?.request_count || 0), 0);
+      if (!Number.isFinite(conversations) || conversations < 0) conversations = 0;
+    } catch (err: any) {
+      logger.warn('Failed to compute agent conversation count', { error: err?.message || err, org_id: orgId, agent_id: id });
+    }
+
     const data = {
       ...agent,
       budget_limit: agent.config?.budget_limit ?? 0,
       current_spend: agent.config?.current_spend ?? 0,
       auto_throttle: agent.config?.auto_throttle ?? false,
+      conversations,
     };
 
     res.json({ success: true, data });
