@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import express, { Request, Response } from 'express';
 import multer from 'multer';
 import { AnthropicService, OpenAIService } from '../services/ai-service';
+import { incidentDetection } from '../services/incident-detection';
 import { validateApiKey } from '../middleware/api-key-validation';
 import { logger } from '../lib/logger';
 import { supabaseRest, eq } from '../lib/supabase-rest';
@@ -85,6 +86,87 @@ const transcriptionUploadMiddleware = (req: Request, res: Response, next: expres
       },
     });
   });
+};
+
+const lastUserMessage = (messages: Array<{ role: string; content: string }>) => {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg?.role === 'user' && typeof msg.content === 'string' && msg.content.trim()) {
+      return msg.content.trim();
+    }
+  }
+  return '';
+};
+
+const maybeCreateIncidentFromCompletion = async (params: {
+  orgId: string;
+  agentId: string;
+  modelId: string;
+  messages: Array<{ role: string; content: string }>;
+  completion: { content: string };
+  requestId?: string;
+}) => {
+  try {
+    const scanResults = incidentDetection.fullScan(params.completion.content || '');
+    const highest = incidentDetection.getHighestSeverity(scanResults);
+    if (!highest || (highest.severity !== 'critical' && highest.severity !== 'high')) return;
+
+    const trigger = lastUserMessage(params.messages);
+    const title = `${String(highest.type || 'incident').replace(/_/g, ' ').toUpperCase()} Detected`;
+
+    const rows = await supabaseRest(
+      'incidents',
+      '',
+      {
+        method: 'POST',
+        body: {
+          organization_id: params.orgId,
+          agent_id: params.agentId,
+          incident_type: highest.type,
+          severity: highest.severity,
+          title,
+          description: highest.details,
+          trigger_content: trigger || undefined,
+          ai_response: params.completion.content,
+          status: 'open',
+        },
+      }
+    );
+
+    const incident = Array.isArray(rows) ? rows[0] : null;
+    logger.warn('Gateway incident created', {
+      incident_id: incident?.id,
+      orgId: params.orgId,
+      agentId: params.agentId,
+      incident_type: highest.type,
+      severity: highest.severity,
+      requestId: params.requestId,
+      model: params.modelId,
+    });
+
+    fireAndForgetWebhookEvent(params.orgId, 'error.occurred', {
+      id: `evt_gateway_detect_${incident?.id || crypto.randomUUID()}`,
+      type: 'error.occurred',
+      created_at: new Date().toISOString(),
+      organization_id: params.orgId,
+      data: {
+        incident_id: incident?.id,
+        agent_id: params.agentId,
+        severity: highest.severity,
+        incident_type: highest.type,
+        title,
+        description: highest.details,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Gateway incident detection failed', {
+      error: String(error?.message || error),
+      requestId: params.requestId,
+      orgId: params.orgId,
+      agentId: params.agentId,
+      model: params.modelId,
+    });
+  }
 };
 
 let openRouterModelsCache: { expiresAt: number; models: GatewayModel[] } = {
@@ -1217,6 +1299,17 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
         messages: normalizedMessages,
         totalTokens: completion.totalTokens,
         costUsd: completion.costUSD,
+      });
+    }
+
+    if (req.apiKey?.organization_id && agentId) {
+      void maybeCreateIncidentFromCompletion({
+        orgId: req.apiKey.organization_id,
+        agentId,
+        modelId: modelConfig.id,
+        messages: normalizedMessages,
+        completion: { content: completion.content },
+        requestId: req.requestId,
       });
     }
 
