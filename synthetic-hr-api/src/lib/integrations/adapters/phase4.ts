@@ -280,6 +280,121 @@ export const OktaAdapter: IntegrationAdapter = {
   },
 };
 
+export const ZendeskAdapter: IntegrationAdapter = {
+  async testConnection(credentials: Record<string, string>): Promise<ConnectionTestResult> {
+    try {
+      const subdomain = normalizeDomain(decryptSecret(credentials.subdomain || ''));
+      const email = decryptSecret(credentials.email || '');
+      const apiToken = decryptSecret(credentials.api_token || '');
+      if (!subdomain) return { success: false, message: 'Missing subdomain' };
+      const url = `https://${subdomain}.zendesk.com/api/v2/users/me.json`;
+      const auth = basicAuthHeader(`${email}/token`, apiToken);
+      const res = await fetchWithTimeout(url, {
+        method: 'GET',
+        headers: { Authorization: auth, Accept: 'application/json' },
+      });
+      if (!res.ok) return { success: false, message: `API Error: ${res.status}` };
+      return { success: true, message: 'Connected to Zendesk successfully' };
+    } catch (err: any) {
+      return { success: false, message: `Connection failed: ${err?.message || String(err)}` };
+    }
+  },
+};
+
+export const FreshdeskAdapter: IntegrationAdapter = {
+  async testConnection(credentials: Record<string, string>): Promise<ConnectionTestResult> {
+    try {
+      const domain = normalizeDomain(decryptSecret(credentials.domain || ''));
+      const apiKey = decryptSecret(credentials.api_key || '');
+      if (!domain) return { success: false, message: 'Missing domain' };
+      const url = `https://${domain}.freshdesk.com/api/v2/agents/me`;
+      const res = await fetchWithTimeout(url, {
+        method: 'GET',
+        headers: { Authorization: basicAuthHeader(apiKey, 'X'), Accept: 'application/json' },
+      });
+      if (!res.ok) return { success: false, message: `API Error: ${res.status}` };
+      return { success: true, message: 'Connected to Freshdesk successfully' };
+    } catch (err: any) {
+      return { success: false, message: `Connection failed: ${err?.message || String(err)}` };
+    }
+  },
+};
+
+function normalizeUrl(value: string) {
+  const trimmed = (value || '').trim();
+  if (!trimmed) return '';
+  return trimmed.startsWith('http://') || trimmed.startsWith('https://') ? trimmed.replace(/\/+$/, '') : `https://${trimmed.replace(/\/+$/, '')}`;
+}
+
+export const JiraAdapter: IntegrationAdapter = {
+  async testConnection(credentials: Record<string, string>): Promise<ConnectionTestResult> {
+    try {
+      const baseUrl = normalizeUrl(decryptSecret(credentials.base_url || ''));
+      const email = decryptSecret(credentials.email || '');
+      const apiToken = decryptSecret(credentials.api_token || '');
+      if (!baseUrl) return { success: false, message: 'Missing base_url' };
+      const url = `${baseUrl}/rest/api/3/myself`;
+      const res = await fetchWithTimeout(url, {
+        method: 'GET',
+        headers: { Authorization: basicAuthHeader(email, apiToken), Accept: 'application/json' },
+      });
+      if (!res.ok) return { success: false, message: `API Error: ${res.status}` };
+      return { success: true, message: 'Connected to Jira successfully' };
+    } catch (err: any) {
+      return { success: false, message: `Connection failed: ${err?.message || String(err)}` };
+    }
+  },
+};
+
+export const HubSpotAdapter: IntegrationAdapter = {
+  async testConnection(credentials: Record<string, string>): Promise<ConnectionTestResult> {
+    try {
+      const token = decryptSecret(credentials.private_app_token || credentials.access_token || '');
+      const res = await fetchWithTimeout('https://api.hubapi.com/account-info/v3/details', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      if (!res.ok) return { success: false, message: `API Error: ${res.status}` };
+      return { success: true, message: 'Connected to HubSpot successfully' };
+    } catch (err: any) {
+      return { success: false, message: `Connection failed: ${err?.message || String(err)}` };
+    }
+  },
+};
+
+export const StripeAdapter: IntegrationAdapter = {
+  async testConnection(credentials: Record<string, string>): Promise<ConnectionTestResult> {
+    try {
+      const secretKey = decryptSecret(credentials.secret_key || '');
+      const res = await fetchWithTimeout('https://api.stripe.com/v1/account', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${secretKey}`, Accept: 'application/json' },
+      });
+      if (!res.ok) return { success: false, message: `API Error: ${res.status}` };
+      return { success: true, message: 'Connected to Stripe successfully' };
+    } catch (err: any) {
+      return { success: false, message: `Connection failed: ${err?.message || String(err)}` };
+    }
+  },
+};
+
+export const RazorpayAdapter: IntegrationAdapter = {
+  async testConnection(credentials: Record<string, string>): Promise<ConnectionTestResult> {
+    try {
+      const keyId = decryptSecret(credentials.key_id || '');
+      const keySecret = decryptSecret(credentials.key_secret || '');
+      const res = await fetchWithTimeout('https://api.razorpay.com/v1/payments?count=1', {
+        method: 'GET',
+        headers: { Authorization: basicAuthHeader(keyId, keySecret), Accept: 'application/json' },
+      });
+      if (!res.ok) return { success: false, message: `API Error: ${res.status}` };
+      return { success: true, message: 'Connected to Razorpay successfully' };
+    } catch (err: any) {
+      return { success: false, message: `Connection failed: ${err?.message || String(err)}` };
+    }
+  },
+};
+
 export const KekaAdapter: IntegrationAdapter = {
   async testConnection(credentials: Record<string, string>): Promise<ConnectionTestResult> {
     try {
@@ -366,6 +481,12 @@ export const EpfoAdapter: IntegrationAdapter = {
 };
 
 export const Phase4Adapters: Record<string, IntegrationAdapter> = {
+  zendesk: ZendeskAdapter,
+  freshdesk: FreshdeskAdapter,
+  jira: JiraAdapter,
+  hubspot: HubSpotAdapter,
+  stripe: StripeAdapter,
+  razorpay: RazorpayAdapter,
   google_workspace: GoogleWorkspaceAdapter,
   microsoft_365: Microsoft365Adapter,
   teams: TeamsAdapter,

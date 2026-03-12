@@ -69,6 +69,19 @@ type StoredConnectionLogRow = {
   created_at: string;
 };
 
+type StoredActionPolicyRow = {
+  id: string;
+  organization_id: string;
+  service: string;
+  action: string;
+  enabled: boolean;
+  require_approval: boolean;
+  required_role: string;
+  notes: string | null;
+  updated_by: string | null;
+  updated_at: string;
+};
+
 async function safeQuery<T>(rest: RestFn, table: string, query: URLSearchParams): Promise<T[]> {
   try {
     return (await rest(table, query)) as T[];
@@ -193,6 +206,51 @@ async function writeConnectionLog(
     // Never break primary flows for logging failures.
     logger.warn('Failed to write integration connection log', { integrationId, action, error: err?.message || String(err) });
   }
+}
+
+async function upsertActionPolicy(
+  rest: RestFn,
+  orgId: string,
+  service: string,
+  action: string,
+  updates: Partial<StoredActionPolicyRow>
+) {
+  const query = new URLSearchParams();
+  query.set('organization_id', eq(orgId));
+  query.set('service', eq(service));
+  query.set('action', eq(action));
+  query.set('select', '*');
+  const existing = await safeQuery<StoredActionPolicyRow>(rest, 'action_policies', query);
+
+  const now = new Date().toISOString();
+  if (existing.length > 0) {
+    const patchQuery = new URLSearchParams();
+    patchQuery.set('id', eq(existing[0].id));
+    const patched = await rest('action_policies', patchQuery, {
+      method: 'PATCH',
+      body: {
+        ...updates,
+        updated_at: now,
+      },
+    }) as any[];
+    return patched?.[0] || existing[0];
+  }
+
+  const created = await rest('action_policies', '', {
+    method: 'POST',
+    body: {
+      organization_id: orgId,
+      service,
+      action,
+      enabled: updates.enabled ?? true,
+      require_approval: updates.require_approval ?? true,
+      required_role: updates.required_role ?? 'manager',
+      notes: updates.notes ?? null,
+      updated_by: (updates as any).updated_by ?? null,
+      updated_at: now,
+    },
+  }) as any[];
+  return created?.[0] || null;
 }
 
 function getApiBaseUrl(req: any): string {
@@ -345,6 +403,45 @@ async function buildOAuthAuthorizeUrl(params: {
   return { url: authUrl.toString() };
 }
 
+function oauthEnvKeysForService(service: string): string[] {
+  switch (service) {
+    case 'zoho_people':
+    case 'zoho_recruit':
+    case 'zoho_learn':
+      return ['ZOHO_CLIENT_ID', 'ZOHO_CLIENT_SECRET'];
+    case 'linkedin':
+      return ['LINKEDIN_CLIENT_ID', 'LINKEDIN_CLIENT_SECRET'];
+    case 'digilocker':
+      return ['DIGILOCKER_CLIENT_ID', 'DIGILOCKER_CLIENT_SECRET'];
+    case 'google_workspace':
+      return ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'];
+    case 'microsoft_365':
+    case 'teams':
+      return ['MICROSOFT_CLIENT_ID', 'MICROSOFT_CLIENT_SECRET'];
+    case 'slack':
+      return ['SLACK_CLIENT_ID', 'SLACK_CLIENT_SECRET'];
+    case 'deel':
+      return ['DEEL_CLIENT_ID', 'DEEL_CLIENT_SECRET'];
+    case 'gusto':
+      return ['GUSTO_CLIENT_ID', 'GUSTO_CLIENT_SECRET'];
+    case 'flock':
+      return ['FLOCK_CLIENT_ID', 'FLOCK_CLIENT_SECRET'];
+    case 'okta':
+      return ['OKTA_CLIENT_ID', 'OKTA_CLIENT_SECRET'];
+    default:
+      return [];
+  }
+}
+
+type ReadinessItemStatus = 'ok' | 'todo' | 'blocked';
+
+type IntegrationReadinessItem = {
+  id: string;
+  label: string;
+  status: ReadinessItemStatus;
+  detail?: string | null;
+};
+
 // Catalog: registry only
 router.get('/catalog', requirePermission('connectors.read'), async (_req, res) => {
   return res.json({
@@ -371,6 +468,7 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
 
   const integrationIds = rows.map((r) => r.id).filter(Boolean);
   const credentialIntegrationIdSet = new Set<string>();
+  const accessTokenExpiryByIntegrationId = new Map<string, string | null>();
   if (integrationIds.length > 0) {
     const credQuery = new URLSearchParams();
     credQuery.set('integration_id', in_(integrationIds));
@@ -378,6 +476,17 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
     const creds = await safeQuery<Pick<StoredCredentialRow, 'integration_id'>>(rest, 'integration_credentials', credQuery);
     (creds || []).forEach((c) => {
       if (c.integration_id) credentialIntegrationIdSet.add(String(c.integration_id));
+    });
+
+    // Access token expiry is stored on the credential row where key=access_token.
+    const expQuery = new URLSearchParams();
+    expQuery.set('integration_id', in_(integrationIds));
+    expQuery.set('key', eq('access_token'));
+    expQuery.set('select', 'integration_id,expires_at');
+    const expRows = await safeQuery<Pick<StoredCredentialRow, 'integration_id' | 'expires_at'>>(rest, 'integration_credentials', expQuery);
+    (expRows || []).forEach((r) => {
+      if (!r.integration_id) return;
+      accessTokenExpiryByIntegrationId.set(String(r.integration_id), r.expires_at || null);
     });
   }
 
@@ -392,6 +501,75 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
   const data = IMPLEMENTED_INTEGRATIONS.map((spec) => {
     const row = byType.get(spec.id);
     const lifecycleStatus = lifecycleFromRow(row);
+    const oauthKeys = spec.authType === 'oauth2' ? oauthEnvKeysForService(spec.id) : [];
+    const oauthMissingEnv = oauthKeys.filter((k) => !(process.env[k] && String(process.env[k]).trim().length > 0));
+    const oauthMeta = spec.authType === 'oauth2'
+      ? { ready: oauthMissingEnv.length === 0, missingEnv: oauthMissingEnv }
+      : null;
+
+    const expectedRedirectUrl =
+      spec.authType === 'oauth2' && spec.oauthConfig
+        ? `${getApiBaseUrl(req)}${spec.oauthConfig.redirectPath}`
+        : null;
+
+    const missingCoreEnv = ['JWT_SECRET', 'FRONTEND_URL'].filter((k) => !(process.env[k] && String(process.env[k]).trim().length > 0));
+    const coreEnvReady = missingCoreEnv.length === 0;
+
+    const requiredFields = spec.apiKeyConfig?.requiredFields || spec.connectionFields || [];
+    const credentialHint = requiredFields.length > 0 ? requiredFields.map((f) => f.label).join(', ') : '—';
+
+    const readiness: { expectedRedirectUrl: string | null; items: IntegrationReadinessItem[] } = {
+      expectedRedirectUrl,
+      items: [],
+    };
+
+    readiness.items.push({
+      id: 'core_env',
+      label: 'Backend env configured',
+      status: coreEnvReady ? 'ok' : 'blocked',
+      detail: coreEnvReady ? null : `Missing: ${missingCoreEnv.join(', ')}`,
+    });
+
+    if (spec.authType === 'oauth2') {
+      readiness.items.push({
+        id: 'oauth_app',
+        label: 'OAuth app keys set',
+        status: oauthMeta?.ready ? 'ok' : 'blocked',
+        detail: oauthMeta?.ready ? null : `Missing: ${(oauthMeta?.missingEnv || []).join(', ')}`,
+      });
+      readiness.items.push({
+        id: 'redirect_url',
+        label: 'Redirect URL added in provider console',
+        status: expectedRedirectUrl ? 'todo' : 'blocked',
+        detail: expectedRedirectUrl || 'Could not compute redirect URL',
+      });
+      readiness.items.push({
+        id: 'validated',
+        label: 'Connection validated',
+        status: lifecycleStatus === 'connected' ? 'ok' : lifecycleStatus === 'error' || lifecycleStatus === 'expired' ? 'blocked' : 'todo',
+        detail: lifecycleStatus === 'connected' ? null : (row?.last_error_msg || null),
+      });
+    } else {
+      readiness.items.push({
+        id: 'credentials',
+        label: 'Credentials saved',
+        status: lifecycleStatus === 'not_configured' ? 'todo' : 'ok',
+        detail: lifecycleStatus === 'not_configured' ? `Required: ${credentialHint}` : null,
+      });
+      readiness.items.push({
+        id: 'validated',
+        label: 'Connection validated',
+        status: lifecycleStatus === 'connected' ? 'ok' : lifecycleStatus === 'error' || lifecycleStatus === 'expired' ? 'blocked' : 'todo',
+        detail: lifecycleStatus === 'connected' ? null : (row?.last_error_msg || null),
+      });
+    }
+
+    const tokenExpiresAt = row?.id ? (accessTokenExpiryByIntegrationId.get(row.id) || null) : null;
+    const tokenExpiresAtMs = tokenExpiresAt ? new Date(tokenExpiresAt).getTime() : NaN;
+    const nowMs = Date.now();
+    const tokenExpired = Number.isFinite(tokenExpiresAtMs) ? tokenExpiresAtMs <= nowMs : false;
+    const tokenExpiresSoon = Number.isFinite(tokenExpiresAtMs) ? (tokenExpiresAtMs - nowMs) <= 1000 * 60 * 60 * 24 * 7 : false;
+
     return {
       id: spec.id,
       name: spec.name,
@@ -403,6 +581,11 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
       priority: spec.priority,
       requiredFields: spec.apiKeyConfig?.requiredFields || spec.connectionFields || [],
       capabilities: spec.capabilities || { reads: [], writes: [] },
+      oauth: oauthMeta,
+      readiness,
+      tokenExpiresAt,
+      tokenExpired,
+      tokenExpiresSoon,
       // Backwards-compatible field for older UIs.
       status: row?.status || 'disconnected',
       // New lifecycle field: use this in UIs to show "visible but disabled until configured".
@@ -416,6 +599,87 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
   });
 
   return res.json({ success: true, data });
+});
+
+// Action catalog: spec-driven write capabilities merged with org enablement (action_policies).
+router.get('/actions', requirePermission('connectors.read'), async (req, res) => {
+  const orgId = getOrgId(req);
+  if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+  const rest = restAsUser(req);
+  const query = new URLSearchParams();
+  query.set('organization_id', eq(orgId));
+  query.set('select', 'service,action,enabled,require_approval,required_role,updated_at');
+  const policies = await safeQuery<Pick<StoredActionPolicyRow, 'service' | 'action' | 'enabled' | 'require_approval' | 'required_role' | 'updated_at'>>(
+    rest,
+    'action_policies',
+    query
+  );
+  const policyMap = new Map(policies.map((p) => [`${p.service}:${p.action}`, p]));
+
+  const actions = IMPLEMENTED_INTEGRATIONS.flatMap((spec) => {
+    const writes = spec.capabilities?.writes || [];
+    return writes.map((w) => {
+      const key = `${spec.id}:${w.id}`;
+      const policy = policyMap.get(key);
+      return {
+        service: spec.id,
+        providerName: spec.name,
+        providerCategory: spec.category,
+        action: w.id,
+        label: w.label,
+        risk: w.risk,
+        enabled: policy ? Boolean(policy.enabled) : false,
+        requireApproval: policy ? Boolean(policy.require_approval) : true,
+        requiredRole: policy?.required_role || 'manager',
+        updatedAt: policy?.updated_at || null,
+      };
+    });
+  });
+
+  return res.json({ success: true, data: actions });
+});
+
+// Upsert action enablement for spec actions (writes only).
+router.post('/actions', requirePermission('connectors.manage'), async (req, res) => {
+  const orgId = getOrgId(req);
+  if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+  const rest = restAsUser(req);
+  const schema = z.object({
+    items: z.array(z.object({
+      service: z.string().min(1),
+      action: z.string().min(1),
+      enabled: z.boolean(),
+    })).min(1),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ success: false, error: 'Invalid payload' });
+
+  const implemented = new Set(IMPLEMENTED_INTEGRATIONS.map((i) => i.id));
+  const writeSet = new Set<string>();
+  IMPLEMENTED_INTEGRATIONS.forEach((spec) => {
+    (spec.capabilities?.writes || []).forEach((w) => writeSet.add(`${spec.id}:${w.id}`));
+  });
+
+  for (const item of parsed.data.items) {
+    if (!implemented.has(item.service)) {
+      return res.status(400).json({ success: false, error: `Unknown integration service: ${item.service}` });
+    }
+    if (!writeSet.has(`${item.service}:${item.action}`)) {
+      return res.status(400).json({ success: false, error: `Unknown action for service: ${item.service}:${item.action}` });
+    }
+
+    await upsertActionPolicy(rest, orgId, item.service, item.action, {
+      enabled: item.enabled,
+      require_approval: true,
+      required_role: 'manager',
+      updated_by: req.user?.id || null,
+      notes: null,
+    });
+  }
+
+  return res.json({ success: true, data: { updated: parsed.data.items.length } });
 });
 
 // OAuth init: returns provider authorization URL (JWT-authenticated; frontend then redirects).
@@ -591,6 +855,8 @@ router.post('/:service/sample-pull', requirePermission('connectors.read'), async
   await writeConnectionLog(rest, integrationId, 'sample_pull', 'success', 'Generated sample pull preview', {
     service,
     count: sample.candidates.length,
+    actor_user_id: req.user?.id || null,
+    actor_email: req.user?.email || null,
   });
 
   return res.json({ success: true, data: sample });
@@ -890,11 +1156,13 @@ router.post('/:service/connect', requirePermission('connectors.manage'), async (
   // Validate credentials with the adapter when available to avoid false "Connected" states.
   const adapter = getAdapter(service);
   if (!adapter) {
-    await writeConnectionLog(rest, integration.id, 'connect', 'success', 'Credential integration stored (no adapter validation)', {
-      service: spec.id,
-      authType: spec.authType,
-      validation: 'adapter_missing',
-    });
+  await writeConnectionLog(rest, integration.id, 'connect', 'success', 'Credential integration stored (no adapter validation)', {
+    service: spec.id,
+    authType: spec.authType,
+    validation: 'adapter_missing',
+    actor_user_id: req.user?.id || null,
+    actor_email: req.user?.email || null,
+  });
     return res.json({ success: true, message: 'Integration stored', data: { id: integration.id, service: spec.id, validated: false } });
   }
 
@@ -915,6 +1183,8 @@ router.post('/:service/connect', requirePermission('connectors.manage'), async (
     await writeConnectionLog(rest, integration.id, 'connect', 'failed', testResult.message || 'Credential validation failed', {
       service: spec.id,
       authType: spec.authType,
+      actor_user_id: req.user?.id || null,
+      actor_email: req.user?.email || null,
     });
     return res.status(400).json({ success: false, error: testResult.message || 'Credential validation failed' });
   }
@@ -935,6 +1205,8 @@ router.post('/:service/connect', requirePermission('connectors.manage'), async (
   await writeConnectionLog(rest, integration.id, 'connect', 'success', 'Credential integration connected (validated)', {
     service: spec.id,
     authType: spec.authType,
+    actor_user_id: req.user?.id || null,
+    actor_email: req.user?.email || null,
   });
 
   return res.json({ success: true, message: 'Integration connected', data: { id: integration.id, service: spec.id, validated: true } });
@@ -995,6 +1267,8 @@ router.post('/:service/configure', requirePermission('connectors.manage'), async
   await writeConnectionLog(rest, integration.id, 'configure', 'success', 'Credentials stored (not validated)', {
     service: spec.id,
     authType: spec.authType,
+    actor_user_id: req.user?.id || null,
+    actor_email: req.user?.email || null,
   });
 
   return res.json({ success: true, message: 'Integration configured', data: { id: integration.id, service: spec.id } });
@@ -1039,7 +1313,11 @@ router.post('/:service/disconnect', requirePermission('connectors.manage'), asyn
     logger.warn('Failed to delete integration credentials', { service, error: (err as any)?.message });
   }
 
-  await writeConnectionLog(rest, row.id, 'disconnect', 'success', 'Integration disconnected', { service });
+  await writeConnectionLog(rest, row.id, 'disconnect', 'success', 'Integration disconnected', {
+    service,
+    actor_user_id: req.user?.id || null,
+    actor_email: req.user?.email || null,
+  });
 
   return res.json({ success: true, message: 'Integration disconnected' });
 });
@@ -1100,7 +1378,11 @@ router.post('/test/:service', requirePermission('connectors.read'), async (req, 
     },
   });
 
-  await writeConnectionLog(rest, row.id, 'test', result.success ? 'success' : 'failed', result.message, { service });
+  await writeConnectionLog(rest, row.id, 'test', result.success ? 'success' : 'failed', result.message, {
+    service,
+    actor_user_id: req.user?.id || null,
+    actor_email: req.user?.email || null,
+  });
 
   return res.json({ success: true, data: result });
 });

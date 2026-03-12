@@ -71,6 +71,8 @@ export function guessPackForIntegration(integration: IntegrationSummary): Integr
 
   if (category === 'COMPLIANCE') return 'compliance';
   if (category === 'FINANCE' || category === 'PAYROLL' || category === 'GLOBAL_PAYROLL' || category === 'PAYMENTS') return 'finance';
+  if (category === 'SUPPORT' || category === 'ITSM') return 'support';
+  if (category === 'CRM') return 'sales';
   if (category === 'IAM' || category === 'IDENTITY' || category === 'COLLABORATION' || category === 'PRODUCTIVITY') return 'it';
   if (category === 'COMMUNICATION') return 'support';
   if (category === 'RECRUITMENT' || category === 'ATS' || category === 'HRMS') return 'recruitment';
@@ -94,4 +96,3 @@ export function packDisplayBadge(packId: IntegrationPackId) {
       return { label: 'Visible, disabled', cls: 'border-white/10 bg-white/5 text-slate-300' };
   }
 }
-

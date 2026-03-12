@@ -1237,6 +1237,17 @@ export const integrationsApi = {
     });
   },
 
+  async getActionCatalog(): Promise<ApiResponse<any[]>> {
+    return authenticatedFetch('/integrations/actions', { method: 'GET' });
+  },
+
+  async upsertActions(items: Array<{ service: string; action: string; enabled: boolean }>): Promise<ApiResponse<any>> {
+    return authenticatedFetch('/integrations/actions', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+  },
+
   getOAuthAuthorizeUrl(service: string, returnTo: string): string {
     const base = API_BASE_URL.replace(/\/+$/, '');
     const params = new URLSearchParams();
