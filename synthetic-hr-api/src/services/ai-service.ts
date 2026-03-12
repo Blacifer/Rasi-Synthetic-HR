@@ -1,5 +1,4 @@
 import OpenAI from 'openai';
-import AnthropicSdk from '@anthropic-ai/sdk';
 
 // OpenAI Pricing (per 1M tokens)
 export const OPENAI_PRICING = {
@@ -89,19 +88,14 @@ export class OpenAIService {
 
 // Anthropic Service
 export class AnthropicService {
-  private client: any;
+  private apiKey: string;
+  private baseUrl: string;
+  private version: string;
 
   constructor(apiKey: string) {
-    const AnthropicCtor =
-      (AnthropicSdk as any)?.Anthropic ||
-      (AnthropicSdk as any)?.default ||
-      AnthropicSdk;
-
-    this.client = new AnthropicCtor({ apiKey });
-
-    if (!this.client?.messages || typeof this.client.messages.create !== 'function') {
-      throw new Error('Anthropic SDK client missing messages.create (check @anthropic-ai/sdk import/version)');
-    }
+    this.apiKey = apiKey;
+    this.baseUrl = process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
+    this.version = process.env.ANTHROPIC_VERSION || '2023-06-01';
   }
 
   private static extractTextBlocks(content: any): string {
@@ -129,20 +123,43 @@ export class AnthropicService {
 
     const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
 
-    const response = await (this.client as any).messages.create({
-      model,
-      system: systemPrompt,
-      messages: anthropicMessages,
-      max_tokens: options.maxTokens ?? 4096,
-      temperature: options.temperature ?? 0.7,
+    const response = await fetch(`${this.baseUrl.replace(/\/$/, '')}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'x-api-key': this.apiKey,
+        'anthropic-version': this.version,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        ...(systemPrompt ? { system: systemPrompt } : {}),
+        messages: anthropicMessages,
+        max_tokens: options.maxTokens ?? 4096,
+        temperature: options.temperature ?? 0.7,
+      }),
     });
+
+    if (!response.ok) {
+      const body = await response.text();
+      const err: any = new Error(`Anthropic messages API failed: ${response.status} ${body}`);
+      err.status = response.status;
+      err.responseBody = body;
+      throw err;
+    }
+
+    const data = (await response.json()) as any;
 
     const latency = Date.now() - startTime;
 
-    // Calculate tokens (Anthropic doesn't provide exact counts in response)
-    const inputTokens = Math.ceil(messages.reduce((acc, m) => acc + m.content.length / 4, 0));
-    const outputText = AnthropicService.extractTextBlocks(response?.content);
-    const outputTokens = Math.ceil(outputText.length / 4);
+    const outputText = AnthropicService.extractTextBlocks(data?.content);
+
+    // Token counts (fallback to heuristic if missing)
+    const inputTokens = Number.isFinite(data?.usage?.input_tokens)
+      ? Number(data.usage.input_tokens)
+      : Math.ceil(messages.reduce((acc, m) => acc + m.content.length / 4, 0));
+    const outputTokens = Number.isFinite(data?.usage?.output_tokens)
+      ? Number(data.usage.output_tokens)
+      : Math.ceil(outputText.length / 4);
     const totalTokens = inputTokens + outputTokens;
 
     // Calculate cost
@@ -153,7 +170,7 @@ export class AnthropicService {
       content: outputText,
       tokenCount: { input: inputTokens, output: outputTokens, total: totalTokens },
       costUSD,
-      model: response?.model || model,
+      model: data?.model || model,
       latency,
     };
   }

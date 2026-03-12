@@ -1,28 +1,18 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
-type CreateFn = (params: any) => Promise<any>;
-const createMock = jest.fn<CreateFn>();
-
-jest.mock('@anthropic-ai/sdk', () => {
-  return {
-    __esModule: true,
-    default: jest.fn().mockImplementation(() => ({
-      messages: {
-        create: createMock,
-      },
-    })),
-  };
-});
-
 import { AnthropicService } from '../services/ai-service';
 
 describe('AnthropicService', () => {
   beforeEach(() => {
-    createMock.mockReset();
+    (global as any).fetch = jest.fn();
   });
 
   it('does not throw when Anthropic returns empty content', async () => {
-    createMock.mockResolvedValue({ content: [], model: 'claude-3-5-sonnet' });
+    (global as any).fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ content: [], model: 'claude-3-5-sonnet', usage: { input_tokens: 1, output_tokens: 0 } }),
+    });
 
     const service = new AnthropicService('test-key');
     const result = await service.chat(
@@ -39,13 +29,18 @@ describe('AnthropicService', () => {
   });
 
   it('concatenates multiple text blocks', async () => {
-    createMock.mockResolvedValue({
-      model: 'claude-3-5-sonnet',
-      content: [
-        { type: 'text', text: 'Hello' },
-        { type: 'tool_use', id: 'toolu_1', name: 'x', input: {} },
-        { type: 'text', text: ' world' },
-      ],
+    (global as any).fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        model: 'claude-3-5-sonnet',
+        usage: { input_tokens: 10, output_tokens: 10 },
+        content: [
+          { type: 'text', text: 'Hello' },
+          { type: 'tool_use', id: 'toolu_1', name: 'x', input: {} },
+          { type: 'text', text: ' world' },
+        ],
+      }),
     });
 
     const service = new AnthropicService('test-key');
