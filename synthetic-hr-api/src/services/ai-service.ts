@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import Anthropic from '@anthropic-ai/sdk';
+import AnthropicSdk from '@anthropic-ai/sdk';
 
 // OpenAI Pricing (per 1M tokens)
 export const OPENAI_PRICING = {
@@ -92,7 +92,16 @@ export class AnthropicService {
   private client: any;
 
   constructor(apiKey: string) {
-    this.client = new Anthropic({ apiKey });
+    const AnthropicCtor =
+      (AnthropicSdk as any)?.Anthropic ||
+      (AnthropicSdk as any)?.default ||
+      AnthropicSdk;
+
+    this.client = new AnthropicCtor({ apiKey });
+
+    if (!this.client?.messages || typeof this.client.messages.create !== 'function') {
+      throw new Error('Anthropic SDK client missing messages.create (check @anthropic-ai/sdk import/version)');
+    }
   }
 
   private static extractTextBlocks(content: any): string {
