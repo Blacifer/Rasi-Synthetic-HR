@@ -50,11 +50,23 @@ const formatCurrency = (value: number) => `$${value.toFixed(2)}`;
 export default function ApiAnalyticsPage({ isDemoMode }: ApiAnalyticsPageProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isAgentDropdownOpen, setIsAgentDropdownOpen] = useState(false);
+  const [agentFilterId, setAgentFilterId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'capabilities' | 'spend'>('capabilities');
   const [data, setData] = useState<AnalyticsData>(generateEmptyMetrics());
   const [loading, setLoading] = useState(true);
   const [hoveredDay, setHoveredDay] = useState<any | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fleetAgents, setFleetAgents] = useState<Array<{ id: string; name: string }>>([]);
+
+  const allAgentsForDropdown = (fleetAgents.length > 0
+    ? fleetAgents
+    : data.agents.map((a) => ({ id: a.agentId, name: a.agentName }))
+  ).slice().sort((a, b) => a.name.localeCompare(b.name));
+
+  const selectedAgentName = agentFilterId
+    ? (allAgentsForDropdown.find((a) => a.id === agentFilterId)?.name || agentFilterId)
+    : 'All agents';
 
   useEffect(() => {
     const loadData = async () => {
@@ -64,8 +76,8 @@ export default function ApiAnalyticsPage({ isDemoMode }: ApiAnalyticsPageProps) 
         const days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : 30;
 
         const [insightsRes, trendRes, comparisonRes] = await Promise.all([
-          api.costs.getInsights(),
-          api.costs.getTrend({ days }),
+          api.costs.getInsights(agentFilterId ? { agentId: agentFilterId } : undefined),
+          api.costs.getTrend({ days, ...(agentFilterId ? { agentId: agentFilterId } : {}) }),
           api.costs.getComparison(),
         ]);
 
@@ -131,7 +143,20 @@ export default function ApiAnalyticsPage({ isDemoMode }: ApiAnalyticsPageProps) 
       }
     };
     loadData();
-  }, [timeRange, isDemoMode]);
+  }, [timeRange, isDemoMode, agentFilterId]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const agentsRes = await api.agents.getAll();
+        if (agentsRes.success && Array.isArray(agentsRes.data)) {
+          setFleetAgents((agentsRes.data as any[]).map((a) => ({ id: a.id, name: a.name || a.id })));
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
 
   // Chart max
   const maxRequests = Math.max(...(data.trend || []).map((d) => d.requests || 0), 10);
@@ -159,7 +184,7 @@ export default function ApiAnalyticsPage({ isDemoMode }: ApiAnalyticsPageProps) 
     const link = document.createElement('a');
 
     link.setAttribute('href', url);
-    link.setAttribute('download', `api_usage_${timeRange}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `api_usage_${agentFilterId ? `agent_${agentFilterId}_` : ''}${timeRange}_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -173,8 +198,59 @@ export default function ApiAnalyticsPage({ isDemoMode }: ApiAnalyticsPageProps) 
         <h1 className="text-[22px] font-semibold tracking-tight text-[#ececec]">Usage</h1>
 
         <div className="flex items-center gap-2 text-sm">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-[#3f3f46] text-[#ececec] bg-[#141417]">
-            All traffic
+          <div className="relative">
+            <button
+              onClick={() => {
+                setIsAgentDropdownOpen(!isAgentDropdownOpen);
+                setIsDropdownOpen(false);
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#3f3f46] hover:bg-[#27272a] transition-colors bg-[#18181b] text-[#ececec]"
+              aria-haspopup="listbox"
+              aria-expanded={isAgentDropdownOpen}
+            >
+              <User className="w-4 h-4 text-zinc-400" />
+              {selectedAgentName}
+              <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform ${isAgentDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isAgentDropdownOpen && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-[#1f1f22] border border-[#3f3f46] rounded-lg shadow-xl overflow-hidden z-50">
+                <div className="py-1 flex flex-col max-h-[320px] overflow-auto">
+                  <button
+                    onClick={() => {
+                      setAgentFilterId('');
+                      setIsAgentDropdownOpen(false);
+                      setHoveredDay(null);
+                    }}
+                    className={`w-full text-left px-4 py-2 text-[13px] transition-colors ${agentFilterId === '' ? 'bg-[#27272a] text-white font-medium' : 'text-zinc-400 hover:bg-[#27272a] hover:text-white'}`}
+                  >
+                    All agents
+                  </button>
+                  {allAgentsForDropdown.map((agent) => (
+                    <button
+                      key={agent.id}
+                      onClick={() => {
+                        setAgentFilterId(agent.id);
+                        setIsAgentDropdownOpen(false);
+                        setHoveredDay(null);
+                      }}
+                      className={`w-full text-left px-4 py-2 text-[13px] transition-colors ${agentFilterId === agent.id ? 'bg-[#27272a] text-white font-medium' : 'text-zinc-400 hover:bg-[#27272a] hover:text-white'}`}
+                      title={agent.id}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="truncate">{agent.name}</span>
+                        <span className="font-mono text-[11px] text-zinc-500">{agent.id.slice(0, 8)}…</span>
+                      </div>
+                    </button>
+                  ))}
+                  {allAgentsForDropdown.length === 0 && (
+                    <div className="px-4 py-2 text-[13px] text-zinc-500">
+                      No agents found.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="relative">
@@ -219,9 +295,11 @@ export default function ApiAnalyticsPage({ isDemoMode }: ApiAnalyticsPageProps) 
       <div className="mb-6 flex items-start gap-3 rounded-xl border border-[#3f3f46] bg-[#141417] px-4 py-3 text-sm text-zinc-300">
         <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-300" />
         <div>
-          <p className="font-medium text-white">Organization-level usage</p>
+          <p className="font-medium text-white">{agentFilterId ? 'Agent-level usage' : 'Organization-level usage'}</p>
           <p className="text-zinc-400">
-            This view aggregates traffic across the workspace. Per-key usage and limits live in the API Keys section.
+            {agentFilterId
+              ? `Showing gateway-observed traffic attributed to: ${selectedAgentName}.`
+              : 'This view aggregates traffic across the workspace. Per-key usage and limits live in the API Keys section.'}
           </p>
         </div>
       </div>
@@ -323,7 +401,7 @@ export default function ApiAnalyticsPage({ isDemoMode }: ApiAnalyticsPageProps) 
               <span className="text-sm text-[#ececec] font-medium transition-colors">Top agent</span>
             </div>
             <span className="text-sm text-zinc-400 font-medium">
-              {data.agents[0] ? `${data.agents[0].agentName}` : 'No agent usage yet'}
+              {agentFilterId ? selectedAgentName : (data.agents[0] ? `${data.agents[0].agentName}` : 'No agent usage yet')}
             </span>
           </div>
         </div>
@@ -465,23 +543,42 @@ export default function ApiAnalyticsPage({ isDemoMode }: ApiAnalyticsPageProps) 
 
           <div className="bg-[#0f0f11] border border-[#27272a] rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[14px] font-semibold text-[#ececec]">Top agents by spend</h3>
+              <h3 className="text-[14px] font-semibold text-[#ececec]">{agentFilterId ? 'Agent filter' : 'Top agents by spend'}</h3>
               <span className="text-xs text-zinc-500">{formatCurrency(data.totals.cost)} total</span>
             </div>
-            {data.agents.length > 0 ? (
-              <div className="space-y-3">
-                {data.agents.slice(0, 6).map((agent) => (
-                  <div key={agent.agentId} className="flex items-center justify-between text-sm text-zinc-300">
-                    <div className="min-w-0">
-                      <p className="font-medium text-white truncate">{agent.agentName}</p>
-                      <p className="text-xs text-zinc-500">{formatCompact(agent.tokens)} tokens · {formatNumber(agent.requests)} requests</p>
-                    </div>
-                    <span className="font-semibold">{formatCurrency(agent.cost)}</span>
-                  </div>
-                ))}
+            {agentFilterId ? (
+              <div className="text-sm text-zinc-300 space-y-3">
+                <div>
+                  <div className="text-xs text-zinc-500">Selected agent</div>
+                  <div className="mt-1 text-white font-semibold truncate">{selectedAgentName}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAgentFilterId('')}
+                  className="w-full px-3 py-2 rounded-lg bg-[#18181b] border border-[#3f3f46] hover:bg-[#27272a] text-sm font-semibold text-white"
+                >
+                  Clear filter (show all agents)
+                </button>
+                <div className="text-xs text-zinc-500">
+                  Agent comparison is organization-wide. Clear the filter to see top agents by spend.
+                </div>
               </div>
             ) : (
-              <div className="text-sm text-zinc-500">No agent spend data available.</div>
+              data.agents.length > 0 ? (
+                <div className="space-y-3">
+                  {data.agents.slice(0, 6).map((agent) => (
+                    <div key={agent.agentId} className="flex items-center justify-between text-sm text-zinc-300">
+                      <div className="min-w-0">
+                        <p className="font-medium text-white truncate">{agent.agentName}</p>
+                        <p className="text-xs text-zinc-500">{formatCompact(agent.tokens)} tokens · {formatNumber(agent.requests)} requests</p>
+                      </div>
+                      <span className="font-semibold">{formatCurrency(agent.cost)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-zinc-500">No agent spend data available.</div>
+              )
             )}
           </div>
         </div>
