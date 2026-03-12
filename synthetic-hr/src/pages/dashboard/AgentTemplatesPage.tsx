@@ -34,7 +34,11 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
   const [sandboxMessage, setSandboxMessage] = useState('');
   const [sandboxChat, setSandboxChat] = useState<{ role: 'user' | 'agent', content: string }[]>([]);
   const [deploymentStep, setDeploymentStep] = useState<'configure' | 'channel'>('configure');
-  const [monthlyTokens, setMonthlyTokens] = useState<number>(10_000_000);
+  const WORKLOAD_STEPS = useMemo(() => [1_000, 10_000, 100_000, 500_000, 1_000_000, 10_000_000, 100_000_000], []);
+  const [monthlyTokensStep, setMonthlyTokensStep] = useState<number>(() => {
+    const idx = WORKLOAD_STEPS.indexOf(10_000_000);
+    return idx >= 0 ? idx : 0;
+  });
 
   // Fetch live model list on mount
   useEffect(() => {
@@ -141,6 +145,22 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
     if (abs >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
     if (abs >= 1_000) return `${(tokens / 1_000).toFixed(1).replace(/\.0$/, '')}k`;
     return `${Math.round(tokens)}`;
+  };
+
+  const monthlyTokens = WORKLOAD_STEPS[Math.min(WORKLOAD_STEPS.length - 1, Math.max(0, monthlyTokensStep))] ?? WORKLOAD_STEPS[0]!;
+
+  const nearestWorkloadStepIndex = (tokens: number) => {
+    const t = Math.min(WORKLOAD_STEPS[WORKLOAD_STEPS.length - 1]!, Math.max(WORKLOAD_STEPS[0]!, tokens));
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < WORKLOAD_STEPS.length; i++) {
+      const d = Math.abs(WORKLOAD_STEPS[i]! - t);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = i;
+      }
+    }
+    return bestIdx;
   };
 
   // Monthly cost estimator
@@ -562,32 +582,48 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
 	                          <span className="text-slate-400 text-sm whitespace-nowrap">Monthly tokens</span>
 
 	                          <div className="flex flex-col gap-1 min-w-0">
-	                            <div className="flex items-center justify-between text-[11px] text-slate-500">
-	                              <span>1k</span>
-	                              <span>100M</span>
+	                            <div className="relative">
+	                              <div className="absolute inset-x-1 top-1/2 -translate-y-1/2 flex justify-between pointer-events-none">
+	                                {WORKLOAD_STEPS.map((_, idx) => (
+	                                  <div
+	                                    key={idx}
+	                                    className={`w-px h-2 ${idx <= monthlyTokensStep ? 'bg-cyan-500/70' : 'bg-slate-600/60'}`}
+	                                  />
+	                                ))}
+	                              </div>
+	                              <input
+	                                type="range"
+	                                min={0}
+	                                max={WORKLOAD_STEPS.length - 1}
+	                                step={1}
+	                                value={monthlyTokensStep}
+	                                onChange={(e) => setMonthlyTokensStep(Number(e.target.value))}
+	                                className="relative z-10 w-full accent-cyan-500"
+	                              />
 	                            </div>
-	                            <input
-	                              type="range"
-	                              min={1_000}
-	                              max={100_000_000}
-	                              step={1_000}
-	                              value={monthlyTokens}
-	                              onChange={(e) => setMonthlyTokens(Number(e.target.value))}
-	                              className="w-full accent-cyan-500"
-	                            />
+	                            <div className="mt-1 grid grid-cols-7 text-[10px] text-slate-500">
+	                              {WORKLOAD_STEPS.map((v, idx) => (
+	                                <span
+	                                  key={v}
+	                                  className={`text-center ${idx === monthlyTokensStep ? 'text-cyan-300' : ''}`}
+	                                >
+	                                  {formatTokensShort(v).toUpperCase()}
+	                                </span>
+	                              ))}
+	                            </div>
 	                          </div>
 
 	                          <div className="flex items-center gap-2 justify-self-start sm:justify-self-end">
 	                            <input
 	                              type="number"
-	                              min={1_000}
-	                              max={100_000_000}
-	                              step={1_000}
+	                              min={WORKLOAD_STEPS[0]}
+	                              max={WORKLOAD_STEPS[WORKLOAD_STEPS.length - 1]}
+	                              step={1}
 	                              value={monthlyTokens}
 	                              onChange={(e) => {
 	                                const next = Number(e.target.value);
 	                                if (!Number.isFinite(next)) return;
-	                                setMonthlyTokens(Math.min(100_000_000, Math.max(1_000, next)));
+	                                setMonthlyTokensStep(nearestWorkloadStepIndex(next));
 	                              }}
 	                              className="w-36 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
 	                            />
