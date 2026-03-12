@@ -1258,17 +1258,34 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
     return res.json(responseBody);
   } catch (error: any) {
     await failIdempotency(idem.cacheKey, idem.dbRowId);
+
+    const providerStatus = typeof error?.status === 'number'
+      ? error.status
+      : typeof error?.response?.status === 'number'
+        ? error.response.status
+        : null;
+
+    const providerMessage = (() => {
+      if (typeof error?.message === 'string' && error.message) return error.message;
+      if (typeof error?.error?.message === 'string' && error.error.message) return error.error.message;
+      if (typeof error?.response?.data?.error?.message === 'string' && error.response.data.error.message) return error.response.data.error.message;
+      return 'Gateway completion failed';
+    })();
+
     logger.error('Gateway completion failed', {
-      error: error.message,
+      error: providerMessage,
+      providerStatus,
       requestId: req.requestId,
       orgId: req.apiKey?.organization_id,
       keyId: req.apiKey?.id,
     });
 
-    return res.status(500).json({
+    const status = providerStatus && providerStatus >= 400 && providerStatus < 600 ? providerStatus : 500;
+
+    return res.status(status).json({
       error: {
-        message: error.message || 'Gateway completion failed',
-        type: 'server_error',
+        message: providerMessage,
+        type: status >= 500 ? 'server_error' : 'invalid_request_error',
       },
     });
   }

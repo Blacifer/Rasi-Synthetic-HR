@@ -404,8 +404,8 @@ export default function GettingStartedPage(props: {
                     </div>
                     <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
                       <div className="text-xs text-slate-400">API keys</div>
-                      <div className="text-2xl font-bold text-white">{coverage?.apiKeys?.total ?? 0}</div>
-                      <div className="text-xs text-slate-400 mt-1">Used 30d: {coverage?.apiKeys?.recentlyUsed30d ?? 0}</div>
+                      <div className="text-2xl font-bold text-white">{coverage?.apiKeys?.active ?? 0}</div>
+                      <div className="text-xs text-slate-400 mt-1">Total: {coverage?.apiKeys?.total ?? 0} · Used 30d: {coverage?.apiKeys?.recentlyUsed30d ?? 0}</div>
                     </div>
                   </div>
                 )}

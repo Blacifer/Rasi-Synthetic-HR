@@ -206,8 +206,19 @@ app.get('/health', async (req, res) => {
 
   const providerKeys = {
     openai: Boolean(process.env.RASI_OPENAI_API_KEY || process.env.OPENAI_API_KEY),
-    anthropic: Boolean(process.env.RASI_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY),
+    anthropic: Boolean(
+      process.env.RASI_ANTHROPIC_API_KEY ||
+      process.env.RASI_ANTHROPIC_KEY ||
+      process.env.ANTHROPIC_API_KEY ||
+      process.env.ANTHROPIC_KEY
+    ),
     openrouter: Boolean(process.env.RASI_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY),
+  };
+
+  const build = {
+    railwayGitSha: process.env.RAILWAY_GIT_COMMIT_SHA || null,
+    githubSha: process.env.GITHUB_SHA || null,
+    vercelGitSha: process.env.VERCEL_GIT_COMMIT_SHA || null,
   };
 
   const response = {
@@ -216,6 +227,7 @@ app.get('/health', async (req, res) => {
     service: 'Synthetic HR API',
     version: '1.0.0',
     uptime_ms: Math.round(process.uptime() * 1000),
+    build,
     dependencies: {
       supabase: supabaseHealth,
       provider_keys: providerKeys,
