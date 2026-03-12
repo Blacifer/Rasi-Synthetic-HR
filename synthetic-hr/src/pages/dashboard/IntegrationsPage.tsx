@@ -50,6 +50,14 @@ type IntegrationRow = {
   capabilities?: Capabilities;
   status: 'disconnected' | 'connected' | 'error' | 'syncing' | 'expired' | string;
   lifecycleStatus?: 'not_configured' | 'configured' | 'connected' | 'error' | 'syncing' | 'expired' | string;
+  oauth?: { ready: boolean; missingEnv: string[] } | null;
+  readiness?: {
+    expectedRedirectUrl: string | null;
+    items: Array<{ id: string; label: string; status: 'ok' | 'todo' | 'blocked'; detail?: string | null }>;
+  } | null;
+  tokenExpiresAt?: string | null;
+  tokenExpired?: boolean;
+  tokenExpiresSoon?: boolean;
   lastSyncAt?: string | null;
   lastErrorAt?: string | null;
   lastErrorMsg?: string | null;
@@ -175,12 +183,27 @@ function riskBadge(risk: CapabilityWrite['risk']) {
   }
 }
 
+function readinessBadge(status: 'ok' | 'todo' | 'blocked') {
+  switch (status) {
+    case 'ok':
+      return { label: 'OK', cls: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' };
+    case 'blocked':
+      return { label: 'Blocked', cls: 'border-rose-400/20 bg-rose-400/10 text-rose-100' };
+    default:
+      return { label: 'Todo', cls: 'border-amber-400/20 bg-amber-400/10 text-amber-100' };
+  }
+}
+
 function providerIcon(id: string) {
   const key = id.toLowerCase();
   if (key.includes('google')) return Mail;
   if (key.includes('microsoft') || key.includes('teams')) return CalendarDays;
   if (key.includes('linkedin')) return Users;
   if (key.includes('naukri')) return Users;
+  if (key.includes('zendesk') || key.includes('freshdesk')) return Users;
+  if (key.includes('jira')) return Wrench;
+  if (key.includes('hubspot')) return Building2;
+  if (key.includes('stripe') || key.includes('razorpay') || key.includes('paytm')) return Database;
   return Building2;
 }
 
@@ -272,6 +295,23 @@ export default function IntegrationsPage() {
   const [vaultFocus, setVaultFocus] = useState<'pack' | 'all'>('pack');
   const [vaultPackId, setVaultPackId] = useState<IntegrationPackId>('recruitment');
   const [vaultBusy, setVaultBusy] = useState<Record<string, 'connecting' | 'testing' | 'disconnecting' | null>>({});
+  const [bulkJson, setBulkJson] = useState('');
+  const [bulkBusy, setBulkBusy] = useState<null | 'save' | 'save_test'>(null);
+
+  const [actionCatalogLoading, setActionCatalogLoading] = useState(false);
+  const [actionCatalogError, setActionCatalogError] = useState<string | null>(null);
+  const [actionCatalog, setActionCatalog] = useState<Array<{
+    service: string;
+    providerName: string;
+    providerCategory: string;
+    action: string;
+    label: string;
+    risk: 'low' | 'medium' | 'high' | 'money';
+    enabled: boolean;
+    requireApproval: boolean;
+    requiredRole: string;
+    updatedAt: string | null;
+  }>>([]);
 
   const selectedIntegration = useMemo(() => {
     if (!activeProviderId) return null;
@@ -342,6 +382,20 @@ export default function IntegrationsPage() {
     }
     setItems((res.data as IntegrationRow[]) || []);
     setLoading(false);
+  }
+
+  async function loadActionCatalog() {
+    setActionCatalogLoading(true);
+    setActionCatalogError(null);
+    const res = await api.integrations.getActionCatalog();
+    if (!res.success) {
+      setActionCatalog([]);
+      setActionCatalogError(res.error || 'Failed to load action catalog');
+      setActionCatalogLoading(false);
+      return;
+    }
+    setActionCatalog((res.data as any[]) || []);
+    setActionCatalogLoading(false);
   }
 
   async function loadLogs(serviceId: string) {
@@ -419,6 +473,11 @@ export default function IntegrationsPage() {
   };
 
   const connectOAuth = async (providerId: string) => {
+    const provider = providerMap.get(providerId);
+    if (provider?.oauth && provider.oauth.ready === false) {
+      toast.error(`OAuth is not ready. Missing env: ${(provider.oauth.missingEnv || []).join(', ')}`);
+      return;
+    }
     setConnecting((prev) => ({ ...prev, [providerId]: true }));
     try {
       const returnTo = '/dashboard/integrations';
@@ -538,6 +597,21 @@ export default function IntegrationsPage() {
     }
   };
 
+  const refreshOAuthToken = async (providerId: string) => {
+    setVaultBusy((prev) => ({ ...prev, [providerId]: 'testing' }));
+    try {
+      const res = await api.integrations.refresh(providerId);
+      if (!res.success) {
+        toast.error(res.error || 'Failed to refresh token');
+        return;
+      }
+      toast.success('Token refreshed.');
+      await load();
+    } finally {
+      setVaultBusy((prev) => ({ ...prev, [providerId]: null }));
+    }
+  };
+
   const runSamplePull = async (providerId: string) => {
     setSampleLoading(true);
     setSampleError(null);
@@ -564,6 +638,7 @@ export default function IntegrationsPage() {
   useEffect(() => {
     parseOAuthToastFromQuery();
     void load();
+    void loadActionCatalog();
   }, []);
 
   const recruitmentProviders = useMemo(() => providersByPack.get('recruitment') || [], [providersByPack]);
@@ -587,6 +662,66 @@ export default function IntegrationsPage() {
     });
     return filtered.sort((a, b) => a.name.localeCompare(b.name));
   }, [vaultQuery, vaultFocus, providersByPack, vaultPackId, items]);
+
+  const actionsByPack = useMemo(() => {
+    const map = new Map<IntegrationPackId, typeof actionCatalog>();
+    INTEGRATION_PACKS.forEach((p) => map.set(p.id, []));
+    actionCatalog.forEach((a) => {
+      const packId = guessPackForIntegration({ id: a.service, name: a.providerName, category: a.providerCategory, tags: [] });
+      const list = map.get(packId) || [];
+      list.push(a);
+      map.set(packId, list);
+    });
+    Array.from(map.entries()).forEach(([k, list]) => {
+      list.sort((left, right) => left.providerName.localeCompare(right.providerName) || left.label.localeCompare(right.label));
+      map.set(k, list);
+    });
+    return map;
+  }, [actionCatalog]);
+
+  const activePackActions = useMemo(() => actionsByPack.get(activePack) || [], [actionsByPack, activePack]);
+
+  const enabledActionCountByPack = useMemo(() => {
+    const out = new Map<IntegrationPackId, number>();
+    INTEGRATION_PACKS.forEach((p) => out.set(p.id, 0));
+    actionCatalog.forEach((a) => {
+      if (!a.enabled) return;
+      const packId = guessPackForIntegration({ id: a.service, name: a.providerName, category: a.providerCategory, tags: [] });
+      out.set(packId, (out.get(packId) || 0) + 1);
+    });
+    return out;
+  }, [actionCatalog]);
+
+  const upsertActionEnabled = async (service: string, action: string, enabled: boolean) => {
+    const provider = providerMap.get(service);
+    const providerStatus = provider ? effectiveStatus(provider) : 'not_configured';
+    const item = actionCatalog.find((a) => a.service === service && a.action === action);
+    const risk = item?.risk || 'medium';
+
+    if (providerStatus === 'not_configured') {
+      toast.error('Configure this provider first in Credentials Vault.');
+      openVault('pack', guessPackForIntegration({ id: service, name: provider?.name || service, category: provider?.category || 'OTHER', tags: provider?.tags || [] }));
+      setVaultQuery(provider?.name || service);
+      ensureCredentialSeed(service);
+      return;
+    }
+    if (risk === 'money' && providerStatus !== 'connected') {
+      toast.error('Money actions require a validated connection. Click “Test & connect” first.');
+      return;
+    }
+
+    // Optimistic update
+    setActionCatalog((prev) => prev.map((a) => (a.service === service && a.action === action ? { ...a, enabled } : a)));
+    const res = await api.integrations.upsertActions([{ service, action, enabled }]);
+    if (!res.success) {
+      toast.error(res.error || 'Failed to update action setting');
+      // rollback
+      setActionCatalog((prev) => prev.map((a) => (a.service === service && a.action === action ? { ...a, enabled: !enabled } : a)));
+      return;
+    }
+    toast.success(enabled ? 'Action enabled.' : 'Action disabled.');
+    void loadActionCatalog();
+  };
 
   return (
     <div className="p-6">
@@ -668,6 +803,9 @@ export default function IntegrationsPage() {
                   {stats.configured}/{stats.total} configured
                 </span>
                 <div className="flex items-center gap-2">
+                  <span className="text-xs px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-slate-300">
+                    {(enabledActionCountByPack.get(pack.id) || 0)} actions enabled
+                  </span>
                   <button
                     onClick={() => {
                       setActivePack(pack.id);
@@ -689,7 +827,7 @@ export default function IntegrationsPage() {
               </div>
             </div>
           );
-        })}
+          })}
       </div>
 
       <div className="mt-8">
@@ -803,6 +941,98 @@ export default function IntegrationsPage() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      <div className="mt-10">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Action Catalog • {INTEGRATION_PACKS.find((p) => p.id === activePack)?.name || 'Pack'}</h2>
+            <p className="text-sm text-slate-400 mt-1">Enable the exact actions you want users/agents to run. Writes are approval-first.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void loadActionCatalog()}
+              className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+              disabled={actionCatalogLoading}
+            >
+              {actionCatalogLoading ? 'Loading…' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+
+        {actionCatalogError ? (
+          <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-rose-100">
+            <div className="font-semibold">Could not load Action Catalog</div>
+            <div className="text-sm text-rose-100/80 mt-1">{actionCatalogError}</div>
+          </div>
+        ) : null}
+
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden">
+          <div className="px-4 py-3 border-b border-white/10 text-sm text-slate-300 flex items-center justify-between">
+            <span>{activePackActions.length} actions</span>
+            <span className="text-xs text-slate-500">Toggle enablement</span>
+          </div>
+          {activePackActions.length === 0 ? (
+            <div className="p-6 text-sm text-slate-400">
+              No write actions registered for this pack yet. Add `capabilities.writes` in the integration registry to populate this list.
+            </div>
+          ) : (
+            <div className="divide-y divide-white/5">
+              {activePackActions.map((a) => {
+                const provider = providerMap.get(a.service);
+                const providerStatus = provider ? effectiveStatus(provider) : 'not_configured';
+                const canToggle = providerStatus !== 'not_configured' && !(a.risk === 'money' && providerStatus !== 'connected');
+                const risk = riskBadge(a.risk);
+                const tone = readinessBadge(a.enabled ? 'ok' : 'todo');
+                const disabledReason =
+                  providerStatus === 'not_configured'
+                    ? 'Configure provider first'
+                    : a.risk === 'money' && providerStatus !== 'connected'
+                      ? 'Requires validated connection'
+                      : null;
+
+                return (
+                  <div key={`${a.service}:${a.action}`} className="px-4 py-3 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-semibold text-white truncate">{a.label}</div>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-md border ${risk.cls}`}>{risk.label}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-md border border-blue-400/20 bg-blue-400/10 text-blue-100">
+                          Approval required
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-md border ${tone.cls}`}>{a.enabled ? 'Enabled' : 'Disabled'}</span>
+                      </div>
+                      <div className="text-xs text-slate-500 mt-1 truncate">
+                        {a.providerName} • {a.service}:{a.action} • Provider status: {formatStatusLabel(providerStatus)}
+                      </div>
+                      {disabledReason ? <div className="text-xs text-amber-200 mt-1">{disabledReason}</div> : null}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => void openDetails(a.service)}
+                        className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                      >
+                        Provider
+                      </button>
+                      <button
+                        onClick={() => void upsertActionEnabled(a.service, a.action, !a.enabled)}
+                        className={`px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${
+                          a.enabled
+                            ? 'border-rose-400/20 bg-rose-400/10 text-rose-100 hover:bg-rose-400/15'
+                            : 'border-emerald-400/25 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/20'
+                        }`}
+                        disabled={!canToggle}
+                        title={!canToggle ? disabledReason || 'Not available' : undefined}
+                      >
+                        {a.enabled ? 'Disable' : 'Enable'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1015,6 +1245,62 @@ export default function IntegrationsPage() {
               </div>
             </div>
 
+            {selectedIntegration.readiness ? (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold text-white">Readiness checklist</div>
+                  {selectedIntegration.readiness.expectedRedirectUrl ? (
+                    <button
+                      onClick={() => {
+                        const value = selectedIntegration.readiness?.expectedRedirectUrl;
+                        if (!value) return;
+                        void navigator.clipboard?.writeText(value);
+                        toast.success('Redirect URL copied.');
+                      }}
+                      className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors"
+                    >
+                      Copy redirect URL
+                    </button>
+                  ) : null}
+                </div>
+                <div className="mt-3 space-y-2">
+                  {(selectedIntegration.readiness.items || []).map((it) => {
+                    const badge = readinessBadge(it.status);
+                    return (
+                      <div key={it.id} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm text-slate-100">{it.label}</div>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-md border ${badge.cls}`}>{badge.label}</span>
+                        </div>
+                        {it.detail ? <div className="text-xs text-slate-400 mt-1 break-words">{it.detail}</div> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      closeDetails();
+                      openVault('pack', guessPackForIntegration(selectedIntegration));
+                      setVaultQuery(selectedIntegration.name);
+                      ensureCredentialSeed(selectedIntegration.id);
+                    }}
+                    className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                  >
+                    Open vault
+                  </button>
+                  {effectiveStatus(selectedIntegration) !== 'connected' ? (
+                    <button
+                      onClick={() => void testProvider(selectedIntegration.id)}
+                      className="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/25 text-emerald-100 hover:bg-emerald-500/20 transition-colors text-sm font-semibold"
+                    >
+                      Test & connect
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
               <div className="font-semibold text-white">Capabilities</div>
               <div className="mt-3">
@@ -1065,6 +1351,15 @@ export default function IntegrationsPage() {
               </div>
             </div>
 
+            {selectedIntegration.authType === 'oauth2' && selectedIntegration.oauth && selectedIntegration.oauth.ready === false ? (
+              <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-amber-100">
+                <div className="font-semibold">OAuth not ready</div>
+                <div className="text-sm text-amber-100/80 mt-1">
+                  Missing backend env vars: {(selectedIntegration.oauth.missingEnv || []).join(', ')}
+                </div>
+              </div>
+            ) : null}
+
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
               <div className="flex items-center justify-between">
                 <div className="font-semibold text-white">Connection logs</div>
@@ -1090,6 +1385,9 @@ export default function IntegrationsPage() {
                         </div>
                         <div className="text-xs text-slate-500">{formatTime(log.created_at)}</div>
                       </div>
+                      {log.metadata?.actor_email ? (
+                        <div className="text-xs text-slate-500 mt-1">By: {String(log.metadata.actor_email)}</div>
+                      ) : null}
                       {log.message ? <div className="text-xs text-slate-400 mt-1">{log.message}</div> : null}
                     </div>
                   ))
@@ -1224,6 +1522,7 @@ export default function IntegrationsPage() {
                   if (!provider) return null;
                   const isBusy = Boolean(connecting[providerId]);
                   const isConnected = effectiveStatus(provider) === 'connected';
+                  const oauthReady = provider.authType !== 'oauth2' ? true : (provider.oauth?.ready !== false);
                   return (
                     <div key={providerId} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
                       <div className="flex items-start justify-between gap-4">
@@ -1254,9 +1553,10 @@ export default function IntegrationsPage() {
                             <button
                               onClick={() => void connectOAuth(provider.id)}
                               className="px-3 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
-                              disabled={isBusy}
+                              disabled={isBusy || !oauthReady}
+                              title={!oauthReady ? `Missing env: ${(provider.oauth?.missingEnv || []).join(', ')}` : undefined}
                             >
-                              {isBusy ? 'Starting…' : 'Connect OAuth'}
+                              {!oauthReady ? 'OAuth not ready' : isBusy ? 'Starting…' : 'Connect OAuth'}
                             </button>
                           ) : (
                             <button
@@ -1417,6 +1717,107 @@ export default function IntegrationsPage() {
 
       {vaultOpen ? (
         <Modal title="Credentials Vault" onClose={closeVault} widthClass="max-w-5xl">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-semibold text-white">Bulk import (API keys)</div>
+                <div className="text-sm text-slate-400 mt-1">
+                  Paste JSON keyed by provider id. OAuth providers are skipped.
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    if (!bulkJson.trim()) return toast.error('Paste JSON first.');
+                    let parsed: any = null;
+                    try {
+                      parsed = JSON.parse(bulkJson);
+                    } catch {
+                      return toast.error('Invalid JSON.');
+                    }
+                    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return toast.error('JSON must be an object keyed by provider id.');
+
+                    setBulkBusy('save');
+                    let ok = 0;
+                    let failed = 0;
+                    let skipped = 0;
+                    for (const [serviceId, creds] of Object.entries(parsed)) {
+                      const provider = providerMap.get(serviceId);
+                      if (!provider || provider.authType === 'oauth2') {
+                        skipped += 1;
+                        continue;
+                      }
+                      if (!creds || typeof creds !== 'object' || Array.isArray(creds)) {
+                        skipped += 1;
+                        continue;
+                      }
+                      const res = await api.integrations.configure(serviceId, creds as Record<string, string>);
+                      if (!res.success) failed += 1;
+                      else ok += 1;
+                    }
+                    setBulkBusy(null);
+                    await load();
+                    toast.success(`Bulk import: ${ok} saved, ${failed} failed, ${skipped} skipped.`);
+                  }}
+                  className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                  disabled={bulkBusy !== null}
+                >
+                  {bulkBusy === 'save' ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!bulkJson.trim()) return toast.error('Paste JSON first.');
+                    let parsed: any = null;
+                    try {
+                      parsed = JSON.parse(bulkJson);
+                    } catch {
+                      return toast.error('Invalid JSON.');
+                    }
+                    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return toast.error('JSON must be an object keyed by provider id.');
+
+                    setBulkBusy('save_test');
+                    let ok = 0;
+                    let failed = 0;
+                    let skipped = 0;
+                    for (const [serviceId, creds] of Object.entries(parsed)) {
+                      const provider = providerMap.get(serviceId);
+                      if (!provider || provider.authType === 'oauth2') {
+                        skipped += 1;
+                        continue;
+                      }
+                      if (!creds || typeof creds !== 'object' || Array.isArray(creds)) {
+                        skipped += 1;
+                        continue;
+                      }
+                      const saved = await api.integrations.configure(serviceId, creds as Record<string, string>);
+                      if (!saved.success) {
+                        failed += 1;
+                        continue;
+                      }
+                      const tested = await api.integrations.test(serviceId);
+                      if (!tested.success) failed += 1;
+                      else ok += 1;
+                    }
+                    setBulkBusy(null);
+                    await load();
+                    toast.success(`Bulk save+test: ${ok} connected, ${failed} failed, ${skipped} skipped.`);
+                  }}
+                  className="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/25 text-emerald-100 hover:bg-emerald-500/20 transition-colors text-sm font-semibold"
+                  disabled={bulkBusy !== null}
+                  title="Saves credentials then runs Test & connect"
+                >
+                  {bulkBusy === 'save_test' ? 'Working…' : 'Save + Test'}
+                </button>
+              </div>
+            </div>
+            <textarea
+              value={bulkJson}
+              onChange={(e) => setBulkJson(e.target.value)}
+              placeholder='{"stripe":{"secret_key":"sk_..."}, "zendesk":{"subdomain":"acme","email":"agent@acme.com","api_token":"..."}}'
+              className="mt-3 w-full min-h-[96px] px-3 py-2 rounded-xl bg-slate-900/60 border border-white/10 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 font-mono text-xs"
+            />
+          </div>
+
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm text-slate-400">
               Visible to everyone. Only users with permissions can actually connect/disconnect.
@@ -1481,11 +1882,23 @@ export default function IntegrationsPage() {
                         <span className={`text-xs px-2 py-0.5 rounded-full border ${statusToneClasses[statusTone(status)]}`}>
                           {formatStatusLabel(status)}
                         </span>
+                        {provider.tokenExpired ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-md border border-rose-400/20 bg-rose-400/10 text-rose-100">
+                            Token expired
+                          </span>
+                        ) : provider.tokenExpiresSoon ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-md border border-amber-400/20 bg-amber-400/10 text-amber-100">
+                            Token expiring soon
+                          </span>
+                        ) : null}
                         {isError && provider.lastErrorMsg ? (
                           <span className="text-xs text-rose-200 truncate max-w-[420px]">• {provider.lastErrorMsg}</span>
                         ) : null}
                       </div>
                       <div className="text-xs text-slate-500 mt-1">{provider.category} • {provider.id}</div>
+                      {provider.authType === 'oauth2' && provider.tokenExpiresAt ? (
+                        <div className="text-xs text-slate-500 mt-1">Access token expiry: {formatTime(provider.tokenExpiresAt)}</div>
+                      ) : null}
                       <div className="mt-2 flex flex-wrap gap-2">
                         {(caps.reads || []).slice(0, 3).map((r) => {
                           const meta = readLabel(r);
@@ -1519,6 +1932,15 @@ export default function IntegrationsPage() {
                       </button>
                       {isConnected ? (
                         <>
+                          {provider.authType === 'oauth2' ? (
+                            <button
+                              onClick={() => void refreshOAuthToken(provider.id)}
+                              className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                              disabled={busy !== null}
+                            >
+                              Refresh token
+                            </button>
+                          ) : null}
                           <button
                             onClick={() => void testProvider(provider.id)}
                             className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
@@ -1543,6 +1965,15 @@ export default function IntegrationsPage() {
                           >
                             {busy === 'testing' ? 'Testing…' : 'Test & connect'}
                           </button>
+                          {provider.authType === 'oauth2' ? (
+                            <button
+                              onClick={() => void connectOAuthFromVault(provider.id)}
+                              className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                              disabled={busy !== null}
+                            >
+                              Reconnect
+                            </button>
+                          ) : null}
                           <button
                             onClick={() => void disconnectProvider(provider.id)}
                             className="px-3 py-2 rounded-xl border border-rose-400/20 bg-rose-400/10 text-rose-100 hover:bg-rose-400/15 transition-colors text-sm"

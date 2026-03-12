@@ -420,6 +420,179 @@ export const PHASE3_INTEGRATIONS: IntegrationSpec[] = [
 
 export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
   {
+    id: 'zendesk',
+    name: 'Zendesk',
+    category: 'SUPPORT',
+    description: 'Customer support ticketing (read tickets, draft replies, and triage workflows).',
+    authType: 'api_key',
+    tags: ['SUPPORT', 'GLOBAL'],
+    status: 'READY',
+    color: '#03363D',
+    priority: 4,
+    apiKeyConfig: {
+      requiredFields: [
+        { name: 'subdomain', label: 'Subdomain', type: 'text', placeholder: 'yourcompany', required: true, description: 'Zendesk subdomain (yourcompany.zendesk.com)' },
+        { name: 'email', label: 'Email', type: 'text', placeholder: 'agent@company.com', required: true, description: 'Agent/admin email' },
+        { name: 'api_token', label: 'API Token', type: 'password', placeholder: '••••••••', required: true, description: 'Zendesk API token' },
+      ],
+      testEndpoint: '/api/v2/users/me.json',
+      baseUrl: 'https://{subdomain}.zendesk.com',
+    },
+    endpoints: {
+      me: { method: 'GET', path: 'https://{subdomain}.zendesk.com/api/v2/users/me.json' },
+      tickets: { method: 'GET', path: 'https://{subdomain}.zendesk.com/api/v2/tickets.json' },
+    },
+    capabilities: {
+      reads: ['support.tickets'],
+      writes: [
+        { id: 'support.ticket.reply', label: 'Reply to ticket', risk: 'medium' },
+        { id: 'support.ticket.update_status', label: 'Update ticket status', risk: 'low' },
+      ],
+    },
+  },
+  {
+    id: 'freshdesk',
+    name: 'Freshdesk',
+    category: 'SUPPORT',
+    description: 'Freshdesk ticketing (triage, replies, and SLA workflows).',
+    authType: 'api_key',
+    tags: ['SUPPORT', 'GLOBAL'],
+    status: 'READY',
+    color: '#25A7DF',
+    priority: 4,
+    apiKeyConfig: {
+      requiredFields: [
+        { name: 'domain', label: 'Domain', type: 'text', placeholder: 'yourcompany', required: true, description: 'Freshdesk domain (yourcompany.freshdesk.com)' },
+        { name: 'api_key', label: 'API Key', type: 'password', placeholder: '••••••••', required: true, description: 'Freshdesk API key' },
+      ],
+      testEndpoint: '/api/v2/agents/me',
+      baseUrl: 'https://{domain}.freshdesk.com',
+    },
+    endpoints: {
+      me: { method: 'GET', path: 'https://{domain}.freshdesk.com/api/v2/agents/me' },
+    },
+    capabilities: {
+      reads: ['support.tickets'],
+      writes: [
+        { id: 'support.ticket.reply', label: 'Reply to ticket', risk: 'medium' },
+        { id: 'support.ticket.update_status', label: 'Update ticket status', risk: 'low' },
+      ],
+    },
+  },
+  {
+    id: 'jira',
+    name: 'Jira (Atlassian)',
+    category: 'ITSM',
+    description: 'Issue tracking and Jira Service Management (create/update issues, triage requests).',
+    authType: 'api_key',
+    tags: ['ITSM', 'GLOBAL'],
+    status: 'READY',
+    color: '#2684FF',
+    priority: 4,
+    apiKeyConfig: {
+      requiredFields: [
+        { name: 'base_url', label: 'Base URL', type: 'text', placeholder: 'https://yourdomain.atlassian.net', required: true, description: 'Atlassian cloud base URL' },
+        { name: 'email', label: 'Email', type: 'text', placeholder: 'admin@company.com', required: true, description: 'Atlassian account email' },
+        { name: 'api_token', label: 'API Token', type: 'password', placeholder: '••••••••', required: true, description: 'Atlassian API token' },
+      ],
+      testEndpoint: '/rest/api/3/myself',
+      baseUrl: '',
+    },
+    endpoints: {
+      myself: { method: 'GET', path: 'https://{base_url}/rest/api/3/myself' },
+    },
+    capabilities: {
+      reads: ['itsm.issues'],
+      writes: [
+        { id: 'itsm.issue.create', label: 'Create issue', risk: 'medium' },
+        { id: 'itsm.issue.update', label: 'Update issue', risk: 'low' },
+      ],
+    },
+  },
+  {
+    id: 'hubspot',
+    name: 'HubSpot',
+    category: 'CRM',
+    description: 'CRM for leads, contacts, and deals (enrichment and pipeline automation).',
+    authType: 'api_key',
+    tags: ['CRM', 'GLOBAL'],
+    status: 'READY',
+    color: '#FF7A59',
+    priority: 4,
+    apiKeyConfig: {
+      requiredFields: [
+        { name: 'private_app_token', label: 'Private App Token', type: 'password', placeholder: 'pat-...', required: true, description: 'HubSpot private app token' },
+      ],
+      testEndpoint: 'https://api.hubapi.com/account-info/v3/details',
+      baseUrl: 'https://api.hubapi.com',
+    },
+    endpoints: {
+      details: { method: 'GET', path: 'https://api.hubapi.com/account-info/v3/details' },
+    },
+    capabilities: {
+      reads: ['sales.leads', 'sales.contacts', 'sales.deals'],
+      writes: [
+        { id: 'sales.lead.update', label: 'Update lead/contact', risk: 'low' },
+        { id: 'sales.deal.update', label: 'Update deal stage', risk: 'low' },
+      ],
+    },
+  },
+  {
+    id: 'stripe',
+    name: 'Stripe',
+    category: 'PAYMENTS',
+    description: 'Payments platform (transactions, refunds, and dispute workflows).',
+    authType: 'api_key',
+    tags: ['PAYMENTS', 'GLOBAL'],
+    status: 'READY',
+    color: '#635BFF',
+    priority: 4,
+    apiKeyConfig: {
+      requiredFields: [
+        { name: 'secret_key', label: 'Secret Key', type: 'password', placeholder: 'sk_live_...', required: true, description: 'Stripe secret key' },
+      ],
+      testEndpoint: 'https://api.stripe.com/v1/account',
+      baseUrl: 'https://api.stripe.com',
+    },
+    endpoints: {
+      account: { method: 'GET', path: 'https://api.stripe.com/v1/account' },
+    },
+    capabilities: {
+      reads: ['finance.transactions', 'finance.refunds'],
+      writes: [
+        { id: 'finance.refund.create', label: 'Create refund', risk: 'money' },
+      ],
+    },
+  },
+  {
+    id: 'razorpay',
+    name: 'Razorpay',
+    category: 'PAYMENTS',
+    description: 'Payments platform in India (transactions and refunds).',
+    authType: 'api_key',
+    tags: ['INDIA PRIORITY', 'PAYMENTS'],
+    status: 'READY',
+    color: '#0C2451',
+    priority: 4,
+    apiKeyConfig: {
+      requiredFields: [
+        { name: 'key_id', label: 'Key ID', type: 'text', placeholder: 'rzp_live_...', required: true, description: 'Razorpay key id' },
+        { name: 'key_secret', label: 'Key Secret', type: 'password', placeholder: '••••••••', required: true, description: 'Razorpay key secret' },
+      ],
+      testEndpoint: 'https://api.razorpay.com/v1/payments?count=1',
+      baseUrl: 'https://api.razorpay.com/v1',
+    },
+    endpoints: {
+      payments: { method: 'GET', path: 'https://api.razorpay.com/v1/payments' },
+    },
+    capabilities: {
+      reads: ['finance.transactions', 'finance.refunds'],
+      writes: [
+        { id: 'finance.refund.create', label: 'Create refund', risk: 'money' },
+      ],
+    },
+  },
+  {
     id: 'google_workspace',
     name: 'Google Workspace',
     category: 'PRODUCTIVITY',
