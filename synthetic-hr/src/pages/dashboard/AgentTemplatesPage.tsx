@@ -11,6 +11,11 @@ interface LiveModel {
   context_length?: number;
 }
 
+type MonthlyCost =
+  | { status: 'priced'; usd: number; inr: number }
+  | { status: 'free' }
+  | { status: 'unknown' };
+
 interface AgentTemplatesPageProps {
   onDeploy: (template: AgentTemplate) => void;
 }
@@ -29,7 +34,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
   const [sandboxMessage, setSandboxMessage] = useState('');
   const [sandboxChat, setSandboxChat] = useState<{ role: 'user' | 'agent', content: string }[]>([]);
   const [deploymentStep, setDeploymentStep] = useState<'configure' | 'channel'>('configure');
-  const [estimatedTokens, setEstimatedTokens] = useState<number>(10);
+  const [monthlyTokens, setMonthlyTokens] = useState<number>(10_000_000);
 
   // Fetch live model list on mount
   useEffect(() => {
@@ -67,8 +72,15 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
   }, []);
 
   const resolveModel = (modelId: string) =>
-    liveModels.find(m => m.id === modelId) ??
-    liveModels.find(m => m.id.includes(modelId) || modelId.includes(m.id));
+    (() => {
+      const direct = liveModels.find(m => m.id === modelId);
+      if (direct) return direct;
+
+      const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+      const key = normalize(modelId);
+
+      return liveModels.find(m => normalize(m.id).includes(key) || key.includes(normalize(m.id)));
+    })();
 
   // Update selected model when template changes or live models load
   useEffect(() => {
@@ -122,22 +134,34 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
     return `₹${Math.round(costINR).toLocaleString('en-IN')}/1M blended`;
   };
 
+  const formatTokensShort = (tokens: number) => {
+    if (!Number.isFinite(tokens)) return '';
+    const abs = Math.abs(tokens);
+    if (abs >= 1_000_000_000) return `${(tokens / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`;
+    if (abs >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+    if (abs >= 1_000) return `${(tokens / 1_000).toFixed(1).replace(/\.0$/, '')}k`;
+    return `${Math.round(tokens)}`;
+  };
+
   // Monthly cost estimator
   const USD_TO_INR = 93;
 
-  const calcMonthlyCost = (model: LiveModel | null, tokens: number) => {
-    if (!model) return null;
+  const calcMonthlyCost = (model: LiveModel | null, tokens: number): MonthlyCost => {
+    if (!model) return { status: 'unknown' };
     const p = Number(model.pricing?.prompt || 0);
     const c = Number(model.pricing?.completion || 0);
-    if (!p && !c) return null; // free/open model
+    const hasPricing = Number.isFinite(p) && Number.isFinite(c) && (p > 0 || c > 0);
+    const isLikelyFreeOpen =
+      (!model.pricing || (!p && !c)) && (model.provider === 'meta-llama' || model.id.toLowerCase().includes('llama'));
+
+    if (!hasPricing) return isLikelyFreeOpen ? { status: 'free' } : { status: 'unknown' };
     // Assume 50/50 prompt vs completion split
     const costUSD = (p * tokens * 0.5) + (c * tokens * 0.5);
     const costINR = costUSD * USD_TO_INR;
-    return { usd: costUSD, inr: costINR };
+    return { status: 'priced', usd: costUSD, inr: costINR };
   };
 
-  const estimatedMonthlyTokens = estimatedTokens * 1_000_000;
-  const monthlyCost = calcMonthlyCost(selectedModel, estimatedMonthlyTokens);
+  const monthlyCost = calcMonthlyCost(selectedModel, monthlyTokens);
   const templates = AGENT_TEMPLATES;
   const industries = [...AGENT_TEMPLATE_INDUSTRIES];
 
@@ -292,7 +316,10 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
                           {liveModels.length > 0 ? (
                             (() => {
                               const cost = calcMonthlyCost(baseModel || null, 500_000);
-                              return cost ? `₹${Math.round(cost.inr).toLocaleString('en-IN')}/month` : 'Free / Open Source';
+                              if (!baseModel) return 'Pricing Unavailable';
+                              if (cost.status === 'priced') return `₹${Math.round(cost.inr).toLocaleString('en-IN')}/month`;
+                              if (cost.status === 'free') return 'Free / Open Source';
+                              return 'Pricing Unavailable';
                             })()
                           ) : (
                             'Pricing Unavailable'
@@ -491,7 +518,14 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
                                     </span>
                                     {model.pricing && (
                                       <span className="text-slate-500 border-l border-slate-700 pl-2">
-                                        ${parseFloat(model.pricing.prompt || '0').toFixed(2)}/1M
+                                        {(() => {
+                                          const p = Number(model.pricing?.prompt || 0);
+                                          const c = Number(model.pricing?.completion || 0);
+                                          if (!p && !c) return 'pricing unknown';
+                                          const inCost = p ? `$${(p * 1_000_000).toFixed(2)}/1M in` : null;
+                                          const outCost = c ? `$${(c * 1_000_000).toFixed(2)}/1M out` : null;
+                                          return [inCost, outCost].filter(Boolean).join(' · ');
+                                        })()}
                                       </span>
                                     )}
                                   </div>
@@ -518,41 +552,65 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
 
                     {/* Footer Configuration Metrics */}
                     <div className="mt-6 p-4 bg-slate-800 rounded-xl border border-slate-700">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-white font-semibold">Workload Parameters</h4>
-                        <div className="flex items-center gap-2">
-                          <span className="text-slate-400 text-sm">Monthly Volume Est:</span>
-                          <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-700">
-                            {[10, 50, 100].map(vol => (
-                              <button
-                                key={vol}
-                                onClick={() => setEstimatedTokens(vol)}
-                                className={`px-2 py-1 text-xs font-semibold rounded-md transition-all ${estimatedTokens === vol
-                                  ? 'bg-slate-700 text-white shadow-sm'
-                                  : 'text-slate-500 hover:text-slate-400 hover:bg-slate-800'
-                                  }`}
-                              >
-                                {vol}M
-                              </button>
-                            ))}
-                          </div>
-                          <span className="text-xs font-semibold text-slate-400">Selected: {estimatedTokens}M</span>
-                        </div>
-                      </div>
+	                      <div className="flex items-center justify-between mb-4">
+	                        <h4 className="text-white font-semibold">Workload Parameters</h4>
+	                        <div className="flex items-center gap-2">
+	                          <span className="text-slate-400 text-sm">Monthly Volume Est:</span>
+	                          <div className="flex items-center gap-3">
+	                            <div className="flex flex-col gap-1">
+	                              <div className="flex items-center justify-between text-[11px] text-slate-500">
+	                                <span>1k</span>
+	                                <span>100M</span>
+	                              </div>
+	                              <input
+	                                type="range"
+	                                min={1_000}
+	                                max={100_000_000}
+	                                step={1_000}
+	                                value={monthlyTokens}
+	                                onChange={(e) => setMonthlyTokens(Number(e.target.value))}
+	                                className="w-56 accent-cyan-500"
+	                              />
+	                            </div>
+	                            <div className="flex items-center gap-2">
+	                              <input
+	                                type="number"
+	                                min={1_000}
+	                                max={100_000_000}
+	                                step={1_000}
+	                                value={monthlyTokens}
+	                                onChange={(e) => {
+	                                  const next = Number(e.target.value);
+	                                  if (!Number.isFinite(next)) return;
+	                                  setMonthlyTokens(Math.min(100_000_000, Math.max(1_000, next)));
+	                                }}
+	                                className="w-32 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+	                              />
+	                              <span className="text-xs text-slate-500">tokens</span>
+	                            </div>
+	                          </div>
+	                          <span className="text-xs font-semibold text-slate-400">Selected: {formatTokensShort(monthlyTokens)}</span>
+	                        </div>
+	                      </div>
 
-                      {/* Cost display */}
-                      {!selectedModel ? (
-                        <p className="text-slate-500 text-xs text-center py-2">Select a model above to see estimated cost</p>
-                      ) : monthlyCost === null ? (
-                        <div className="flex items-center justify-between py-2">
-                          <span className="text-slate-400 text-sm">Estimated monthly cost</span>
-                          <span className="text-emerald-400 font-semibold">Free / Open source</span>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-3 gap-3 mt-1">
-                          <div className="text-center">
-                            <p className="text-xs text-slate-500 mb-1">USD / month</p>
-                            <p className="text-white font-bold text-base">${monthlyCost.usd.toFixed(2)}</p>
+	                      {/* Cost display */}
+	                      {!selectedModel ? (
+	                        <p className="text-slate-500 text-xs text-center py-2">Select a model above to see estimated cost</p>
+	                      ) : monthlyCost.status === 'free' ? (
+	                        <div className="flex items-center justify-between py-2">
+	                          <span className="text-slate-400 text-sm">Estimated monthly cost</span>
+	                          <span className="text-emerald-400 font-semibold">Free / Open source</span>
+	                        </div>
+	                      ) : monthlyCost.status === 'unknown' ? (
+	                        <div className="flex items-center justify-between py-2">
+	                          <span className="text-slate-400 text-sm">Estimated monthly cost</span>
+	                          <span className="text-slate-400 font-semibold">Pricing unavailable</span>
+	                        </div>
+	                      ) : (
+	                        <div className="grid grid-cols-3 gap-3 mt-1">
+	                          <div className="text-center">
+	                            <p className="text-xs text-slate-500 mb-1">USD / month</p>
+	                            <p className="text-white font-bold text-base">${monthlyCost.usd.toFixed(2)}</p>
                           </div>
                           <div className="text-center border-x border-slate-700">
                             <p className="text-xs text-slate-500 mb-1">INR / month <span className="text-slate-600">(1$=₹{USD_TO_INR})</span></p>
@@ -563,24 +621,24 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
                             <p className="text-slate-300 font-bold text-base">₹{selectedTemplate.budget.toLocaleString('en-IN')}</p>
                           </div>
                         </div>
-                      )}
+	                      )}
                       {selectedModel && (
                         <p className="text-xs text-slate-500 text-center mt-2">
                           Pricing for <span className="text-slate-300">{selectedModel.name}</span> (<span className="text-slate-400">{selectedModel.provider}</span>)
                         </p>
                       )}
-                      {monthlyCost && (
-                        <p className="text-xs text-slate-600 text-center mt-2">
-                          Assumes 50/50 prompt/completion split · $1 = ₹{USD_TO_INR} · Pricing from RasiAI Gateway
-                        </p>
-                      )}
+	                      {selectedModel && monthlyCost.status === 'priced' && (
+	                        <p className="text-xs text-slate-600 text-center mt-2">
+	                          Assumes 50/50 prompt/completion split · $1 = ₹{USD_TO_INR} · Pricing from RasiAI Gateway
+	                        </p>
+	                      )}
 
                       {/* Over-budget warning */}
-                      {monthlyCost && selectedTemplate.budget > 0 && monthlyCost.inr > selectedTemplate.budget && (
-                        <div className="mt-3 flex items-center gap-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                          <span className="text-amber-400 text-xs">⚠️ Estimated cost exceeds budget limit — consider fewer tokens or a cheaper model.</span>
-                        </div>
-                      )}
+	                      {monthlyCost.status === 'priced' && selectedTemplate.budget > 0 && monthlyCost.inr > selectedTemplate.budget && (
+	                        <div className="mt-3 flex items-center gap-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+	                          <span className="text-amber-400 text-xs">⚠️ Estimated cost exceeds budget limit — consider fewer tokens or a cheaper model.</span>
+	                        </div>
+	                      )}
                     </div>
 
                     <div className="flex gap-3 mt-6">
