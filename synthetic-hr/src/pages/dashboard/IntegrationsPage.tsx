@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
+import { INTEGRATION_PACKS, guessPackForIntegration, packDisplayBadge, type IntegrationPackId } from '../../lib/integration-packs';
 import {
   AlertTriangle,
   ArrowRight,
@@ -11,6 +12,7 @@ import {
   CheckCircle2,
   Clock,
   Database,
+  KeyRound,
   FileText,
   Fingerprint,
   Info,
@@ -19,6 +21,7 @@ import {
   Shield,
   Sparkles,
   Users,
+  Wrench,
   X,
 } from 'lucide-react';
 
@@ -46,6 +49,7 @@ type IntegrationRow = {
   requiredFields: RequiredField[];
   capabilities?: Capabilities;
   status: 'disconnected' | 'connected' | 'error' | 'syncing' | 'expired' | string;
+  lifecycleStatus?: 'not_configured' | 'configured' | 'connected' | 'error' | 'syncing' | 'expired' | string;
   lastSyncAt?: string | null;
   lastErrorAt?: string | null;
   lastErrorMsg?: string | null;
@@ -76,7 +80,7 @@ type SampleCandidate = {
 
 type SamplePullResponse = { candidates: SampleCandidate[]; jds: Array<{ id: string; title: string; location: string; seniority: string }> };
 
-function statusTone(status: IntegrationRow['status']): 'connected' | 'pending' | 'error' | 'neutral' {
+function statusTone(status: string): 'connected' | 'pending' | 'error' | 'neutral' {
   if (status === 'connected') return 'connected';
   if (status === 'syncing') return 'pending';
   if (status === 'error' || status === 'expired') return 'error';
@@ -90,8 +94,12 @@ const statusToneClasses: Record<ReturnType<typeof statusTone>, string> = {
   neutral: 'border-white/10 bg-white/[0.05] text-slate-300',
 };
 
-function formatStatusLabel(status: IntegrationRow['status']): string {
+function formatStatusLabel(status: string): string {
   switch (status) {
+    case 'not_configured':
+      return 'Not configured';
+    case 'configured':
+      return 'Configured';
     case 'connected':
       return 'Connected';
     case 'syncing':
@@ -231,9 +239,6 @@ function Drawer({
   );
 }
 
-const RECRUITMENT_PROVIDER_IDS = ['naukri', 'linkedin', 'google_workspace', 'microsoft_365'] as const;
-type RecruitmentProviderId = (typeof RECRUITMENT_PROVIDER_IDS)[number];
-
 export default function IntegrationsPage() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<IntegrationRow[]>([]);
@@ -260,19 +265,58 @@ export default function IntegrationsPage() {
   const [sampleJds, setSampleJds] = useState<SamplePullResponse['jds']>([]);
   const [activeCandidateId, setActiveCandidateId] = useState<string | null>(null);
 
+  const [activePack, setActivePack] = useState<IntegrationPackId>('recruitment');
+
+  const [vaultOpen, setVaultOpen] = useState(false);
+  const [vaultQuery, setVaultQuery] = useState('');
+  const [vaultFocus, setVaultFocus] = useState<'pack' | 'all'>('pack');
+  const [vaultPackId, setVaultPackId] = useState<IntegrationPackId>('recruitment');
+  const [vaultBusy, setVaultBusy] = useState<Record<string, 'connecting' | 'testing' | 'disconnecting' | null>>({});
+
   const selectedIntegration = useMemo(() => {
     if (!activeProviderId) return null;
     return items.find((it) => it.id === activeProviderId) || null;
   }, [items, activeProviderId]);
 
-  const recruitmentProviders = useMemo(() => items.filter((it) => RECRUITMENT_PROVIDER_IDS.includes(it.id as any)), [items]);
-  const connectedRecruitmentCount = useMemo(
-    () => recruitmentProviders.filter((it) => it.status === 'connected').length,
-    [recruitmentProviders],
-  );
+  const providersByPack = useMemo(() => {
+    const map = new Map<IntegrationPackId, IntegrationRow[]>();
+    INTEGRATION_PACKS.forEach((p) => map.set(p.id, []));
+    items.forEach((it) => {
+      const packId = guessPackForIntegration(it);
+      const list = map.get(packId) || [];
+      list.push(it);
+      map.set(packId, list);
+    });
+    // stable ordering
+    Array.from(map.entries()).forEach(([k, list]) => {
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      map.set(k, list);
+    });
+    return map;
+  }, [items]);
+
+  const activePackProviders = useMemo(() => providersByPack.get(activePack) || [], [providersByPack, activePack]);
+
+  const effectiveStatus = (it: IntegrationRow): string => it.lifecycleStatus || it.status || 'disconnected';
+  const isConfiguredLike = (it: IntegrationRow): boolean => effectiveStatus(it) !== 'not_configured';
+  const isConnectedLike = (it: IntegrationRow): boolean => effectiveStatus(it) === 'connected';
+
+  const packStats = useMemo(() => {
+    const stats = new Map<IntegrationPackId, { total: number; configured: number; connected: number; needsAttention: number }>();
+    INTEGRATION_PACKS.forEach((p) => {
+      const list = providersByPack.get(p.id) || [];
+      stats.set(p.id, {
+        total: list.length,
+        configured: list.filter(isConfiguredLike).length,
+        connected: list.filter(isConnectedLike).length,
+        needsAttention: list.filter((it) => ['error', 'expired'].includes(effectiveStatus(it))).length,
+      });
+    });
+    return stats;
+  }, [providersByPack]);
 
   const selectedProviders = useMemo(() => {
-    const list: RecruitmentProviderId[] = [];
+    const list: string[] = [];
     if (selectedNaukri) list.push('naukri');
     if (selectedLinkedIn) list.push('linkedin');
     list.push(outreachChoice);
@@ -341,6 +385,17 @@ export default function IntegrationsPage() {
     setSampleError(null);
   };
 
+  const openVault = (focus?: 'pack' | 'all', packId?: IntegrationPackId) => {
+    setVaultFocus(focus || 'pack');
+    if (packId) setVaultPackId(packId);
+    setVaultOpen(true);
+  };
+
+  const closeVault = () => {
+    setVaultOpen(false);
+    setVaultQuery('');
+  };
+
   const ensureCredentialSeed = (providerId: string) => {
     const provider = providerMap.get(providerId);
     if (!provider) return;
@@ -398,9 +453,88 @@ export default function IntegrationsPage() {
         return;
       }
       toast.success(`Connected ${provider.name}.`);
+      setCredentials((prev) => ({ ...prev, [providerId]: {} }));
       await load();
     } finally {
       setConnecting((prev) => ({ ...prev, [providerId]: false }));
+    }
+  };
+
+  const configureApiKey = async (providerId: string) => {
+    const provider = providerMap.get(providerId);
+    if (!provider) return;
+    ensureCredentialSeed(providerId);
+    const creds = credentials[providerId] || {};
+
+    const missing = provider.requiredFields.filter((f) => f.required && !String(creds[f.name] || '').trim());
+    if (missing.length > 0) {
+      toast.error(`Missing required field: ${missing[0].label}`);
+      return;
+    }
+
+    setVaultBusy((prev) => ({ ...prev, [providerId]: 'connecting' }));
+    try {
+      const res = await api.integrations.configure(providerId, creds);
+      if (!res.success) {
+        toast.error(res.error || 'Failed to save credentials');
+        return;
+      }
+      toast.success(`Configured ${provider.name}.`);
+      setCredentials((prev) => ({ ...prev, [providerId]: {} }));
+      await load();
+    } finally {
+      setVaultBusy((prev) => ({ ...prev, [providerId]: null }));
+    }
+  };
+
+  const connectApiKeyFromVault = async (providerId: string) => {
+    setVaultBusy((prev) => ({ ...prev, [providerId]: 'connecting' }));
+    try {
+      await connectApiKey(providerId);
+    } finally {
+      setVaultBusy((prev) => ({ ...prev, [providerId]: null }));
+    }
+  };
+
+  const connectOAuthFromVault = async (providerId: string) => {
+    setVaultBusy((prev) => ({ ...prev, [providerId]: 'connecting' }));
+    try {
+      await connectOAuth(providerId);
+    } finally {
+      setVaultBusy((prev) => ({ ...prev, [providerId]: null }));
+    }
+  };
+
+  const disconnectProvider = async (providerId: string) => {
+    const ok = window.confirm('Disconnecting will remove stored credentials for this integration. Continue?');
+    if (!ok) return;
+    setVaultBusy((prev) => ({ ...prev, [providerId]: 'disconnecting' }));
+    try {
+      const res = await api.integrations.disconnect(providerId);
+      if (!res.success) {
+        toast.error(res.error || 'Failed to disconnect');
+        return;
+      }
+      toast.success('Disconnected.');
+      await load();
+    } finally {
+      setVaultBusy((prev) => ({ ...prev, [providerId]: null }));
+    }
+  };
+
+  const testProvider = async (providerId: string) => {
+    setVaultBusy((prev) => ({ ...prev, [providerId]: 'testing' }));
+    try {
+      const res = await api.integrations.test(providerId);
+      if (!res.success) {
+        toast.error(res.error || 'Test failed');
+        await load();
+        return;
+      }
+      toast.success('Test successful.');
+      await load();
+    } finally {
+      setVaultBusy((prev) => ({ ...prev, [providerId]: null }));
     }
   };
 
@@ -432,14 +566,27 @@ export default function IntegrationsPage() {
     void load();
   }, []);
 
+  const recruitmentProviders = useMemo(() => providersByPack.get('recruitment') || [], [providersByPack]);
+
   const connectedCandidateSources = useMemo(() => {
     return recruitmentProviders
-      .filter((p) => p.status === 'connected')
+      .filter((p) => isConnectedLike(p))
       .filter((p) => (p.capabilities?.reads || []).some((r) => String(r).includes('candidate_profiles')))
       .map((p) => p.id);
   }, [recruitmentProviders]);
 
   const defaultSampleProviderId = connectedCandidateSources[0] || null;
+
+  const vaultProviders = useMemo(() => {
+    const q = vaultQuery.trim().toLowerCase();
+    const base = vaultFocus === 'pack' ? (providersByPack.get(vaultPackId) || []) : items;
+    const filtered = base.filter((it) => {
+      if (!q) return true;
+      const hay = `${it.name} ${it.id} ${it.category} ${it.description}`.toLowerCase();
+      return hay.includes(q);
+    });
+    return filtered.sort((a, b) => a.name.localeCompare(b.name));
+  }, [vaultQuery, vaultFocus, providersByPack, vaultPackId, items]);
 
   return (
     <div className="p-6">
@@ -454,6 +601,13 @@ export default function IntegrationsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => openVault('pack', activePack)}
+            className="px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm font-semibold inline-flex items-center gap-2"
+          >
+            <KeyRound className="w-4 h-4" />
+            Credentials Vault
+          </button>
           <button
             onClick={() => openWizard(1)}
             className="px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
@@ -474,59 +628,75 @@ export default function IntegrationsPage() {
       ) : null}
 
       <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-emerald-300" />
-              <div className="font-semibold text-white">Recruitment</div>
-            </div>
-            <span className="text-xs px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-slate-300">
-              {connectedRecruitmentCount}/{RECRUITMENT_PROVIDER_IDS.length} connected
-            </span>
-          </div>
-          <p className="text-sm text-slate-400 mt-2">
-            Naukri + LinkedIn sources, plus outreach via Google Workspace or Microsoft 365.
-          </p>
-          <div className="mt-4 flex items-center gap-2">
-            <span className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200 inline-flex items-center gap-1">
-              <BadgeCheck className="w-3.5 h-3.5 text-emerald-300" />
-              Capability-first
-            </span>
-            <span className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200 inline-flex items-center gap-1">
-              <Shield className="w-3.5 h-3.5 text-blue-300" />
-              Approval-first
-            </span>
-          </div>
-        </div>
+        {INTEGRATION_PACKS.map((pack) => {
+          const stats = packStats.get(pack.id) || { total: 0, configured: 0, connected: 0, needsAttention: 0 };
+          const badge = packDisplayBadge(pack.id);
+          const Icon = pack.icon as any;
+          const isActive = activePack === pack.id;
+          const enableTone = stats.configured === 0 ? 'border-amber-400/20 bg-amber-400/10 text-amber-100' : stats.needsAttention > 0 ? 'border-rose-400/20 bg-rose-400/10 text-rose-100' : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100';
+          const enableLabel = stats.configured === 0 ? 'Disabled until configured' : stats.needsAttention > 0 ? 'Needs attention' : 'Enabled';
 
-        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 opacity-70">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Mail className="w-4 h-4 text-slate-300" />
-              <div className="font-semibold text-white">Payments</div>
+          return (
+            <div
+              key={pack.id}
+              className={`rounded-2xl border border-white/10 p-5 transition-colors ${isActive ? 'bg-white/[0.04]' : 'bg-white/[0.02] hover:bg-white/[0.03]'}`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Icon className={`w-4 h-4 ${pack.id === 'recruitment' ? 'text-emerald-300' : 'text-slate-300'}`} />
+                  <div className="font-semibold text-white">{pack.name}</div>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${badge.cls}`}>{badge.label}</span>
+              </div>
+              <p className="text-sm text-slate-400 mt-2">{pack.description}</p>
+              <div className="mt-4 flex items-center gap-2 flex-wrap">
+                <span className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200 inline-flex items-center gap-1">
+                  <BadgeCheck className="w-3.5 h-3.5 text-slate-300" />
+                  Capability-first
+                </span>
+                <span className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200 inline-flex items-center gap-1">
+                  <Shield className="w-3.5 h-3.5 text-blue-300" />
+                  Approval-first
+                </span>
+                <span className={`text-xs px-2 py-1 rounded-lg border ${enableTone} inline-flex items-center gap-1`}>
+                  {stats.needsAttention > 0 ? <AlertTriangle className="w-3.5 h-3.5" /> : <Info className="w-3.5 h-3.5" />}
+                  {enableLabel}
+                </span>
+              </div>
+              <div className="mt-4 flex items-center justify-between gap-2">
+                <span className="text-xs px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-slate-300">
+                  {stats.configured}/{stats.total} configured
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setActivePack(pack.id);
+                      openVault('pack', pack.id);
+                    }}
+                    className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                  >
+                    Configure
+                  </button>
+                  <button
+                    onClick={() => setActivePack(pack.id)}
+                    className={`px-3 py-2 rounded-xl border text-sm transition-colors ${
+                      isActive ? 'border-blue-400/30 bg-blue-500/15 text-blue-200' : 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'
+                    }`}
+                  >
+                    View
+                  </button>
+                </div>
+              </div>
             </div>
-            <span className="text-xs px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-slate-300">Coming soon</span>
-          </div>
-          <p className="text-sm text-slate-400 mt-2">Transactions and refunds with strict approvals and audit.</p>
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 opacity-70">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Database className="w-4 h-4 text-slate-300" />
-              <div className="font-semibold text-white">Finance / ERP</div>
-            </div>
-            <span className="text-xs px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-slate-300">Coming soon</span>
-          </div>
-          <p className="text-sm text-slate-400 mt-2">Read-first ledgers/vouchers with safe automation patterns.</p>
-        </div>
+          );
+        })}
       </div>
 
       <div className="mt-8">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-white">Recruitment providers</h2>
-            <p className="text-sm text-slate-400 mt-1">Connect sources and outreach tools. Every write is approval-first.</p>
+            <h2 className="text-lg font-semibold text-white">Providers • {INTEGRATION_PACKS.find((p) => p.id === activePack)?.name || 'Pack'}</h2>
+            <p className="text-sm text-slate-400 mt-1">Visible to everyone. Disabled until credentials are configured.</p>
           </div>
           {loading ? (
             <div className="text-sm text-slate-400 inline-flex items-center gap-2">
@@ -537,11 +707,12 @@ export default function IntegrationsPage() {
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-3">
-          {recruitmentProviders.map((provider) => {
+          {activePackProviders.map((provider) => {
             const Icon = providerIcon(provider.id);
             const caps = provider.capabilities || { reads: [], writes: [] };
             const readBadges = (caps.reads || []).slice(0, 2);
             const writeBadges = (caps.writes || []).slice(0, 2);
+            const status = effectiveStatus(provider);
 
             return (
               <div key={provider.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
@@ -553,8 +724,8 @@ export default function IntegrationsPage() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <div className="font-semibold text-white truncate">{provider.name}</div>
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${statusToneClasses[statusTone(provider.status)]}`}>
-                          {formatStatusLabel(provider.status)}
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${statusToneClasses[statusTone(status)]}`}>
+                          {formatStatusLabel(status)}
                         </span>
                       </div>
                       <div className="text-sm text-slate-400 mt-1 line-clamp-2">{provider.description}</div>
@@ -603,7 +774,7 @@ export default function IntegrationsPage() {
                       Details
                     </button>
 
-                    {provider.status === 'connected' && (caps.reads || []).some((r) => String(r).includes('candidate_profiles')) ? (
+                    {status === 'connected' && (caps.reads || []).some((r) => String(r).includes('candidate_profiles')) ? (
                       <button
                         onClick={() => runSamplePull(provider.id)}
                         className="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/25 text-emerald-100 hover:bg-emerald-500/20 transition-colors text-sm font-semibold"
@@ -613,10 +784,18 @@ export default function IntegrationsPage() {
                       </button>
                     ) : (
                       <button
-                        onClick={() => startConnectProvider(provider.id)}
+                        onClick={() => {
+                          if (provider.authType === 'api_key' || provider.authType === 'client_credentials') {
+                          openVault('pack', activePack);
+                          setVaultQuery(provider.name);
+                          ensureCredentialSeed(provider.id);
+                          return;
+                        }
+                        startConnectProvider(provider.id);
+                        }}
                         className="px-3 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
                       >
-                        Connect
+                        {provider.authType === 'api_key' || provider.authType === 'client_credentials' ? 'Configure' : 'Connect'}
                       </button>
                     )}
                   </div>
@@ -816,8 +995,8 @@ export default function IntegrationsPage() {
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
               <div className="flex items-center justify-between">
                 <div className="font-semibold text-white">Status</div>
-                <span className={`text-xs px-2 py-0.5 rounded-full border ${statusToneClasses[statusTone(selectedIntegration.status)]}`}>
-                  {formatStatusLabel(selectedIntegration.status)}
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${statusToneClasses[statusTone(effectiveStatus(selectedIntegration))]}`}>
+                  {formatStatusLabel(effectiveStatus(selectedIntegration))}
                 </span>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
@@ -1044,15 +1223,15 @@ export default function IntegrationsPage() {
                   const provider = providerMap.get(providerId);
                   if (!provider) return null;
                   const isBusy = Boolean(connecting[providerId]);
-                  const isConnected = provider.status === 'connected';
+                  const isConnected = effectiveStatus(provider) === 'connected';
                   return (
                     <div key={providerId} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <div className="flex items-center gap-2">
                             <div className="font-semibold text-white">{provider.name}</div>
-                            <span className={`text-xs px-2 py-0.5 rounded-full border ${statusToneClasses[statusTone(provider.status)]}`}>
-                              {formatStatusLabel(provider.status)}
+                            <span className={`text-xs px-2 py-0.5 rounded-full border ${statusToneClasses[statusTone(effectiveStatus(provider))]}`}>
+                              {formatStatusLabel(effectiveStatus(provider))}
                             </span>
                           </div>
                           <div className="text-xs text-slate-500 mt-1">
@@ -1094,7 +1273,7 @@ export default function IntegrationsPage() {
                         </div>
                       </div>
 
-                      {provider.authType === 'api_key' && provider.requiredFields.length > 0 && provider.status !== 'connected' ? (
+                      {provider.authType === 'api_key' && provider.requiredFields.length > 0 && effectiveStatus(provider) !== 'connected' ? (
                         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                           {provider.requiredFields.map((field) => (
                             <label key={field.name} className="block">
@@ -1233,6 +1412,194 @@ export default function IntegrationsPage() {
               ) : null}
             </div>
           ) : null}
+        </Modal>
+      ) : null}
+
+      {vaultOpen ? (
+        <Modal title="Credentials Vault" onClose={closeVault} widthClass="max-w-5xl">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-slate-400">
+              Visible to everyone. Only users with permissions can actually connect/disconnect.
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setVaultFocus('pack');
+                  setVaultPackId(activePack);
+                }}
+                className={`px-3 py-2 rounded-xl border text-sm transition-colors ${
+                  vaultFocus === 'pack'
+                    ? 'border-blue-400/30 bg-blue-500/15 text-blue-200'
+                    : 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'
+                }`}
+              >
+                This pack
+              </button>
+              <button
+                onClick={() => setVaultFocus('all')}
+                className={`px-3 py-2 rounded-xl border text-sm transition-colors ${
+                  vaultFocus === 'all'
+                    ? 'border-blue-400/30 bg-blue-500/15 text-blue-200'
+                    : 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'
+                }`}
+              >
+                All providers
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-center gap-3">
+            <input
+              value={vaultQuery}
+              onChange={(e) => setVaultQuery(e.target.value)}
+              placeholder="Search providers…"
+              className="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-white/10 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            />
+            <button
+              onClick={() => void load()}
+              className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+            >
+              Refresh
+            </button>
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 gap-3 max-h-[60vh] overflow-auto pr-1">
+            {vaultProviders.map((provider) => {
+              const busy = vaultBusy[provider.id] || null;
+              const status = effectiveStatus(provider);
+              const isConnected = status === 'connected';
+              const isConfigured = status === 'configured';
+              const isError = status === 'error' || status === 'expired';
+              const caps = provider.capabilities || { reads: [], writes: [] };
+
+              return (
+                <div key={provider.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <div className="font-semibold text-white">{provider.name}</div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${statusToneClasses[statusTone(status)]}`}>
+                          {formatStatusLabel(status)}
+                        </span>
+                        {isError && provider.lastErrorMsg ? (
+                          <span className="text-xs text-rose-200 truncate max-w-[420px]">• {provider.lastErrorMsg}</span>
+                        ) : null}
+                      </div>
+                      <div className="text-xs text-slate-500 mt-1">{provider.category} • {provider.id}</div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {(caps.reads || []).slice(0, 3).map((r) => {
+                          const meta = readLabel(r);
+                          const ReadIcon = meta.icon;
+                          return (
+                            <span key={r} className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200 inline-flex items-center gap-1">
+                              <ReadIcon className="w-3.5 h-3.5 text-slate-300" />
+                              {meta.label}
+                            </span>
+                          );
+                        })}
+                        {(caps.writes || []).slice(0, 2).map((w) => {
+                          const risk = riskBadge(w.risk);
+                          return (
+                            <span key={w.id} className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200 inline-flex items-center gap-2">
+                              <ArrowRight className="w-3.5 h-3.5 text-slate-300" />
+                              {w.label}
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-md border ${risk.cls}`}>{risk.label}</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => openDetails(provider.id)}
+                        className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                      >
+                        Details
+                      </button>
+                      {isConnected ? (
+                        <>
+                          <button
+                            onClick={() => void testProvider(provider.id)}
+                            className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                            disabled={busy !== null}
+                          >
+                            {busy === 'testing' ? 'Testing…' : 'Test'}
+                          </button>
+                          <button
+                            onClick={() => void disconnectProvider(provider.id)}
+                            className="px-3 py-2 rounded-xl border border-rose-400/20 bg-rose-400/10 text-rose-100 hover:bg-rose-400/15 transition-colors text-sm"
+                            disabled={busy !== null}
+                          >
+                            {busy === 'disconnecting' ? 'Disconnecting…' : 'Disconnect'}
+                          </button>
+                        </>
+                      ) : isConfigured || isError ? (
+                        <>
+                          <button
+                            onClick={() => void testProvider(provider.id)}
+                            className="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/25 text-emerald-100 hover:bg-emerald-500/20 transition-colors text-sm font-semibold"
+                            disabled={busy !== null}
+                          >
+                            {busy === 'testing' ? 'Testing…' : 'Test & connect'}
+                          </button>
+                          <button
+                            onClick={() => void disconnectProvider(provider.id)}
+                            className="px-3 py-2 rounded-xl border border-rose-400/20 bg-rose-400/10 text-rose-100 hover:bg-rose-400/15 transition-colors text-sm"
+                            disabled={busy !== null}
+                          >
+                            {busy === 'disconnecting' ? 'Disconnecting…' : 'Clear'}
+                          </button>
+                        </>
+                      ) : provider.authType === 'oauth2' ? (
+                        <button
+                          onClick={() => void connectOAuthFromVault(provider.id)}
+                          className="px-3 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
+                          disabled={busy !== null}
+                        >
+                          Connect OAuth
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            ensureCredentialSeed(provider.id);
+                            void configureApiKey(provider.id);
+                          }}
+                          className="px-3 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
+                          disabled={busy !== null}
+                        >
+                          {busy === 'connecting' ? 'Saving…' : 'Save'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {provider.authType === 'api_key' && provider.requiredFields.length > 0 && !isConnected ? (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {provider.requiredFields.map((field) => (
+                        <label key={field.name} className="block">
+                          <div className="text-xs text-slate-400 font-semibold">{field.label}</div>
+                          <input
+                            type={field.type === 'password' ? 'password' : 'text'}
+                            value={(credentials[provider.id]?.[field.name] || '') as string}
+                            onChange={(e) =>
+                              setCredentials((prev) => ({
+                                ...prev,
+                                [provider.id]: { ...(prev[provider.id] || {}), [field.name]: e.target.value },
+                              }))
+                            }
+                            placeholder={field.placeholder || ''}
+                            className="mt-1 w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-white/10 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                          />
+                          {field.description ? <div className="text-xs text-slate-500 mt-1">{field.description}</div> : null}
+                        </label>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
         </Modal>
       ) : null}
     </div>

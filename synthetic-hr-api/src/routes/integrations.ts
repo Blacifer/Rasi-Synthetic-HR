@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { SignJWT, jwtVerify } from 'jose';
 import { logger } from '../lib/logger';
 import { requirePermission } from '../middleware/rbac';
-import { SupabaseRestError, eq, supabaseRestAsService, supabaseRestAsUser } from '../lib/supabase-rest';
+import { SupabaseRestError, eq, in_, supabaseRestAsService, supabaseRestAsUser } from '../lib/supabase-rest';
 import { encryptSecret, decryptSecret } from '../lib/integrations/encryption';
 import { IMPLEMENTED_INTEGRATIONS, getIntegrationSpec } from '../lib/integrations/spec-registry';
 import { getAdapter } from '../lib/integrations/adapters';
@@ -28,7 +28,7 @@ const restAsUser = (req: any): RestFn => {
 
 const restAsService: RestFn = (table, query, options = {}) => supabaseRestAsService(table, query, options);
 
-type IntegrationStatus = 'disconnected' | 'connected' | 'error' | 'syncing' | 'expired';
+type IntegrationStatus = 'disconnected' | 'configured' | 'connected' | 'error' | 'syncing' | 'expired';
 
 type StoredIntegrationRow = {
   id: string;
@@ -369,8 +369,29 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
 
   const byType = new Map(rows.map((row) => [row.service_type, row]));
 
+  const integrationIds = rows.map((r) => r.id).filter(Boolean);
+  const credentialIntegrationIdSet = new Set<string>();
+  if (integrationIds.length > 0) {
+    const credQuery = new URLSearchParams();
+    credQuery.set('integration_id', in_(integrationIds));
+    credQuery.set('select', 'integration_id');
+    const creds = await safeQuery<Pick<StoredCredentialRow, 'integration_id'>>(rest, 'integration_credentials', credQuery);
+    (creds || []).forEach((c) => {
+      if (c.integration_id) credentialIntegrationIdSet.add(String(c.integration_id));
+    });
+  }
+
+  const lifecycleFromRow = (row: StoredIntegrationRow | undefined | null): 'not_configured' | 'configured' | IntegrationStatus => {
+    if (!row?.id) return 'not_configured';
+    const hasCredentials = credentialIntegrationIdSet.has(row.id);
+    if (!hasCredentials) return 'not_configured';
+    if ((row.status as any) === 'configured') return 'configured';
+    return row.status;
+  };
+
   const data = IMPLEMENTED_INTEGRATIONS.map((spec) => {
     const row = byType.get(spec.id);
+    const lifecycleStatus = lifecycleFromRow(row);
     return {
       id: spec.id,
       name: spec.name,
@@ -382,7 +403,10 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
       priority: spec.priority,
       requiredFields: spec.apiKeyConfig?.requiredFields || spec.connectionFields || [],
       capabilities: spec.capabilities || { reads: [], writes: [] },
+      // Backwards-compatible field for older UIs.
       status: row?.status || 'disconnected',
+      // New lifecycle field: use this in UIs to show "visible but disabled until configured".
+      lifecycleStatus,
       lastSyncAt: row?.last_sync_at || null,
       lastErrorAt: row?.last_error_at || null,
       lastErrorMsg: row?.last_error_msg || null,
@@ -835,7 +859,18 @@ router.post('/:service/connect', requirePermission('connectors.manage'), async (
     }
   }
 
+  // Prepare stored credentials and a test payload (adapters expect sensitive fields to be encrypted).
+  const storedCredentials: Record<string, string> = {};
+  Object.entries(parsed.data.credentials).forEach(([key, value]) => {
+    const descriptor = required.find((f) => f.name === key);
+    const sensitive = descriptor ? descriptor.type === 'password' : true;
+    storedCredentials[key] = sensitive
+      ? encryptSecret(value)
+      : (key.includes('domain') || key.includes('subdomain') ? normalizeDomainInput(value) : value);
+  });
+
   const integration = await upsertIntegration(rest, orgId, spec.id, {
+    // Optimistically connect; validation below can downgrade to error if needed.
     status: 'connected',
     auth_type: spec.authType,
     category: spec.category,
@@ -846,18 +881,123 @@ router.post('/:service/connect', requirePermission('connectors.manage'), async (
 
   if (!integration?.id) return res.status(500).json({ success: false, error: 'Failed to store integration' });
 
-  await Promise.all(Object.entries(parsed.data.credentials).map(async ([key, value]) => {
+  await Promise.all(Object.entries(storedCredentials).map(async ([key, stored]) => {
     const descriptor = required.find((f) => f.name === key);
     const sensitive = descriptor ? descriptor.type === 'password' : true;
-    const stored = sensitive
-      ? encryptSecret(value)
-      : (key.includes('domain') || key.includes('subdomain') ? normalizeDomainInput(value) : value);
     await upsertCredential(rest, integration.id, key, stored, sensitive);
   }));
 
-  await writeConnectionLog(rest, integration.id, 'connect', 'success', 'Credential integration connected', { service: spec.id, authType: spec.authType });
+  // Validate credentials with the adapter when available to avoid false "Connected" states.
+  const adapter = getAdapter(service);
+  if (!adapter) {
+    await writeConnectionLog(rest, integration.id, 'connect', 'success', 'Credential integration stored (no adapter validation)', {
+      service: spec.id,
+      authType: spec.authType,
+      validation: 'adapter_missing',
+    });
+    return res.json({ success: true, message: 'Integration stored', data: { id: integration.id, service: spec.id, validated: false } });
+  }
 
-  return res.json({ success: true, message: 'Integration connected', data: { id: integration.id, service: spec.id } });
+  const testResult = await adapter.testConnection(storedCredentials);
+  if (!testResult.success) {
+    const patchQuery = new URLSearchParams();
+    patchQuery.set('id', eq(integration.id));
+    await rest('integrations', patchQuery, {
+      method: 'PATCH',
+      body: {
+        status: 'error',
+        last_error_at: new Date().toISOString(),
+        last_error_msg: testResult.message || 'Credential validation failed',
+        updated_at: new Date().toISOString(),
+      },
+    });
+
+    await writeConnectionLog(rest, integration.id, 'connect', 'failed', testResult.message || 'Credential validation failed', {
+      service: spec.id,
+      authType: spec.authType,
+    });
+    return res.status(400).json({ success: false, error: testResult.message || 'Credential validation failed' });
+  }
+
+  const patchQuery = new URLSearchParams();
+  patchQuery.set('id', eq(integration.id));
+  await rest('integrations', patchQuery, {
+    method: 'PATCH',
+    body: {
+      status: 'connected',
+      last_error_at: null,
+      last_error_msg: null,
+      last_sync_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  });
+
+  await writeConnectionLog(rest, integration.id, 'connect', 'success', 'Credential integration connected (validated)', {
+    service: spec.id,
+    authType: spec.authType,
+  });
+
+  return res.json({ success: true, message: 'Integration connected', data: { id: integration.id, service: spec.id, validated: true } });
+});
+
+// Configure (store credentials without validation)
+router.post('/:service/configure', requirePermission('connectors.manage'), async (req, res) => {
+  const orgId = getOrgId(req);
+  if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+  const rest = restAsUser(req);
+  const service = req.params.service;
+  const spec = getIntegrationSpec(service);
+  if (!spec) return res.status(404).json({ success: false, error: 'Integration not found' });
+  if (spec.authType !== 'api_key' && spec.authType !== 'client_credentials') {
+    return res.status(400).json({ success: false, error: 'Integration is not configurable via credentials' });
+  }
+
+  const schema = z.object({
+    credentials: z.record(z.string(), z.string()),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ success: false, error: 'Invalid payload' });
+
+  const required = spec.apiKeyConfig?.requiredFields || spec.connectionFields || [];
+  for (const field of required) {
+    if (field.required && !parsed.data.credentials[field.name]) {
+      return res.status(400).json({ success: false, error: `Missing required field: ${field.name}` });
+    }
+  }
+
+  const storedCredentials: Record<string, string> = {};
+  Object.entries(parsed.data.credentials).forEach(([key, value]) => {
+    const descriptor = required.find((f) => f.name === key);
+    const sensitive = descriptor ? descriptor.type === 'password' : true;
+    storedCredentials[key] = sensitive
+      ? encryptSecret(value)
+      : (key.includes('domain') || key.includes('subdomain') ? normalizeDomainInput(value) : value);
+  });
+
+  const integration = await upsertIntegration(rest, orgId, spec.id, {
+    status: 'configured' as any,
+    auth_type: spec.authType,
+    category: spec.category,
+    service_name: spec.name,
+    last_error_at: null,
+    last_error_msg: null,
+  });
+
+  if (!integration?.id) return res.status(500).json({ success: false, error: 'Failed to store integration' });
+
+  await Promise.all(Object.entries(storedCredentials).map(async ([key, stored]) => {
+    const descriptor = required.find((f) => f.name === key);
+    const sensitive = descriptor ? descriptor.type === 'password' : true;
+    await upsertCredential(rest, integration.id, key, stored, sensitive);
+  }));
+
+  await writeConnectionLog(rest, integration.id, 'configure', 'success', 'Credentials stored (not validated)', {
+    service: spec.id,
+    authType: spec.authType,
+  });
+
+  return res.json({ success: true, message: 'Integration configured', data: { id: integration.id, service: spec.id } });
 });
 
 // Disconnect

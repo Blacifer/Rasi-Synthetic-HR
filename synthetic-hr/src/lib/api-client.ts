@@ -1182,6 +1182,13 @@ export const integrationsApi = {
     });
   },
 
+  async configure(service: string, credentials: Record<string, string>): Promise<ApiResponse<any>> {
+    return authenticatedFetch(`/integrations/${encodeURIComponent(service)}/configure`, {
+      method: 'POST',
+      body: JSON.stringify({ credentials }),
+    });
+  },
+
   // Backwards-compatible alias (older UI calls).
   async connectApiKey(service: string, credentials: Record<string, string>): Promise<ApiResponse<any>> {
     return integrationsApi.connect(service, credentials);
