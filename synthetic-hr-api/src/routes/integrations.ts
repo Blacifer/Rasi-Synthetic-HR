@@ -381,6 +381,7 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
       color: spec.color,
       priority: spec.priority,
       requiredFields: spec.apiKeyConfig?.requiredFields || spec.connectionFields || [],
+      capabilities: spec.capabilities || { reads: [], writes: [] },
       status: row?.status || 'disconnected',
       lastSyncAt: row?.last_sync_at || null,
       lastErrorAt: row?.last_error_at || null,
@@ -477,6 +478,98 @@ router.get('/:service/logs', requirePermission('connectors.read'), async (req, r
   );
 
   return res.json({ success: true, data: logs });
+});
+
+function mulberry32(seed: number) {
+  return function next() {
+    let t = (seed += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function stableSeed(orgId: string, service: string): number {
+  const hex = crypto.createHash('sha256').update(`${orgId}:${service}`).digest('hex').slice(0, 8);
+  return Number.parseInt(hex, 16) >>> 0;
+}
+
+function pick<T>(rng: () => number, items: T[]): T {
+  return items[Math.floor(rng() * items.length)];
+}
+
+function sampleCandidateData(orgId: string, service: string) {
+  const rng = mulberry32(stableSeed(orgId, service));
+  const firstNames = ['Aarav', 'Diya', 'Ishaan', 'Meera', 'Kabir', 'Ananya', 'Rohan', 'Sara', 'Vikram', 'Naina', 'Arjun', 'Priya'];
+  const lastNames = ['Sharma', 'Patel', 'Gupta', 'Iyer', 'Singh', 'Reddy', 'Khan', 'Verma', 'Nair', 'Mehta', 'Bose', 'Kapoor'];
+  const cities = ['Bengaluru', 'Hyderabad', 'Pune', 'Mumbai', 'Delhi', 'Chennai', 'Kolkata', 'Ahmedabad'];
+  const roles = ['Software Engineer', 'HR Generalist', 'Talent Acquisition', 'Accountant', 'Payroll Specialist', 'Data Analyst', 'Customer Success'];
+  const skillPool = ['React', 'Node.js', 'TypeScript', 'Python', 'PostgreSQL', 'Recruiting', 'Sourcing', 'Excel', 'Tally', 'Payroll', 'Communication', 'Stakeholder management'];
+
+  const now = Date.now();
+  const candidates = Array.from({ length: 20 }).map((_, idx) => {
+    const name = `${pick(rng, firstNames)} ${pick(rng, lastNames)}`;
+    const role = pick(rng, roles);
+    const skills = Array.from({ length: 6 }).map(() => pick(rng, skillPool));
+    const uniqueSkills = Array.from(new Set(skills)).slice(0, 5);
+    const experienceYears = Math.max(0, Math.round(rng() * 10));
+    const score = Math.round(55 + rng() * 40);
+    const updatedAt = new Date(now - Math.floor(rng() * 1000 * 60 * 60 * 24 * 14)).toISOString();
+
+    return {
+      id: `${service}_cand_${idx + 1}`,
+      source: service,
+      full_name: name,
+      headline: `${role} • ${experienceYears} yrs`,
+      location: pick(rng, cities),
+      experience_years: experienceYears,
+      skills: uniqueSkills,
+      match_score: score,
+      summary:
+        experienceYears >= 5
+          ? 'Senior profile with strong delivery ownership and cross-functional collaboration.'
+          : 'Early-career profile with high learning velocity and good fundamentals.',
+      last_updated_at: updatedAt,
+    };
+  });
+
+  const jds = [
+    { id: 'jd_1', title: 'Senior Software Engineer (React/Node)', location: 'Bengaluru', seniority: 'Senior' },
+    { id: 'jd_2', title: 'Talent Acquisition Specialist', location: 'Hyderabad', seniority: 'Mid' },
+    { id: 'jd_3', title: 'Payroll & Compliance Associate', location: 'Pune', seniority: 'Junior' },
+  ];
+
+  return { candidates, jds };
+}
+
+// Sample pull: a fast "see it" endpoint used by the new Integrations Hub.
+router.post('/:service/sample-pull', requirePermission('connectors.read'), async (req, res) => {
+  const orgId = getOrgId(req);
+  if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+  const rest = restAsUser(req);
+  const service = req.params.service;
+  const spec = getIntegrationSpec(service);
+  if (!spec) return res.status(404).json({ success: false, error: 'Integration not found' });
+
+  const iQuery = new URLSearchParams();
+  iQuery.set('organization_id', eq(orgId));
+  iQuery.set('service_type', eq(service));
+  iQuery.set('select', 'id,status');
+  const rows = await safeQuery<Pick<StoredIntegrationRow, 'id' | 'status'>>(rest, 'integrations', iQuery);
+  const integrationId = rows?.[0]?.id || null;
+  const status = rows?.[0]?.status || 'disconnected';
+  if (!integrationId || status !== 'connected') {
+    return res.status(400).json({ success: false, error: 'Integration not connected' });
+  }
+
+  const sample = sampleCandidateData(orgId, service);
+  await writeConnectionLog(rest, integrationId, 'sample_pull', 'success', 'Generated sample pull preview', {
+    service,
+    count: sample.candidates.length,
+  });
+
+  return res.json({ success: true, data: sample });
 });
 
 // Manual token refresh (OAuth only)

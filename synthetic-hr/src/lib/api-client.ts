@@ -1213,6 +1213,12 @@ export const integrationsApi = {
     });
   },
 
+  async samplePull(service: string): Promise<ApiResponse<any>> {
+    return authenticatedFetch(`/integrations/${encodeURIComponent(service)}/sample-pull`, {
+      method: 'POST',
+    });
+  },
+
   async initOAuth(service: string, returnTo: string, connection?: Record<string, string>): Promise<ApiResponse<{ url: string }>> {
     return authenticatedFetch('/integrations/oauth/init', {
       method: 'POST',

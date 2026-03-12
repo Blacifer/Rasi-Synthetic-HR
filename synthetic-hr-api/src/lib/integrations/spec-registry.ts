@@ -29,6 +29,10 @@ export const PHASE1_INTEGRATIONS: IntegrationSpec[] = [
       getCandidate: { method: 'GET', path: '/candidates/{id}' },
       parseResume: { method: 'POST', path: '/candidates/parse' },
     },
+    capabilities: {
+      reads: ['candidate_profiles', 'job_descriptions'],
+      writes: [],
+    },
     aiFeatures: {
       enabled: true,
       capabilities: ['resume_matching', 'candidate_scoring', 'skill_extraction'],
@@ -118,6 +122,10 @@ export const PHASE1_INTEGRATIONS: IntegrationSpec[] = [
       search: { method: 'GET', path: '/people/search' },
       skills: { method: 'GET', path: '/skills' },
       share: { method: 'POST', path: '/shares' },
+    },
+    capabilities: {
+      reads: ['candidate_profiles_lite'],
+      writes: [],
     },
     aiFeatures: {
       enabled: true,
@@ -438,6 +446,13 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     endpoints: {
       userinfo: { method: 'GET', path: 'https://www.googleapis.com/oauth2/v3/userinfo' },
     },
+    capabilities: {
+      reads: ['user_profile'],
+      writes: [
+        { id: 'outreach.send_email', label: 'Send email (Gmail)', risk: 'medium' },
+        { id: 'outreach.create_calendar_event', label: 'Create calendar invite', risk: 'medium' },
+      ],
+    },
   },
   {
     id: 'microsoft_365',
@@ -467,6 +482,13 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     },
     endpoints: {
       me: { method: 'GET', path: 'https://graph.microsoft.com/v1.0/me' },
+    },
+    capabilities: {
+      reads: ['user_profile'],
+      writes: [
+        { id: 'outreach.send_email', label: 'Send email (Outlook)', risk: 'medium' },
+        { id: 'outreach.create_calendar_event', label: 'Create calendar invite', risk: 'medium' },
+      ],
     },
   },
   {

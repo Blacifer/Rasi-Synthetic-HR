@@ -1,19 +1,29 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 import {
+  AlertTriangle,
+  ArrowRight,
   BadgeCheck,
-  BriefcaseBusiness,
-  Calculator,
   Building2,
-  Search,
-  RefreshCw,
+  CalendarDays,
+  CheckCircle2,
   Clock,
-  Activity,
+  Database,
+  FileText,
+  Fingerprint,
+  Info,
+  Link2,
+  Mail,
   Shield,
+  Sparkles,
   Users,
   X,
 } from 'lucide-react';
+
+type CapabilityWrite = { id: string; label: string; risk: 'low' | 'medium' | 'high' | 'money' };
+type Capabilities = { reads: string[]; writes: CapabilityWrite[] };
 
 type RequiredField = {
   name: string;
@@ -34,6 +44,7 @@ type IntegrationRow = {
   color?: string;
   priority?: number;
   requiredFields: RequiredField[];
+  capabilities?: Capabilities;
   status: 'disconnected' | 'connected' | 'error' | 'syncing' | 'expired' | string;
   lastSyncAt?: string | null;
   lastErrorAt?: string | null;
@@ -49,6 +60,21 @@ type ConnectionLog = {
   metadata?: any;
   created_at: string;
 };
+
+type SampleCandidate = {
+  id: string;
+  source: string;
+  full_name: string;
+  headline: string;
+  location: string;
+  experience_years: number;
+  skills: string[];
+  match_score: number;
+  summary: string;
+  last_updated_at: string;
+};
+
+type SamplePullResponse = { candidates: SampleCandidate[]; jds: Array<{ id: string; title: string; location: string; seniority: string }> };
 
 function statusTone(status: IntegrationRow['status']): 'connected' | 'pending' | 'error' | 'neutral' {
   if (status === 'connected') return 'connected';
@@ -79,13 +105,11 @@ function formatStatusLabel(status: IntegrationRow['status']): string {
   }
 }
 
-function iconForCategory(category: string) {
-  const upper = category.toUpperCase();
-  if (upper.includes('HR')) return Users;
-  if (upper.includes('FINANCE')) return Calculator;
-  if (upper.includes('COMPLIANCE')) return Shield;
-  if (upper.includes('RECRUIT')) return BriefcaseBusiness;
-  return Building2;
+function formatTime(value: string | null | undefined): string {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString();
 }
 
 function parseOAuthToastFromQuery() {
@@ -104,7 +128,6 @@ function parseOAuthToastFromQuery() {
     toast.info('Integration flow updated.');
   }
 
-  // Clear query params so refresh doesn't replay.
   try {
     const url = new URL(window.location.href);
     url.search = '';
@@ -114,65 +137,154 @@ function parseOAuthToastFromQuery() {
   }
 }
 
-function maskValue(value: string): string {
-  if (!value) return '';
-  if (value.length <= 8) return '••••••••';
-  return `${value.slice(0, 2)}••••••••${value.slice(-2)}`;
+function readLabel(readId: string): { label: string; icon: any } {
+  switch (readId) {
+    case 'candidate_profiles':
+      return { label: 'Read candidates', icon: Users };
+    case 'candidate_profiles_lite':
+      return { label: 'Read profiles (lite)', icon: Users };
+    case 'job_descriptions':
+      return { label: 'Read jobs/JDs', icon: FileText };
+    case 'user_profile':
+      return { label: 'Identity', icon: Fingerprint };
+    default:
+      return { label: readId.replace(/_/g, ' '), icon: Database };
+  }
 }
+
+function riskBadge(risk: CapabilityWrite['risk']) {
+  switch (risk) {
+    case 'low':
+      return { label: 'Low', cls: 'border-white/10 bg-white/5 text-slate-200' };
+    case 'medium':
+      return { label: 'Medium', cls: 'border-amber-400/20 bg-amber-400/12 text-amber-200' };
+    case 'high':
+      return { label: 'High', cls: 'border-rose-400/20 bg-rose-400/12 text-rose-200' };
+    case 'money':
+      return { label: 'Money', cls: 'border-rose-400/25 bg-rose-400/15 text-rose-100' };
+    default:
+      return { label: '—', cls: 'border-white/10 bg-white/5 text-slate-200' };
+  }
+}
+
+function providerIcon(id: string) {
+  const key = id.toLowerCase();
+  if (key.includes('google')) return Mail;
+  if (key.includes('microsoft') || key.includes('teams')) return CalendarDays;
+  if (key.includes('linkedin')) return Users;
+  if (key.includes('naukri')) return Users;
+  return Building2;
+}
+
+function Modal({
+  title,
+  children,
+  onClose,
+  widthClass = 'max-w-3xl',
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+  widthClass?: string;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button className="absolute inset-0 bg-black/60" onClick={onClose} aria-label="Close modal" />
+      <div className={`relative w-full ${widthClass} rounded-2xl border border-white/10 bg-slate-950/95 backdrop-blur-xl shadow-2xl`}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-blue-300" />
+            <h2 className="text-base font-semibold text-white">{title}</h2>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-6">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function Drawer({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <button className="absolute inset-0 bg-black/60" onClick={onClose} aria-label="Close drawer" />
+      <div className="ml-auto w-full max-w-xl h-full border-l border-white/10 bg-slate-950/95 backdrop-blur-xl shadow-2xl relative">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+          <h2 className="text-base font-semibold text-white">{title}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-6 overflow-auto h-[calc(100%-64px)]">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+const RECRUITMENT_PROVIDER_IDS = ['naukri', 'linkedin', 'google_workspace', 'microsoft_365'] as const;
+type RecruitmentProviderId = (typeof RECRUITMENT_PROVIDER_IDS)[number];
 
 export default function IntegrationsPage() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<IntegrationRow[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'connected' | 'disconnected' | 'error' | 'syncing' | 'expired'>('all');
-  const [authFilter, setAuthFilter] = useState<'all' | 'api_key' | 'oauth2'>('all');
-  const [categoryFilter, setCategoryFilter] = useState<'all' | string>('all');
-  const [phaseFilter, setPhaseFilter] = useState<'all' | 1 | 2 | 3 | 4>('all');
-
-  const [active, setActive] = useState<IntegrationRow | null>(null);
-  const [credentials, setCredentials] = useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [rowBusy, setRowBusy] = useState<Record<string, 'testing' | 'disconnecting' | null>>({});
-
-  const [selectedIntegrationId, setSelectedIntegrationId] = useState<string | null>(null);
-  const [logLoading, setLogLoading] = useState(false);
-  const [logError, setLogError] = useState<string | null>(null);
+  const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [logs, setLogs] = useState<ConnectionLog[]>([]);
-  const [logActionBusy, setLogActionBusy] = useState<'refreshing' | null>(null);
+  const [logsError, setLogsError] = useState<string | null>(null);
 
-  const connectedCount = useMemo(() => items.filter((it) => it.status === 'connected').length, [items]);
-  const categories = useMemo(() => {
-    const set = new Set<string>();
-    items.forEach((it) => set.add(it.category));
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [items]);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [selectedNaukri, setSelectedNaukri] = useState(true);
+  const [selectedLinkedIn, setSelectedLinkedIn] = useState(true);
+  const [outreachChoice, setOutreachChoice] = useState<'google_workspace' | 'microsoft_365'>('google_workspace');
+  const [governanceConfirmed, setGovernanceConfirmed] = useState(false);
+  const [connecting, setConnecting] = useState<Record<string, boolean>>({});
+  const [credentials, setCredentials] = useState<Record<string, Record<string, string>>>({});
 
-  const filteredItems = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return items.filter((it) => {
-      const phase = it.priority === 1 ? 1 : it.priority === 2 ? 2 : it.priority === 3 ? 3 : 4;
-      const matchesQuery = !q || `${it.name} ${it.category} ${it.description} ${it.id}`.toLowerCase().includes(q);
-      const matchesStatus = statusFilter === 'all' ? true : it.status === statusFilter;
-      const matchesAuth = authFilter === 'all' ? true : it.authType === authFilter;
-      const matchesCategory = categoryFilter === 'all' ? true : it.category === categoryFilter;
-      const matchesPhase = phaseFilter === 'all' ? true : phase === phaseFilter;
-      return matchesQuery && matchesStatus && matchesAuth && matchesCategory && matchesPhase;
-    });
-  }, [items, query, statusFilter, authFilter, categoryFilter, phaseFilter]);
+  const [sampleLoading, setSampleLoading] = useState(false);
+  const [sampleError, setSampleError] = useState<string | null>(null);
+  const [sampleCandidates, setSampleCandidates] = useState<SampleCandidate[]>([]);
+  const [sampleJds, setSampleJds] = useState<SamplePullResponse['jds']>([]);
+  const [activeCandidateId, setActiveCandidateId] = useState<string | null>(null);
 
-  const groupedByPhase = useMemo(() => {
-    const groups: Record<1 | 2 | 3 | 4, IntegrationRow[]> = { 1: [], 2: [], 3: [], 4: [] };
-    filteredItems.forEach((it) => {
-      const phase = it.priority === 1 ? 1 : it.priority === 2 ? 2 : it.priority === 3 ? 3 : 4;
-      groups[phase].push(it);
-    });
-    (Object.keys(groups) as Array<'1' | '2' | '3' | '4'>).forEach((key) => {
-      groups[Number(key) as 1 | 2 | 3 | 4].sort((a, b) => a.name.localeCompare(b.name));
-    });
-    return groups;
-  }, [filteredItems]);
+  const selectedIntegration = useMemo(() => {
+    if (!activeProviderId) return null;
+    return items.find((it) => it.id === activeProviderId) || null;
+  }, [items, activeProviderId]);
+
+  const recruitmentProviders = useMemo(() => items.filter((it) => RECRUITMENT_PROVIDER_IDS.includes(it.id as any)), [items]);
+  const connectedRecruitmentCount = useMemo(
+    () => recruitmentProviders.filter((it) => it.status === 'connected').length,
+    [recruitmentProviders],
+  );
+
+  const selectedProviders = useMemo(() => {
+    const list: RecruitmentProviderId[] = [];
+    if (selectedNaukri) list.push('naukri');
+    if (selectedLinkedIn) list.push('linkedin');
+    list.push(outreachChoice);
+    return list;
+  }, [selectedNaukri, selectedLinkedIn, outreachChoice]);
+
+  const providerMap = useMemo(() => new Map(items.map((it) => [it.id, it])), [items]);
+
+  const activeCandidate = useMemo(() => {
+    if (!activeCandidateId) return null;
+    return sampleCandidates.find((c) => c.id === activeCandidateId) || null;
+  }, [sampleCandidates, activeCandidateId]);
 
   async function load() {
     setLoading(true);
@@ -188,36 +300,131 @@ export default function IntegrationsPage() {
     setLoading(false);
   }
 
-  const selectedIntegration = useMemo(() => {
-    if (!selectedIntegrationId) return null;
-    return items.find((it) => it.id === selectedIntegrationId) || null;
-  }, [items, selectedIntegrationId]);
-
   async function loadLogs(serviceId: string) {
-    setLogLoading(true);
-    setLogError(null);
+    setLogsLoading(true);
+    setLogsError(null);
     const res = await api.integrations.getLogs(serviceId, 20);
     if (!res.success) {
       setLogs([]);
-      setLogError(res.error || 'Failed to load connection history');
-      setLogLoading(false);
+      setLogsError(res.error || 'Failed to load connection history');
+      setLogsLoading(false);
       return;
     }
     setLogs((res.data as ConnectionLog[]) || []);
-    setLogLoading(false);
+    setLogsLoading(false);
   }
 
-  const openDetails = async (integration: IntegrationRow) => {
-    setSelectedIntegrationId(integration.id);
-    await loadLogs(integration.id);
+  const openDetails = async (providerId: string) => {
+    setActiveProviderId(providerId);
+    setDetailsOpen(true);
+    await loadLogs(providerId);
   };
 
   const closeDetails = () => {
-    setSelectedIntegrationId(null);
+    setDetailsOpen(false);
+    setActiveProviderId(null);
     setLogs([]);
-    setLogError(null);
-    setLogLoading(false);
-    setLogActionBusy(null);
+    setLogsError(null);
+    setLogsLoading(false);
+  };
+
+  const openWizard = (step?: 1 | 2 | 3 | 4 | 5) => {
+    setWizardOpen(true);
+    setWizardStep(step || 1);
+    setGovernanceConfirmed(false);
+    setSampleError(null);
+  };
+
+  const closeWizard = () => {
+    setWizardOpen(false);
+    setWizardStep(1);
+    setSampleError(null);
+  };
+
+  const ensureCredentialSeed = (providerId: string) => {
+    const provider = providerMap.get(providerId);
+    if (!provider) return;
+    if (provider.authType !== 'api_key') return;
+    setCredentials((prev) => {
+      if (prev[providerId]) return prev;
+      const seed: Record<string, string> = {};
+      provider.requiredFields.forEach((f) => {
+        seed[f.name] = '';
+      });
+      return { ...prev, [providerId]: seed };
+    });
+  };
+
+  const startConnectProvider = (providerId: string) => {
+    if (providerId === 'naukri') setSelectedNaukri(true);
+    if (providerId === 'linkedin') setSelectedLinkedIn(true);
+    if (providerId === 'google_workspace' || providerId === 'microsoft_365') setOutreachChoice(providerId);
+    openWizard(3);
+    ensureCredentialSeed(providerId);
+  };
+
+  const connectOAuth = async (providerId: string) => {
+    setConnecting((prev) => ({ ...prev, [providerId]: true }));
+    try {
+      const returnTo = '/dashboard/integrations';
+      const init = await api.integrations.initOAuth(providerId, returnTo);
+      if (!init.success || !init.data?.url) {
+        toast.error(init.error || 'Failed to start OAuth connection');
+        return;
+      }
+      window.location.href = init.data.url;
+    } finally {
+      setConnecting((prev) => ({ ...prev, [providerId]: false }));
+    }
+  };
+
+  const connectApiKey = async (providerId: string) => {
+    const provider = providerMap.get(providerId);
+    if (!provider) return;
+    ensureCredentialSeed(providerId);
+    const creds = credentials[providerId] || {};
+
+    const missing = provider.requiredFields.filter((f) => f.required && !String(creds[f.name] || '').trim());
+    if (missing.length > 0) {
+      toast.error(`Missing required field: ${missing[0].label}`);
+      return;
+    }
+
+    setConnecting((prev) => ({ ...prev, [providerId]: true }));
+    try {
+      const res = await api.integrations.connect(providerId, creds);
+      if (!res.success) {
+        toast.error(res.error || 'Failed to connect integration');
+        return;
+      }
+      toast.success(`Connected ${provider.name}.`);
+      await load();
+    } finally {
+      setConnecting((prev) => ({ ...prev, [providerId]: false }));
+    }
+  };
+
+  const runSamplePull = async (providerId: string) => {
+    setSampleLoading(true);
+    setSampleError(null);
+    try {
+      const res = await api.integrations.samplePull(providerId);
+      if (!res.success) {
+        setSampleCandidates([]);
+        setSampleJds([]);
+        setSampleError(res.error || 'Sample pull failed');
+        return;
+      }
+      const data = (res.data || {}) as SamplePullResponse;
+      setSampleCandidates(Array.isArray(data.candidates) ? data.candidates : []);
+      setSampleJds(Array.isArray(data.jds) ? data.jds : []);
+      if (Array.isArray(data.candidates) && data.candidates.length > 0) {
+        setActiveCandidateId(data.candidates[0].id);
+      }
+      toast.success('Sample data loaded.');
+    } finally {
+      setSampleLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -225,578 +432,808 @@ export default function IntegrationsPage() {
     void load();
   }, []);
 
-  const openConnect = (integration: IntegrationRow) => {
-    // OAuth integrations with no extra fields can jump directly into the OAuth flow.
-    if (integration.authType === 'oauth2' && integration.requiredFields.length === 0) {
-      const returnTo = '/dashboard/integrations';
-      void (async () => {
-        const init = await api.integrations.initOAuth(integration.id, returnTo);
-        if (!init.success || !init.data?.url) {
-          toast.error(init.error || 'Failed to start OAuth connection');
-          return;
-        }
-        window.location.href = init.data.url;
-      })();
-      return;
-    }
+  const connectedCandidateSources = useMemo(() => {
+    return recruitmentProviders
+      .filter((p) => p.status === 'connected')
+      .filter((p) => (p.capabilities?.reads || []).some((r) => String(r).includes('candidate_profiles')))
+      .map((p) => p.id);
+  }, [recruitmentProviders]);
 
-    setActive(integration);
-    const seed: Record<string, string> = {};
-    integration.requiredFields.forEach((field) => {
-      seed[field.name] = '';
-    });
-    setCredentials(seed);
-  };
-
-  const closeConnect = () => {
-    setActive(null);
-    setCredentials({});
-    setSubmitting(false);
-  };
-
-  const connect = async () => {
-    if (!active) return;
-    setSubmitting(true);
-
-    const missing = active.requiredFields.filter((f) => f.required && !credentials[f.name]);
-    if (missing.length > 0) {
-      toast.error(`Missing required fields: ${missing.map((m) => m.label).join(', ')}`);
-      setSubmitting(false);
-      return;
-    }
-
-    if (active.authType === 'oauth2') {
-      // Only allow non-secret fields to be passed via query params.
-      const returnTo = '/dashboard/integrations';
-      const connection: Record<string, string> = {};
-      active.requiredFields.forEach((field) => {
-        const value = credentials[field.name];
-        if (!value) return;
-        if (field.type === 'password') return;
-        connection[field.name] = value;
-      });
-      const init = await api.integrations.initOAuth(active.id, returnTo, connection);
-      if (!init.success || !init.data?.url) {
-        toast.error(init.error || 'Failed to start OAuth connection');
-        setSubmitting(false);
-        return;
-      }
-      window.location.href = init.data.url;
-      return;
-    }
-
-    const res = await api.integrations.connect(active.id, credentials);
-    if (!res.success) {
-      toast.error(res.error || 'Failed to connect integration');
-      setSubmitting(false);
-      return;
-    }
-    toast.success(`Connected ${active.name}.`);
-    closeConnect();
-    await load();
-  };
-
-  const disconnect = async (integration: IntegrationRow) => {
-    setRowBusy((prev) => ({ ...prev, [integration.id]: 'disconnecting' }));
-    const res = await api.integrations.disconnect(integration.id);
-    if (!res.success) {
-      toast.error(res.error || 'Failed to disconnect integration');
-      setRowBusy((prev) => ({ ...prev, [integration.id]: null }));
-      return;
-    }
-    toast.success(`Disconnected ${integration.name}.`);
-    await load();
-    setRowBusy((prev) => ({ ...prev, [integration.id]: null }));
-  };
-
-  const test = async (integration: IntegrationRow) => {
-    setRowBusy((prev) => ({ ...prev, [integration.id]: 'testing' }));
-    const res = await api.integrations.test(integration.id);
-    if (!res.success) {
-      toast.error(res.error || 'Test failed');
-      setRowBusy((prev) => ({ ...prev, [integration.id]: null }));
-      return;
-    }
-    const ok = (res.data as any)?.success ?? (res.data as any)?.data?.success;
-    const message = (res.data as any)?.message || (res.data as any)?.data?.message;
-    if (ok) toast.success(message || 'Connection ok');
-    else toast.error(message || 'Connection failed');
-    await load();
-    setRowBusy((prev) => ({ ...prev, [integration.id]: null }));
-  };
-
-  const refreshToken = async (integration: IntegrationRow) => {
-    setLogActionBusy('refreshing');
-    const res = await api.integrations.refresh(integration.id);
-    if (!res.success) {
-      toast.error(res.error || 'Refresh failed');
-      setLogActionBusy(null);
-      return;
-    }
-    toast.success('Token refreshed.');
-    await load();
-    await loadLogs(integration.id);
-    setLogActionBusy(null);
-  };
+  const defaultSampleProviderId = connectedCandidateSources[0] || null;
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-4 rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.12),transparent_40%),linear-gradient(180deg,rgba(15,23,42,0.88),rgba(15,23,42,0.75))] p-7 shadow-[0_20px_70px_rgba(2,6,23,0.28)]">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-cyan-200/80">Integrations</p>
-            <h1 className="mt-2 text-3xl font-semibold text-white">Connect your HR stack</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
-              Phase 1 integrations are live. Connect an HRMS, compliance, recruitment, or finance system to unlock governed workflows and AI-ready telemetry.
-            </p>
+    <div className="p-6">
+      <div className="flex items-start justify-between gap-6">
+        <div>
+          <div className="flex items-center gap-2">
+            <Link2 className="w-5 h-5 text-blue-300" />
+            <h1 className="text-2xl font-bold text-white">Integration Hub</h1>
           </div>
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-200">
-            <BadgeCheck className="h-4 w-4 text-emerald-300" />
-            <span className="font-semibold">{connectedCount}</span>
-            <span className="text-slate-400">connected</span>
-          </div>
-        </div>
-
-        {loadError ? (
-          <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
-            {loadError}
-          </div>
-        ) : null}
-      </header>
-
-      <section className="rounded-[26px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_18px_55px_rgba(2,6,23,0.18)]">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-            <input
-              id="integrations-search"
-              name="integrations-search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search integrations, categories, or capability tags"
-              autoComplete="off"
-              className="w-full rounded-2xl border border-white/10 bg-white/[0.05] py-3 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-cyan-400/40 focus:bg-white/[0.07]"
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <select
-              id="integrations-phase"
-              name="integrations-phase"
-              value={String(phaseFilter)}
-              onChange={(e) => setPhaseFilter(e.target.value === 'all' ? 'all' : (Number(e.target.value) as 1 | 2 | 3 | 4))}
-              className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-slate-200 outline-none transition focus:border-cyan-400/40"
-            >
-              <option value="all">All phases</option>
-              <option value="1">Phase 1</option>
-              <option value="2">Phase 2</option>
-              <option value="3">Phase 3</option>
-              <option value="4">Phase 4</option>
-            </select>
-
-            <select
-              id="integrations-status"
-              name="integrations-status"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-slate-200 outline-none transition focus:border-cyan-400/40"
-            >
-              <option value="all">All status</option>
-              <option value="connected">Connected</option>
-              <option value="disconnected">Disconnected</option>
-              <option value="error">Error</option>
-              <option value="syncing">Syncing</option>
-              <option value="expired">Expired</option>
-            </select>
-
-            <select
-              id="integrations-auth"
-              name="integrations-auth"
-              value={authFilter}
-              onChange={(e) => setAuthFilter(e.target.value as any)}
-              className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-slate-200 outline-none transition focus:border-cyan-400/40"
-            >
-              <option value="all">All auth</option>
-              <option value="api_key">API key</option>
-              <option value="oauth2">OAuth2</option>
-            </select>
-
-            <select
-              id="integrations-category"
-              name="integrations-category"
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-slate-200 outline-none transition focus:border-cyan-400/40"
-            >
-              <option value="all">All categories</option>
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-400">
-          <p>
-            Showing <span className="font-semibold text-slate-200">{filteredItems.length}</span> of{' '}
-            <span className="font-semibold text-slate-200">{items.length}</span> integrations.
+          <p className="text-sm text-slate-400 mt-1 max-w-2xl">
+            Connect third-party apps with clear capabilities, safe defaults, and an immediate “see it” moment.
           </p>
+        </div>
+        <div className="flex items-center gap-3">
           <button
-            type="button"
-            onClick={() => {
-              setQuery('');
-              setStatusFilter('all');
-              setAuthFilter('all');
-              setCategoryFilter('all');
-              setPhaseFilter('all');
-            }}
-            className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] hover:text-white"
+            onClick={() => openWizard(1)}
+            className="px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
           >
-            Reset filters
+            Set up Recruitment pack
           </button>
         </div>
-      </section>
+      </div>
 
-      <section className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        {loading ? (
-          <div className="rounded-[26px] border border-white/10 bg-white/[0.03] p-6 text-sm text-slate-300">
-            Loading integrations...
+      {loadError ? (
+        <div className="mt-6 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-rose-100 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 mt-0.5" />
+          <div>
+            <div className="font-semibold">Could not load integrations</div>
+            <div className="text-sm text-rose-100/80">{loadError}</div>
           </div>
-        ) : null}
+        </div>
+      ) : null}
 
-        {!loading && items.length === 0 ? (
-          <div className="rounded-[26px] border border-white/10 bg-white/[0.03] p-6 text-sm text-slate-300">
-            No integrations available.
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-emerald-300" />
+              <div className="font-semibold text-white">Recruitment</div>
+            </div>
+            <span className="text-xs px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-slate-300">
+              {connectedRecruitmentCount}/{RECRUITMENT_PROVIDER_IDS.length} connected
+            </span>
           </div>
-        ) : null}
-
-        {!loading && filteredItems.length === 0 ? (
-          <div className="rounded-[26px] border border-white/10 bg-white/[0.03] p-6 text-sm text-slate-300">
-            No integrations match your filters.
+          <p className="text-sm text-slate-400 mt-2">
+            Naukri + LinkedIn sources, plus outreach via Google Workspace or Microsoft 365.
+          </p>
+          <div className="mt-4 flex items-center gap-2">
+            <span className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200 inline-flex items-center gap-1">
+              <BadgeCheck className="w-3.5 h-3.5 text-emerald-300" />
+              Capability-first
+            </span>
+            <span className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200 inline-flex items-center gap-1">
+              <Shield className="w-3.5 h-3.5 text-blue-300" />
+              Approval-first
+            </span>
           </div>
-        ) : null}
+        </div>
 
-        {!loading
-          ? (Object.keys(groupedByPhase) as Array<'1' | '2' | '3' | '4'>).flatMap((key) => {
-              const phase = Number(key) as 1 | 2 | 3 | 4;
-              const list = groupedByPhase[phase];
-              if (list.length === 0) return [];
+        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 opacity-70">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Mail className="w-4 h-4 text-slate-300" />
+              <div className="font-semibold text-white">Payments</div>
+            </div>
+            <span className="text-xs px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-slate-300">Coming soon</span>
+          </div>
+          <p className="text-sm text-slate-400 mt-2">Transactions and refunds with strict approvals and audit.</p>
+        </div>
 
-              const heading = phase === 1
-                ? 'Phase 1 (Critical)'
-                : phase === 2
-                  ? 'Phase 2 (High priority)'
-                  : phase === 3
-                    ? 'Phase 3 (Medium priority)'
-                    : 'Phase 4 (Growing)';
-              return [
-                <div key={`phase-${phase}`} className="lg:col-span-2">
-                  <div className="flex items-center justify-between gap-3 rounded-[22px] border border-white/10 bg-white/[0.03] px-5 py-4">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">{heading}</p>
-                      <p className="mt-1 text-sm text-slate-300">{list.length} integration{list.length === 1 ? '' : 's'}</p>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 opacity-70">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Database className="w-4 h-4 text-slate-300" />
+              <div className="font-semibold text-white">Finance / ERP</div>
+            </div>
+            <span className="text-xs px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-slate-300">Coming soon</span>
+          </div>
+          <p className="text-sm text-slate-400 mt-2">Read-first ledgers/vouchers with safe automation patterns.</p>
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Recruitment providers</h2>
+            <p className="text-sm text-slate-400 mt-1">Connect sources and outreach tools. Every write is approval-first.</p>
+          </div>
+          {loading ? (
+            <div className="text-sm text-slate-400 inline-flex items-center gap-2">
+              <Clock className="w-4 h-4 animate-pulse" />
+              Loading…
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-3">
+          {recruitmentProviders.map((provider) => {
+            const Icon = providerIcon(provider.id);
+            const caps = provider.capabilities || { reads: [], writes: [] };
+            const readBadges = (caps.reads || []).slice(0, 2);
+            const writeBadges = (caps.writes || []).slice(0, 2);
+
+            return (
+              <div key={provider.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center shrink-0">
+                      <Icon className="w-5 h-5 text-slate-200" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <div className="font-semibold text-white truncate">{provider.name}</div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${statusToneClasses[statusTone(provider.status)]}`}>
+                          {formatStatusLabel(provider.status)}
+                        </span>
+                      </div>
+                      <div className="text-sm text-slate-400 mt-1 line-clamp-2">{provider.description}</div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {readBadges.map((readId) => {
+                          const meta = readLabel(readId);
+                          const ReadIcon = meta.icon;
+                          return (
+                            <span
+                              key={readId}
+                              className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200 inline-flex items-center gap-1"
+                            >
+                              <ReadIcon className="w-3.5 h-3.5 text-slate-300" />
+                              {meta.label}
+                            </span>
+                          );
+                        })}
+                        {writeBadges.map((w) => {
+                          const risk = riskBadge(w.risk);
+                          return (
+                            <span
+                              key={w.id}
+                              className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200 inline-flex items-center gap-2"
+                            >
+                              <ArrowRight className="w-3.5 h-3.5 text-slate-300" />
+                              {w.label}
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-md border ${risk.cls}`}>{risk.label}</span>
+                            </span>
+                          );
+                        })}
+                        {(readBadges.length === 0 && writeBadges.length === 0) ? (
+                          <span className="text-xs text-slate-500 inline-flex items-center gap-1">
+                            <Info className="w-3.5 h-3.5" />
+                            Capabilities coming soon
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>,
-                ...list.map((integration) => {
-                  const Icon = iconForCategory(integration.category);
-                  const tone = statusTone(integration.status);
-                  const label = formatStatusLabel(integration.status);
-                  const isConnected = integration.status === 'connected' || integration.status === 'error' || integration.status === 'expired' || integration.status === 'syncing';
-                  const isOauth = integration.authType === 'oauth2';
-                  const busy = rowBusy[integration.id] || null;
 
-                  return (
-                    <article
-                      key={integration.id}
-                      className="flex flex-col rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.88),rgba(15,23,42,0.72))] p-6 shadow-[0_20px_60px_rgba(2,6,23,0.24)]"
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => openDetails(provider.id)}
+                      className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
                     >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="flex flex-wrap gap-2">
-                          {integration.tags?.slice(0, 3).map((tag) => (
-                            <span
-                              key={`${integration.id}-${tag}`}
-                              className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300"
-                            >
-                              {tag}
+                      Details
+                    </button>
+
+                    {provider.status === 'connected' && (caps.reads || []).some((r) => String(r).includes('candidate_profiles')) ? (
+                      <button
+                        onClick={() => runSamplePull(provider.id)}
+                        className="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/25 text-emerald-100 hover:bg-emerald-500/20 transition-colors text-sm font-semibold"
+                        disabled={sampleLoading}
+                      >
+                        {sampleLoading ? 'Loading…' : 'Sample pull'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => startConnectProvider(provider.id)}
+                        className="px-3 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
+                      >
+                        Connect
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-10">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Recruitment browser (preview)</h2>
+            <p className="text-sm text-slate-400 mt-1">A fast “see it” view. V1 uses sample pulls; real sync comes next.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                if (defaultSampleProviderId) {
+                  void runSamplePull(defaultSampleProviderId);
+                } else {
+                  openWizard(3);
+                }
+              }}
+              className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+            >
+              {defaultSampleProviderId ? 'Refresh preview' : 'Connect & preview'}
+            </button>
+          </div>
+        </div>
+
+        {sampleError ? (
+          <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-rose-100">
+            <div className="font-semibold">Preview unavailable</div>
+            <div className="text-sm text-rose-100/80 mt-1">{sampleError}</div>
+          </div>
+        ) : null}
+
+        {sampleCandidates.length === 0 ? (
+          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+            <div className="flex items-start gap-3">
+              <Sparkles className="w-5 h-5 text-blue-300 mt-0.5" />
+              <div>
+                <div className="font-semibold text-white">No preview data yet</div>
+                <div className="text-sm text-slate-400 mt-1">
+                  Connect Naukri or LinkedIn, then run a sample pull to instantly see candidate cards inside SyntheticHR.
+                </div>
+                <div className="mt-4 flex items-center gap-2">
+                  <button
+                    onClick={() => openWizard(1)}
+                    className="px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
+                  >
+                    Start setup
+                  </button>
+                  <button
+                    onClick={() => openWizard(3)}
+                    className="px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                  >
+                    Connect providers
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden">
+              <div className="px-4 py-3 border-b border-white/10 text-sm text-slate-300 flex items-center justify-between">
+                <span>{sampleCandidates.length} candidates</span>
+                <span className="text-xs text-slate-500">Preview data</span>
+              </div>
+              <div className="max-h-[420px] overflow-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-slate-950/95 backdrop-blur border-b border-white/10">
+                    <tr className="text-left text-slate-400">
+                      <th className="px-4 py-2 font-medium">Candidate</th>
+                      <th className="px-4 py-2 font-medium">Source</th>
+                      <th className="px-4 py-2 font-medium">Experience</th>
+                      <th className="px-4 py-2 font-medium">Match</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sampleCandidates.map((c) => (
+                      <tr
+                        key={c.id}
+                        className={`border-b border-white/5 hover:bg-white/5 cursor-pointer ${activeCandidateId === c.id ? 'bg-white/5' : ''}`}
+                        onClick={() => setActiveCandidateId(c.id)}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-white">{c.full_name}</div>
+                          <div className="text-xs text-slate-400 mt-0.5">{c.headline}</div>
+                        </td>
+                        <td className="px-4 py-3 text-slate-300">{c.source}</td>
+                        <td className="px-4 py-3 text-slate-300">{c.experience_years} yrs</td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs px-2 py-1 rounded-lg border border-emerald-400/20 bg-emerald-400/10 text-emerald-100">
+                            {c.match_score}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              {activeCandidate ? (
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-semibold text-white">{activeCandidate.full_name}</div>
+                      <div className="text-sm text-slate-400 mt-1">{activeCandidate.headline}</div>
+                      <div className="text-xs text-slate-500 mt-1">{activeCandidate.location}</div>
+                    </div>
+                    <span className="text-xs px-2 py-1 rounded-lg border border-emerald-400/20 bg-emerald-400/10 text-emerald-100">
+                      {activeCandidate.match_score}%
+                    </span>
+                  </div>
+
+                  <div className="mt-4 text-sm text-slate-300">{activeCandidate.summary}</div>
+
+                  <div className="mt-4">
+                    <div className="text-xs text-slate-400 font-semibold">Skills</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {activeCandidate.skills.map((s) => (
+                        <span key={s} className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200">
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                    <div className="flex items-center gap-2 text-sm text-white font-semibold">
+                      <FileText className="w-4 h-4 text-blue-300" />
+                      Suggested JDs (stub)
+                    </div>
+                    <div className="mt-2 space-y-2">
+                      {(sampleJds || []).slice(0, 3).map((jd, idx) => (
+                        <div key={jd.id} className="flex items-start justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                          <div className="min-w-0">
+                            <div className="text-sm text-slate-100 truncate">{jd.title}</div>
+                            <div className="text-xs text-slate-500 mt-0.5">
+                              {jd.location} • {jd.seniority}
+                            </div>
+                          </div>
+                          <span className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200">
+                            {Math.max(55, activeCandidate.match_score - idx * 6)}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                    <div className="flex items-center gap-2 text-sm text-white font-semibold">
+                      <Shield className="w-4 h-4 text-emerald-300" />
+                      Actions (approval-first)
+                    </div>
+                    <div className="mt-2 text-sm text-slate-400">
+                      In V1, outreach/shortlist actions are shown as a preview. Execution will route through Jobs &amp; Approvals.
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                      <button
+                        onClick={() => toast.info('Action preview: Shortlist request (coming next).')}
+                        className="flex-1 px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                      >
+                        Request shortlist
+                      </button>
+                      <button
+                        onClick={() => toast.info('Action preview: Outreach draft (coming next).')}
+                        className="flex-1 px-3 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
+                      >
+                        Draft outreach
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 text-xs text-slate-500 inline-flex items-center gap-2">
+                    <Clock className="w-3.5 h-3.5" />
+                    Updated {formatTime(activeCandidate.last_updated_at)}
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-slate-400">Select a candidate to view details.</div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {detailsOpen && selectedIntegration ? (
+        <Drawer title={`${selectedIntegration.name} • Details`} onClose={closeDetails}>
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex items-center justify-between">
+                <div className="font-semibold text-white">Status</div>
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${statusToneClasses[statusTone(selectedIntegration.status)]}`}>
+                  {formatStatusLabel(selectedIntegration.status)}
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div className="text-xs text-slate-500">Last sync</div>
+                  <div className="text-slate-200">{formatTime(selectedIntegration.lastSyncAt)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500">Last error</div>
+                  <div className="text-slate-200">{formatTime(selectedIntegration.lastErrorAt)}</div>
+                </div>
+                <div className="col-span-2">
+                  <div className="text-xs text-slate-500">Error message</div>
+                  <div className="text-slate-200">{selectedIntegration.lastErrorMsg || '—'}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="font-semibold text-white">Capabilities</div>
+              <div className="mt-3">
+                <div className="text-xs text-slate-500 font-semibold">Reads</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(selectedIntegration.capabilities?.reads || []).length === 0 ? (
+                    <span className="text-xs text-slate-500">—</span>
+                  ) : (
+                    (selectedIntegration.capabilities?.reads || []).map((r) => {
+                      const meta = readLabel(r);
+                      const ReadIcon = meta.icon;
+                      return (
+                        <span key={r} className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200 inline-flex items-center gap-1">
+                          <ReadIcon className="w-3.5 h-3.5 text-slate-300" />
+                          {meta.label}
+                        </span>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <div className="text-xs text-slate-500 font-semibold">Writes</div>
+                <div className="mt-2 space-y-2">
+                  {(selectedIntegration.capabilities?.writes || []).length === 0 ? (
+                    <div className="text-xs text-slate-500">—</div>
+                  ) : (
+                    (selectedIntegration.capabilities?.writes || []).map((w) => {
+                      const risk = riskBadge(w.risk);
+                      return (
+                        <div key={w.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                          <div className="text-sm text-slate-100 flex items-center gap-2">
+                            <ArrowRight className="w-4 h-4 text-slate-300" />
+                            {w.label}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] px-2 py-0.5 rounded-md border ${risk.cls}`}>{risk.label}</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-md border border-blue-400/20 bg-blue-400/10 text-blue-100">
+                              Approval required
                             </span>
-                          ))}
+                          </div>
                         </div>
-                        <span className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusToneClasses[tone]}`}>
-                          <Shield className="h-3 w-3" />
-                          {label}
-                        </span>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex items-center justify-between">
+                <div className="font-semibold text-white">Connection logs</div>
+                <button
+                  onClick={() => void loadLogs(selectedIntegration.id)}
+                  className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors"
+                  disabled={logsLoading}
+                >
+                  {logsLoading ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
+              {logsError ? <div className="mt-2 text-sm text-rose-200">{logsError}</div> : null}
+              <div className="mt-3 space-y-2">
+                {logs.length === 0 ? (
+                  <div className="text-sm text-slate-500">No logs yet.</div>
+                ) : (
+                  logs.slice(0, 10).map((log) => (
+                    <div key={log.id} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm text-slate-200">
+                          <span className="font-semibold">{log.action}</span>{' '}
+                          <span className="text-slate-500">• {log.status}</span>
+                        </div>
+                        <div className="text-xs text-slate-500">{formatTime(log.created_at)}</div>
                       </div>
+                      {log.message ? <div className="text-xs text-slate-400 mt-1">{log.message}</div> : null}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </Drawer>
+      ) : null}
 
-                      <div className="mt-5 flex items-start gap-4">
-                        <div
-                          className="rounded-2xl border border-white/10 bg-white/[0.05] p-3"
-                          style={integration.color ? { color: integration.color } : undefined}
-                        >
-                          <Icon className="h-6 w-6" />
+      {wizardOpen ? (
+        <Modal title="Recruitment pack setup" onClose={closeWizard} widthClass="max-w-4xl">
+          <div className="flex items-center justify-between gap-4">
+            <div className="text-sm text-slate-400">
+              Step <span className="text-slate-200 font-semibold">{wizardStep}</span> / 5
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setWizardStep((s) => (s > 1 ? ((s - 1) as any) : s))}
+                className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                disabled={wizardStep === 1}
+              >
+                Back
+              </button>
+              <button
+                onClick={() => setWizardStep((s) => (s < 5 ? ((s + 1) as any) : s))}
+                className="px-3 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
+                disabled={wizardStep === 4 && !governanceConfirmed}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+
+          {wizardStep === 1 ? (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-lg font-semibold text-white">Choose pack</div>
+                  <div className="text-sm text-slate-400 mt-1">V1 ships Recruitment end-to-end. Payments and ERP come next.</div>
+                </div>
+                <span className="text-xs px-2 py-1 rounded-lg border border-emerald-400/20 bg-emerald-400/10 text-emerald-100 inline-flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Enabled
+                </span>
+              </div>
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
+                  <div className="font-semibold text-white">Recruitment</div>
+                  <div className="text-sm text-emerald-100/80 mt-1">Sources + outreach</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 opacity-60">
+                  <div className="font-semibold text-white">Payments</div>
+                  <div className="text-sm text-slate-400 mt-1">Coming soon</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 opacity-60">
+                  <div className="font-semibold text-white">Finance / ERP</div>
+                  <div className="text-sm text-slate-400 mt-1">Coming soon</div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {wizardStep === 2 ? (
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                <div className="font-semibold text-white">Candidate sources</div>
+                <div className="text-sm text-slate-400 mt-1">Pick where candidate data will come from.</div>
+                <div className="mt-4 space-y-3">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" className="mt-1" checked={selectedNaukri} onChange={(e) => setSelectedNaukri(e.target.checked)} />
+                    <div>
+                      <div className="text-sm font-semibold text-white">Naukri</div>
+                      <div className="text-xs text-slate-500">API key based</div>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" className="mt-1" checked={selectedLinkedIn} onChange={(e) => setSelectedLinkedIn(e.target.checked)} />
+                    <div>
+                      <div className="text-sm font-semibold text-white">LinkedIn</div>
+                      <div className="text-xs text-slate-500">OAuth (official scopes only)</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                <div className="font-semibold text-white">Outreach tool</div>
+                <div className="text-sm text-slate-400 mt-1">Pick one tool for email/calendar outreach in V1.</div>
+                <div className="mt-4 space-y-3">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input type="radio" className="mt-1" checked={outreachChoice === 'google_workspace'} onChange={() => setOutreachChoice('google_workspace')} />
+                    <div>
+                      <div className="text-sm font-semibold text-white">Google Workspace</div>
+                      <div className="text-xs text-slate-500">OAuth (Gmail + Calendar)</div>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input type="radio" className="mt-1" checked={outreachChoice === 'microsoft_365'} onChange={() => setOutreachChoice('microsoft_365')} />
+                    <div>
+                      <div className="text-sm font-semibold text-white">Microsoft 365</div>
+                      <div className="text-xs text-slate-500">OAuth (Graph)</div>
+                    </div>
+                  </label>
+                </div>
+                <div className="mt-4 text-xs text-slate-500 inline-flex items-center gap-2">
+                  <Shield className="w-3.5 h-3.5" />
+                  Writes will require approvals by default.
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {wizardStep === 3 ? (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="font-semibold text-white">Connect providers</div>
+                  <div className="text-sm text-slate-400 mt-1">Connect each selected provider. You can come back anytime.</div>
+                </div>
+                <button
+                  onClick={() => void load()}
+                  className="text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors"
+                >
+                  Refresh status
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {selectedProviders.map((providerId) => {
+                  const provider = providerMap.get(providerId);
+                  if (!provider) return null;
+                  const isBusy = Boolean(connecting[providerId]);
+                  const isConnected = provider.status === 'connected';
+                  return (
+                    <div key={providerId} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <div className="font-semibold text-white">{provider.name}</div>
+                            <span className={`text-xs px-2 py-0.5 rounded-full border ${statusToneClasses[statusTone(provider.status)]}`}>
+                              {formatStatusLabel(provider.status)}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1">
+                            {provider.authType === 'oauth2' ? 'OAuth' : provider.authType === 'api_key' ? 'API key' : provider.authType}
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <h3 className="text-lg font-semibold text-white">{integration.name}</h3>
-                          <p className="mt-1 text-[11px] uppercase tracking-[0.22em] text-slate-500">{integration.category}</p>
-                        </div>
-                      </div>
-
-                      <p className="mt-5 flex-1 text-sm leading-7 text-slate-300">{integration.description}</p>
-
-                      {integration.lastErrorMsg ? (
-                        <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-xs text-rose-200">
-                          {integration.lastErrorMsg}
-                        </div>
-                      ) : null}
-
-                      <div className="mt-6 flex flex-wrap items-center gap-3">
-                        <span className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200">
-                          <RefreshCw className="h-3.5 w-3.5" />
-                          {isOauth ? 'OAuth2' : 'API Key'}
-                        </span>
-
-                        <div className="ml-auto flex flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
                           <button
-                            type="button"
-                            onClick={() => void openDetails(integration)}
-                            disabled={busy !== null}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-70"
+                            onClick={() => openDetails(provider.id)}
+                            className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
                           >
                             Details
                           </button>
                           {isConnected ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => test(integration)}
-                                disabled={busy !== null}
-                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-70"
-                              >
-                                <RefreshCw className="h-4 w-4" />
-                                {busy === 'testing' ? 'Testing...' : 'Test'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => disconnect(integration)}
-                                disabled={busy !== null}
-                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-400/25 bg-rose-400/10 px-4 py-2.5 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-70"
-                              >
-                                {busy === 'disconnecting' ? 'Disconnecting...' : 'Disconnect'}
-                              </button>
-                            </>
+                            <span className="text-xs px-2 py-1 rounded-lg border border-emerald-400/20 bg-emerald-400/10 text-emerald-100 inline-flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Connected
+                            </span>
+                          ) : provider.authType === 'oauth2' ? (
+                            <button
+                              onClick={() => void connectOAuth(provider.id)}
+                              className="px-3 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
+                              disabled={isBusy}
+                            >
+                              {isBusy ? 'Starting…' : 'Connect OAuth'}
+                            </button>
                           ) : (
                             <button
-                              type="button"
-                              onClick={() => openConnect(integration)}
-                              disabled={busy !== null}
-                              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_35px_rgba(34,211,238,0.18)] transition hover:from-cyan-400 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-70"
+                              onClick={() => {
+                                ensureCredentialSeed(provider.id);
+                                void connectApiKey(provider.id);
+                              }}
+                              className="px-3 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
+                              disabled={isBusy}
                             >
-                              {integration.status === 'error' || integration.status === 'expired' ? 'Reconnect' : 'Connect'}
+                              {isBusy ? 'Connecting…' : 'Connect'}
                             </button>
                           )}
                         </div>
                       </div>
-                    </article>
-                  );
-                }),
-              ];
-            })
-          : null}
-      </section>
 
-      {selectedIntegration ? (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <button className="absolute inset-0 bg-slate-950/70" onClick={closeDetails} aria-label="Close details panel" />
-          <aside className="relative h-full w-full max-w-[560px] overflow-y-auto border-l border-slate-700 bg-slate-950 p-6 shadow-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">Integration detail</p>
-                <h2 className="mt-2 text-2xl font-bold text-white">{selectedIntegration.name}</h2>
-                <p className="mt-2 text-sm leading-7 text-slate-300">{selectedIntegration.description}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${statusToneClasses[statusTone(selectedIntegration.status)]}`}>
-                    {formatStatusLabel(selectedIntegration.status)}
-                  </span>
-                  <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-200">
-                    {selectedIntegration.authType === 'oauth2' ? 'OAuth2' : selectedIntegration.authType === 'api_key' ? 'API key' : selectedIntegration.authType}
-                  </span>
-                  <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-200">
-                    {selectedIntegration.category}
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={closeDetails}
-                className="rounded-xl border border-slate-700 bg-slate-900 p-2 text-slate-400 transition hover:border-slate-500 hover:text-white"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {selectedIntegration.lastErrorMsg ? (
-              <div className="mt-6 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
-                {selectedIntegration.lastErrorMsg}
-              </div>
-            ) : null}
-
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-                <div className="flex items-center gap-2 text-slate-400">
-                  <Clock className="h-4 w-4" />
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em]">Last sync</p>
-                </div>
-                <p className="mt-2 text-sm text-white">
-                  {selectedIntegration.lastSyncAt ? new Date(selectedIntegration.lastSyncAt).toLocaleString('en-IN') : 'Not synced yet'}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-                <div className="flex items-center gap-2 text-slate-400">
-                  <Activity className="h-4 w-4" />
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em]">Connection ID</p>
-                </div>
-                <p className="mt-2 break-all text-sm text-white">{selectedIntegration.connectionId || 'Not connected'}</p>
-              </div>
-            </div>
-
-            <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-white">Connection history</p>
-                {selectedIntegration.authType === 'oauth2' ? (
-                  <button
-                    type="button"
-                    onClick={() => void refreshToken(selectedIntegration)}
-                    disabled={logActionBusy !== null}
-                    className="rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {logActionBusy === 'refreshing' ? 'Refreshing...' : 'Refresh token'}
-                  </button>
-                ) : null}
-              </div>
-
-              {logError ? (
-                <div className="mt-3 rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-sm text-rose-200">
-                  {logError}
-                </div>
-              ) : null}
-
-              {logLoading ? (
-                <div className="mt-4 text-sm text-slate-300">Loading history...</div>
-              ) : null}
-
-              {!logLoading && logs.length === 0 ? (
-                <div className="mt-4 text-sm text-slate-300">No connection events recorded yet.</div>
-              ) : null}
-
-              {!logLoading && logs.length > 0 ? (
-                <div className="mt-4 max-h-[320px] space-y-2 overflow-y-auto pr-1">
-                  {logs.map((log) => (
-                    <div key={log.id} className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
-                            {log.action} · {log.status}
-                          </p>
-                          {log.message ? (
-                            <p className="mt-1 break-words text-sm text-white">{log.message}</p>
-                          ) : null}
+                      {provider.authType === 'api_key' && provider.requiredFields.length > 0 && provider.status !== 'connected' ? (
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {provider.requiredFields.map((field) => (
+                            <label key={field.name} className="block">
+                              <div className="text-xs text-slate-400 font-semibold">{field.label}</div>
+                              <input
+                                type={field.type === 'password' ? 'password' : 'text'}
+                                value={(credentials[provider.id]?.[field.name] || '') as string}
+                                onChange={(e) =>
+                                  setCredentials((prev) => ({
+                                    ...prev,
+                                    [provider.id]: { ...(prev[provider.id] || {}), [field.name]: e.target.value },
+                                  }))
+                                }
+                                placeholder={field.placeholder || ''}
+                                className="mt-1 w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-white/10 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                              />
+                              {field.description ? <div className="text-xs text-slate-500 mt-1">{field.description}</div> : null}
+                            </label>
+                          ))}
                         </div>
-                        <p className="shrink-0 text-xs text-slate-400">{new Date(log.created_at).toLocaleString('en-IN')}</p>
-                      </div>
+                      ) : null}
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
+              </div>
+
+              {selectedProviders.length === 0 ? (
+                <div className="mt-3 text-sm text-slate-500">Select providers in Step 2.</div>
               ) : null}
             </div>
-          </aside>
-        </div>
-      ) : null}
+          ) : null}
 
-      {active ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_35%),rgba(2,6,23,0.82)] p-6 backdrop-blur-xl">
-          <div
-            className="w-full max-w-2xl overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/90 shadow-[0_30px_90px_rgba(2,6,23,0.6)]"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="integration-connect-title"
-          >
-            <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
-              <div>
-                <h2 id="integration-connect-title" className="text-lg font-semibold text-white">
-                  Connect {active.name}
-                </h2>
-                <p className="mt-1 text-sm text-slate-400">
-                  Add credentials for {active.name}. Secrets are stored encrypted and never re-shown after you save.
-                </p>
+          {wizardStep === 4 ? (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+              <div className="font-semibold text-white">Governance defaults</div>
+              <div className="text-sm text-slate-400 mt-1">
+                V1 defaults to being strict: reads are role-gated, and writes require approvals. You can tune these later in the sidebar’s “Action Policies”.
               </div>
-              <button
-                type="button"
-                onClick={closeConnect}
-                className="rounded-xl border border-white/10 bg-white/[0.05] p-2 text-slate-200 transition hover:bg-white/[0.08] hover:text-white"
-                aria-label="Close dialog"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <Users className="w-4 h-4 text-slate-200" />
+                    Who can connect
+                  </div>
+                  <div className="text-sm text-slate-400 mt-2">Users with `connectors.manage` permission.</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <FileText className="w-4 h-4 text-slate-200" />
+                    Who can read
+                  </div>
+                  <div className="text-sm text-slate-400 mt-2">Users with `connectors.read` permission.</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <Shield className="w-4 h-4 text-emerald-300" />
+                    Writes
+                  </div>
+                  <div className="text-sm text-slate-400 mt-2">Approval required by default (safe).</div>
+                </div>
+              </div>
 
-            <div className="space-y-5 px-6 py-6">
-              {active.requiredFields.length === 0 ? (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
-                  This integration does not declare any required fields.
+              <label className="mt-5 flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={governanceConfirmed}
+                  onChange={(e) => setGovernanceConfirmed(e.target.checked)}
+                />
+                <div>
+                  <div className="text-sm text-white font-semibold">Confirm safe defaults</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    I understand that writes are approval-first and that this pack is a preview of the full governed workflow.
+                  </div>
+                </div>
+              </label>
+            </div>
+          ) : null}
+
+          {wizardStep === 5 ? (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+              <div className="font-semibold text-white">Test + Sample pull</div>
+              <div className="text-sm text-slate-400 mt-1">Instantly see candidate cards inside SyntheticHR (no full sync required yet).</div>
+
+              {defaultSampleProviderId ? (
+                <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                  <div className="min-w-0">
+                    <div className="text-sm text-white font-semibold">Preview source</div>
+                    <div className="text-sm text-slate-400 mt-1 truncate">
+                      {providerMap.get(defaultSampleProviderId)?.name || defaultSampleProviderId}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => void runSamplePull(defaultSampleProviderId)}
+                    className="px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/25 text-emerald-100 hover:bg-emerald-500/20 transition-colors text-sm font-semibold"
+                    disabled={sampleLoading}
+                  >
+                    {sampleLoading ? 'Loading…' : 'Run sample pull'}
+                  </button>
                 </div>
               ) : (
-                active.requiredFields.map((field) => {
-                  const id = `${active.id}-${field.name}`;
-                  const value = credentials[field.name] || '';
-                  return (
-                    <div key={id} className="space-y-2">
-                      <label htmlFor={id} className="text-sm font-semibold text-slate-200">
-                        {field.label}
-                        {field.required ? <span className="text-rose-300"> *</span> : null}
-                      </label>
-                      <input
-                        id={id}
-                        name={field.name}
-                        type={field.type}
-                        value={value}
-                        onChange={(e) => setCredentials((prev) => ({ ...prev, [field.name]: e.target.value }))}
-                        placeholder={field.placeholder || ''}
-                        autoComplete="off"
-                        className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-cyan-400/40 focus:bg-white/[0.07]"
-                      />
-                      {field.description ? (
-                        <p className="text-xs text-slate-400">{field.description}</p>
-                      ) : null}
-                      {field.type === 'password' && value ? (
-                        <p className="text-xs text-slate-500">Current input: {maskValue(value)}</p>
-                      ) : null}
-                    </div>
-                  );
-                })
+                <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-amber-100 flex items-start gap-3">
+                  <Info className="w-5 h-5 mt-0.5" />
+                  <div>
+                    <div className="font-semibold">No connected candidate source yet</div>
+                    <div className="text-sm text-amber-100/80 mt-1">Connect Naukri or LinkedIn in Step 3, then come back here.</div>
+                  </div>
+                </div>
               )}
-            </div>
 
-            <div className="flex items-center justify-end gap-3 border-t border-white/10 px-6 py-5">
-              <button
-                type="button"
-                onClick={closeConnect}
-                className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] hover:text-white"
-                disabled={submitting}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void connect()}
-                className="rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_35px_rgba(34,211,238,0.18)] transition hover:from-cyan-400 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-70"
-                disabled={submitting}
-              >
-                {submitting ? 'Connecting...' : 'Connect'}
-              </button>
+              {sampleError ? <div className="mt-3 text-sm text-rose-200">{sampleError}</div> : null}
+              {sampleCandidates.length > 0 ? (
+                <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                  <div className="text-sm text-white font-semibold">Preview loaded</div>
+                  <div className="text-sm text-slate-400 mt-1">
+                    {sampleCandidates.length} candidates are now visible in the Recruitment browser on this page.
+                  </div>
+                  <div className="mt-4 flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        closeWizard();
+                        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                      }}
+                      className="px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
+                    >
+                      View candidates
+                    </button>
+                    <button
+                      onClick={() => toast.info('Next: wire preview actions into Jobs & Approvals execution.')}
+                      className="px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
+                    >
+                      Next steps
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
-          </div>
-        </div>
+          ) : null}
+        </Modal>
       ) : null}
     </div>
   );

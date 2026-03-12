@@ -21,6 +21,8 @@ export type IntegrationAuthType = 'oauth2' | 'api_key' | 'client_credentials';
 
 export type IntegrationFieldType = 'text' | 'password';
 
+export type IntegrationActionRisk = 'low' | 'medium' | 'high' | 'money';
+
 export type IntegrationRequiredField = {
   name: string;
   label: string;
@@ -49,6 +51,17 @@ export type IntegrationEndpoint = {
   format?: 'json' | 'xml';
 };
 
+export type IntegrationWriteCapability = {
+  id: string; // stable action id, e.g. "outreach.send_email"
+  label: string;
+  risk: IntegrationActionRisk;
+};
+
+export type IntegrationCapabilities = {
+  reads: string[]; // canonical-ish objects, e.g. "candidate_profiles"
+  writes: IntegrationWriteCapability[];
+};
+
 export type IntegrationSpec = {
   id: string;
   name: string;
@@ -64,6 +77,7 @@ export type IntegrationSpec = {
   connectionFields?: IntegrationRequiredField[];
   oauthConfig?: IntegrationOAuthConfig;
   endpoints: Record<string, IntegrationEndpoint>;
+  capabilities?: IntegrationCapabilities;
   aiFeatures?: {
     enabled: boolean;
     capabilities: string[];
