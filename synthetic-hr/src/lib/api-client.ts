@@ -5,7 +5,7 @@
 
 import { getSupabaseClient } from './supabase';
 import { getFrontendConfig } from './config';
-import type { AIAgent, Incident, CostData, SupportTicket, SalesLead, AccessRequest } from '../types';
+import type { AIAgent, Incident, CostData, SupportTicket, SalesLead, AccessRequest, AgentWorkspaceData } from '../types';
 
 const API_BASE_URL = getFrontendConfig().apiUrl || 'http://localhost:3001/api';
 
@@ -228,6 +228,12 @@ export const agentApi = {
     });
   },
 
+  async getWorkspace(id: string): Promise<ApiResponse<AgentWorkspaceData>> {
+    return authenticatedFetch(`/agents/${id}/workspace`, {
+      method: 'GET',
+    });
+  },
+
   async updatePublishState(
     id: string,
     updates: Partial<{
@@ -252,6 +258,36 @@ export const agentApi = {
     return authenticatedFetch(`/agents/${id}/publish`, {
       method: 'PUT',
       body: JSON.stringify(updates),
+    });
+  },
+
+  async pause(id: string, reason?: string): Promise<ApiResponse<AIAgent>> {
+    return authenticatedFetch(`/agents/${id}/pause`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  },
+
+  async resume(id: string, reason?: string): Promise<ApiResponse<AIAgent>> {
+    return authenticatedFetch(`/agents/${id}/resume`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  },
+
+  async goLive(id: string): Promise<ApiResponse<AIAgent>> {
+    return authenticatedFetch(`/agents/${id}/go-live`, {
+      method: 'POST',
+    });
+  },
+
+  async escalate(
+    id: string,
+    options?: { notes?: string; assignee?: string }
+  ): Promise<ApiResponse<{ agent: AIAgent; incident: any | null }>> {
+    return authenticatedFetch(`/agents/${id}/escalate`, {
+      method: 'POST',
+      body: JSON.stringify(options || {}),
     });
   },
 
