@@ -5,7 +5,7 @@ import {
   Brain, Target, TrendingUp, X, Plus, Search, Filter, Download, Copy, Trash2, Key,
   ShieldAlert, ZapOff, Play, Rocket, Link2, MessageSquare, BarChart3, PauseCircle, Loader2, Clock3
 } from 'lucide-react';
-import type { AIAgent } from '../../types';
+import type { AIAgent, AgentWorkspaceAnalytics, AgentWorkspaceConversation, AgentWorkspaceIncident, AgentWorkspaceSummary } from '../../types';
 import { toast } from '../../lib/toast';
 import { validateAgentForm } from '../../lib/validation';
 import { api } from '../../lib/api-client';
@@ -14,7 +14,7 @@ import { packDisplayBadge, type IntegrationPackId } from '../../lib/integration-
 
 interface FleetPageProps {
   agents: AIAgent[];
-  setAgents: (agents: AIAgent[]) => void;
+  setAgents: (agents: AIAgent[] | ((currentAgents: AIAgent[]) => AIAgent[])) => void | Promise<void>;
   selectedAgentId?: string | null;
   onSelectAgent?: (agentId: string | null) => void;
   onPublishAgent?: (agent: AIAgent, packId?: IntegrationPackId | null) => void;
@@ -22,78 +22,18 @@ interface FleetPageProps {
 }
 
 type WorkspaceTab = 'overview' | 'conversations' | 'integrations' | 'policies' | 'analytics' | 'controls';
-type WorkspaceConversation = {
-  id: string;
-  user: string;
-  topic: string;
-  preview: string;
-  status: string;
-  platform: string;
-  timestamp: string;
-};
-type WorkspaceIncident = {
-  id: string;
-  title: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  status: string;
-  type: string;
-  createdAt: string;
-};
-type WorkspaceAnalytics = {
-  totalCost: number;
-  totalTokens: number;
-  totalRequests: number;
-  avgCostPerRequest: number;
-  dailyAverage: number;
-  trend: Array<{
-    date: string;
-    cost: number;
-    requests: number;
-  }>;
-};
 type WorkspaceState = {
-  conversations: WorkspaceConversation[];
+  summary: AgentWorkspaceSummary | null;
+  conversations: AgentWorkspaceConversation[];
   loadingConversations: boolean;
   conversationsError: string | null;
-  incidents: WorkspaceIncident[];
+  incidents: AgentWorkspaceIncident[];
   loadingIncidents: boolean;
   incidentsError: string | null;
-  analytics: WorkspaceAnalytics | null;
+  analytics: AgentWorkspaceAnalytics | null;
   loadingAnalytics: boolean;
   analyticsError: string | null;
 };
-
-function normalizeWorkspaceConversation(raw: any): WorkspaceConversation {
-  const metadata = raw?.metadata || {};
-  const preview =
-    metadata.preview ||
-    metadata.last_user_message ||
-    metadata.summary ||
-    `Conversation on ${raw?.platform || 'unknown platform'}`;
-  const trimmed = String(preview || '').trim();
-  const topic = metadata.topic || trimmed.split(/[.!?]/)[0] || 'Conversation';
-
-  return {
-    id: raw.id,
-    user: metadata.user_email || metadata.customer_email || raw.user_id || 'Unknown user',
-    topic: topic.slice(0, 64),
-    preview: trimmed,
-    status: raw.status || 'unknown',
-    platform: raw.platform || 'internal',
-    timestamp: raw.started_at || raw.created_at || new Date().toISOString(),
-  };
-}
-
-function normalizeWorkspaceIncident(raw: any): WorkspaceIncident {
-  return {
-    id: raw.id,
-    title: raw.title || 'Untitled incident',
-    severity: raw.severity || 'low',
-    status: raw.status || 'open',
-    type: raw.incident_type || 'other',
-    createdAt: raw.created_at || new Date().toISOString(),
-  };
-}
 
 export default function FleetPage({
   agents,
@@ -111,6 +51,7 @@ export default function FleetPage({
   const [workspaceAgentId, setWorkspaceAgentId] = useState<string | null>(selectedAgentId || null);
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('overview');
   const [workspaceState, setWorkspaceState] = useState<WorkspaceState>({
+    summary: null,
     conversations: [],
     loadingConversations: false,
     conversationsError: null,
@@ -136,6 +77,7 @@ export default function FleetPage({
   const [createdEnrollment, setCreatedEnrollment] = useState<{ runtimeId: string; token: string; expiresAt: string } | null>(null);
   const [testJob, setTestJob] = useState<any | null>(null);
   const [testJobBusy, setTestJobBusy] = useState(false);
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -182,9 +124,56 @@ export default function FleetPage({
     });
   }, [agents, workspaceAgentId]);
 
+  const loadWorkspace = async (agentId: string) => {
+    setWorkspaceState((current) => ({
+      ...current,
+      loadingConversations: true,
+      conversationsError: null,
+      loadingIncidents: true,
+      incidentsError: null,
+      loadingAnalytics: true,
+      analyticsError: null,
+    }));
+
+    const workspaceResponse = await api.agents.getWorkspace(agentId);
+    if (!workspaceResponse.success || !workspaceResponse.data) {
+      setWorkspaceState({
+        summary: null,
+        conversations: [],
+        loadingConversations: false,
+        conversationsError: workspaceResponse.error || 'Failed to load recent conversations.',
+        incidents: [],
+        loadingIncidents: false,
+        incidentsError: workspaceResponse.error || 'Failed to load incidents.',
+        analytics: null,
+        loadingAnalytics: false,
+        analyticsError: workspaceResponse.error || 'Failed to load analytics.',
+      });
+      return;
+    }
+
+    await setAgents(agents.map((agent) => (
+      agent.id === agentId ? workspaceResponse.data!.agent : agent
+    )));
+
+    setWorkspaceState({
+      summary: workspaceResponse.data.summary,
+      conversations: workspaceResponse.data.conversations || [],
+      loadingConversations: false,
+      conversationsError: null,
+      incidents: workspaceResponse.data.incidents || [],
+      loadingIncidents: false,
+      incidentsError: null,
+      analytics: workspaceResponse.data.analytics || null,
+      loadingAnalytics: false,
+      analyticsError: null,
+    });
+  };
+
   useEffect(() => {
     if (!workspaceAgentId) {
       setWorkspaceState({
+        summary: null,
         conversations: [],
         loadingConversations: false,
         conversationsError: null,
@@ -199,58 +188,46 @@ export default function FleetPage({
     }
 
     let cancelled = false;
-    setWorkspaceState((current) => ({
-      ...current,
-      loadingConversations: true,
-      conversationsError: null,
-      loadingIncidents: true,
-      incidentsError: null,
-      loadingAnalytics: true,
-      analyticsError: null,
-    }));
-
     (async () => {
-      const [conversationResponse, incidentResponse, insightsResponse, trendResponse] = await Promise.all([
-        api.conversations.getAll({ agent_id: workspaceAgentId, limit: 6 }),
-        api.incidents.getAll({ agent_id: workspaceAgentId, limit: 6 }),
-        api.costs.getInsights({ agentId: workspaceAgentId }),
-        api.costs.getTrend({ agentId: workspaceAgentId, days: 7 }),
-      ]);
+      const workspaceResponse = await api.agents.getWorkspace(workspaceAgentId);
       if (cancelled) return;
+      setWorkspaceState((current) => ({
+        ...current,
+        loadingConversations: true,
+        conversationsError: null,
+        loadingIncidents: true,
+        incidentsError: null,
+        loadingAnalytics: true,
+        analyticsError: null,
+      }));
+
+      if (!workspaceResponse.success || !workspaceResponse.data) {
+        setWorkspaceState({
+          summary: null,
+          conversations: [],
+          loadingConversations: false,
+          conversationsError: workspaceResponse.error || 'Failed to load recent conversations.',
+          incidents: [],
+          loadingIncidents: false,
+          incidentsError: workspaceResponse.error || 'Failed to load incidents.',
+          analytics: null,
+          loadingAnalytics: false,
+          analyticsError: workspaceResponse.error || 'Failed to load analytics.',
+        });
+        return;
+      }
 
       setWorkspaceState({
-        conversations: conversationResponse.success && Array.isArray(conversationResponse.data)
-          ? conversationResponse.data.map(normalizeWorkspaceConversation)
-          : [],
+        summary: workspaceResponse.data.summary,
+        conversations: workspaceResponse.data.conversations || [],
         loadingConversations: false,
-        conversationsError: conversationResponse.success
-          ? null
-          : (conversationResponse.error || 'Failed to load recent conversations.'),
-        incidents: incidentResponse.success && Array.isArray(incidentResponse.data)
-          ? incidentResponse.data.map(normalizeWorkspaceIncident)
-          : [],
+        conversationsError: null,
+        incidents: workspaceResponse.data.incidents || [],
         loadingIncidents: false,
-        incidentsError: incidentResponse.success
-          ? null
-          : (incidentResponse.error || 'Failed to load incidents.'),
-        analytics: insightsResponse.success && trendResponse.success
-          ? {
-              totalCost: insightsResponse.data?.insights?.totalCost || 0,
-              totalTokens: insightsResponse.data?.insights?.totalTokens || 0,
-              totalRequests: (trendResponse.data?.trend || []).reduce((sum, item) => sum + (item.requests || 0), 0),
-              avgCostPerRequest: insightsResponse.data?.insights?.avgCostPerRequest || 0,
-              dailyAverage: insightsResponse.data?.insights?.dailyAverage || 0,
-              trend: (trendResponse.data?.trend || []).map((item) => ({
-                date: item.date,
-                cost: item.cost || 0,
-                requests: item.requests || 0,
-              })),
-            }
-          : null,
+        incidentsError: null,
+        analytics: workspaceResponse.data.analytics || null,
         loadingAnalytics: false,
-        analyticsError: insightsResponse.success && trendResponse.success
-          ? null
-          : (insightsResponse.error || trendResponse.error || 'Failed to load analytics.'),
+        analyticsError: null,
       });
     })();
 
@@ -340,8 +317,50 @@ export default function FleetPage({
     setShowAddModal(false);
   };
 
-  const updateAgentStatus = (id: string, status: AIAgent['status']) => {
-    setAgents(agents.map(a => a.id === id ? { ...a, status } : a));
+  const mergeAgent = async (updatedAgent: AIAgent) => {
+    await setAgents(agents.map((agent) => (
+      agent.id === updatedAgent.id
+        ? {
+            ...agent,
+            ...updatedAgent,
+            config: {
+              ...((agent as any).config || {}),
+              ...((updatedAgent as any).config || {}),
+            },
+          }
+        : agent
+    )));
+  };
+
+  const runAgentAction = async (
+    agentId: string,
+    actionKey: string,
+    action: () => Promise<{ success: boolean; data?: any; error?: string }>,
+    successMessage: string
+  ) => {
+    setActionBusy(actionKey);
+    try {
+      const response = await action();
+      if (!response.success) {
+        throw new Error(response.error || 'Action failed.');
+      }
+
+      const payload = response.data;
+      if (payload?.agent) {
+        await mergeAgent(payload.agent as AIAgent);
+      } else if (payload?.id) {
+        await mergeAgent(payload as AIAgent);
+      }
+
+      if (workspaceAgentId === agentId) {
+        await loadWorkspace(agentId);
+      }
+
+      toast.success(successMessage);
+      return payload;
+    } finally {
+      setActionBusy(null);
+    }
   };
 
   const handleConfirmAction = (
@@ -380,9 +399,13 @@ export default function FleetPage({
           'Issue Warning (Level 1)',
           `Are you sure you want to pause ${agent.name} and issue a warning?`,
           'warning',
-          () => {
-            setAgents(agents.map(a => a.id === agentId ? { ...a, status: 'paused' as const } : a));
-            toast.warning(`⚠️ LEVEL 1 WARNING issued to ${agent.name}. Agent paused.`);
+          async () => {
+            await runAgentAction(
+              agentId,
+              `pause:${agentId}`,
+              () => api.agents.pause(agentId, 'Level 1 warning issued from fleet workspace'),
+              `${agent.name} paused.`
+            );
           }
         );
         break;
@@ -391,7 +414,14 @@ export default function FleetPage({
           'Escalate to Human (Level 2)',
           `🚨 LEVEL 2 ESCALATION: ${agent.name} requires human review. This will increase its risk score. Continue?`,
           'warning',
-          () => setAgents(agents.map(a => a.id === agentId ? { ...a, risk_score: Math.min(100, a.risk_score + 20) } : a))
+          async () => {
+            await runAgentAction(
+              agentId,
+              `escalate:${agentId}`,
+              () => api.agents.escalate(agentId, { notes: 'Escalated from fleet workspace for human review' }),
+              `${agent.name} escalated for human review.`
+            );
+          }
         );
         break;
       case 3:
@@ -399,7 +429,17 @@ export default function FleetPage({
           'Terminate Agent (Level 3)',
           `🛑 LEVEL 3 SHUTDOWN: This will permanently terminate ${agent.name}. Are you absolutely sure?`,
           'danger',
-          () => setAgents(agents.map(a => a.id === agentId ? { ...a, status: 'terminated' as const } : a))
+          async () => {
+            await runAgentAction(
+              agentId,
+              `kill:${agentId}`,
+              () => api.agents.kill(agentId, {
+                level: 3,
+                reason: 'Emergency kill switch triggered from fleet workspace',
+              }),
+              `${agent.name} terminated.`
+            );
+          }
         );
         break;
     }
@@ -417,7 +457,7 @@ export default function FleetPage({
         if (!response.success) {
           throw new Error(response.error || 'Failed to delete agent.');
         }
-        setAgents(agents.filter(a => a.id !== id));
+        await setAgents(agents.filter(a => a.id !== id));
         toast.success(`${agent?.name || 'Agent'} deleted successfully.`);
       }
     );
@@ -431,14 +471,34 @@ export default function FleetPage({
     }));
   };
 
-  const saveConfigure = (agentId: string) => {
+  const saveConfigure = async (agentId: string) => {
     const vals = editBudget[agentId];
     if (!vals) return;
-    setAgents(agents.map(a =>
-      a.id === agentId ? { ...a, budget_limit: vals.budget, auto_throttle: vals.autoThrottle } : a
-    ));
-    toast.success('Agent configuration saved.');
-    setConfigureAgentId(null);
+    const agent = agents.find((item) => item.id === agentId);
+    if (!agent) return;
+    try {
+      const response = await api.agents.update(agentId, {
+        budget_limit: vals.budget,
+        config: {
+          ...((agent as any).config || {}),
+          budget_limit: vals.budget,
+          auto_throttle: vals.autoThrottle,
+        },
+      });
+      if (!response.success || !response.data) {
+        throw new Error(response.error || 'Failed to save agent configuration.');
+      }
+      await mergeAgent({
+        ...(response.data as AIAgent),
+        auto_throttle: vals.autoThrottle,
+        budget_limit: vals.budget,
+      });
+      toast.success('Agent configuration saved.');
+      setConfigureAgentId(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save agent configuration.';
+      toast.error(message);
+    }
   };
 
   const saveWorkspacePolicies = async () => {
@@ -456,20 +516,11 @@ export default function FleetPage({
         throw new Error(response.error || 'Failed to save policy changes.');
       }
       const updatedAgent = response.data as AIAgent;
-      setAgents(agents.map((agent) => (
-        agent.id === activeWorkspaceAgent.id
-          ? {
-              ...agent,
-              ...updatedAgent,
-              system_prompt: updatedAgent.system_prompt ?? policyDraft.systemPrompt,
-              config: {
-                ...((agent as any).config || {}),
-                ...((updatedAgent as any).config || {}),
-                operational_policy: policyDraft.operationalPolicy,
-              },
-            }
-          : agent
-      )));
+      await mergeAgent({
+        ...updatedAgent,
+        system_prompt: updatedAgent.system_prompt ?? policyDraft.systemPrompt,
+      });
+      await loadWorkspace(activeWorkspaceAgent.id);
       toast.success('Persona and policy updated.');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to save policy changes.';
@@ -795,19 +846,28 @@ export default function FleetPage({
                       {agent.status !== 'terminated' && (
                         agent.status === 'active' ? (
                           <button
-                            onClick={() => handleConfirmAction('Pause Agent', `Are you sure you want to pause ${agent.name}?`, 'warning', () => updateAgentStatus(agent.id, 'paused'))}
+                            onClick={() => handleConfirmAction(
+                              'Pause Agent',
+                              `Are you sure you want to pause ${agent.name}?`,
+                              'warning',
+                              async () => {
+                                await runAgentAction(agent.id, `pause:${agent.id}`, () => api.agents.pause(agent.id, 'Paused from fleet list'), `${agent.name} paused.`);
+                              }
+                            )}
                             className="p-2 text-slate-400 hover:text-amber-400 transition-colors rounded-lg hover:bg-amber-400/10"
                             title="Pause Agent"
+                            disabled={actionBusy === `pause:${agent.id}`}
                           >
-                            <ZapOff className="w-4 h-4" />
+                            {actionBusy === `pause:${agent.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <ZapOff className="w-4 h-4" />}
                           </button>
                         ) : (
                           <button
-                            onClick={() => updateAgentStatus(agent.id, 'active')}
+                            onClick={() => void runAgentAction(agent.id, `resume:${agent.id}`, () => api.agents.resume(agent.id, 'Resumed from fleet list'), `${agent.name} resumed.`)}
                             className="p-2 text-slate-400 hover:text-emerald-400 transition-colors rounded-lg hover:bg-emerald-400/10"
                             title="Activate Agent"
+                            disabled={actionBusy === `resume:${agent.id}`}
                           >
-                            <Play className="w-4 h-4" />
+                            {actionBusy === `resume:${agent.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
                           </button>
                         )
                       )}
@@ -1270,6 +1330,34 @@ export default function FleetPage({
                             </div>
                           </div>
                         </div>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            onClick={() => void runAgentAction(
+                              activeWorkspaceAgent.id,
+                              `disconnect:${target.integrationId}`,
+                              () => api.integrations.disconnect(target.integrationId),
+                              `${target.integrationName} disconnected.`
+                            )}
+                            className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-100 hover:bg-rose-400/15"
+                            disabled={actionBusy === `disconnect:${target.integrationId}`}
+                          >
+                            {actionBusy === `disconnect:${target.integrationId}` ? 'Disconnecting…' : 'Disconnect channel'}
+                          </button>
+                          {activeWorkspaceAgent.publishStatus !== 'live' ? (
+                            <button
+                              onClick={() => void runAgentAction(
+                                activeWorkspaceAgent.id,
+                                `live:${activeWorkspaceAgent.id}`,
+                                () => api.agents.goLive(activeWorkspaceAgent.id),
+                                `${activeWorkspaceAgent.name} is now live.`
+                              )}
+                              className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/15"
+                              disabled={actionBusy === `live:${activeWorkspaceAgent.id}`}
+                            >
+                              {actionBusy === `live:${activeWorkspaceAgent.id}` ? 'Going live…' : 'Go live'}
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     ))
                   )}
@@ -1433,7 +1521,7 @@ export default function FleetPage({
 
             {workspaceTab === 'controls' ? (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                   <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                     <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Agent state</div>
                     <div className="mt-3 text-2xl font-semibold text-white capitalize">{activeWorkspaceAgent.status}</div>
@@ -1454,10 +1542,18 @@ export default function FleetPage({
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <button
                     onClick={() => activeWorkspaceAgent.status === 'active'
-                      ? handleConfirmAction('Pause Agent', `Are you sure you want to pause ${activeWorkspaceAgent.name}?`, 'warning', () => updateAgentStatus(activeWorkspaceAgent.id, 'paused'))
-                      : updateAgentStatus(activeWorkspaceAgent.id, 'active')
+                      ? handleConfirmAction(
+                        'Pause Agent',
+                        `Are you sure you want to pause ${activeWorkspaceAgent.name}?`,
+                        'warning',
+                        async () => {
+                          await runAgentAction(activeWorkspaceAgent.id, `pause:${activeWorkspaceAgent.id}`, () => api.agents.pause(activeWorkspaceAgent.id, 'Paused from controls workspace'), `${activeWorkspaceAgent.name} paused.`);
+                        }
+                      )
+                      : void runAgentAction(activeWorkspaceAgent.id, `resume:${activeWorkspaceAgent.id}`, () => api.agents.resume(activeWorkspaceAgent.id, 'Resumed from controls workspace'), `${activeWorkspaceAgent.name} resumed.`)
                     }
                     className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-5 text-left"
+                    disabled={actionBusy === `pause:${activeWorkspaceAgent.id}` || actionBusy === `resume:${activeWorkspaceAgent.id}`}
                   >
                     <PauseCircle className="w-5 h-5 text-amber-300" />
                     <div className="mt-3 text-sm font-semibold text-white">{activeWorkspaceAgent.status === 'active' ? 'Pause agent' : 'Resume agent'}</div>
@@ -1466,11 +1562,23 @@ export default function FleetPage({
                   <button
                     onClick={() => handleKillSwitch(activeWorkspaceAgent.id, 2)}
                     className="rounded-2xl border border-orange-400/20 bg-orange-400/10 p-5 text-left"
+                    disabled={actionBusy === `escalate:${activeWorkspaceAgent.id}`}
                   >
                     <AlertTriangle className="w-5 h-5 text-orange-300" />
                     <div className="mt-3 text-sm font-semibold text-white">Escalate to human</div>
                     <div className="mt-1 text-sm text-orange-100/80">Increase scrutiny and force review for risky behavior.</div>
                   </button>
+                  {activeWorkspaceAgent.publishStatus !== 'live' ? (
+                    <button
+                      onClick={() => void runAgentAction(activeWorkspaceAgent.id, `live:${activeWorkspaceAgent.id}`, () => api.agents.goLive(activeWorkspaceAgent.id), `${activeWorkspaceAgent.name} is now live.`)}
+                      className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-5 text-left"
+                      disabled={actionBusy === `live:${activeWorkspaceAgent.id}`}
+                    >
+                      <Play className="w-5 h-5 text-emerald-300" />
+                      <div className="mt-3 text-sm font-semibold text-white">Go live</div>
+                      <div className="mt-1 text-sm text-emerald-100/80">Enable live traffic on connected channels.</div>
+                    </button>
+                  ) : null}
                   <button
                     onClick={() => handleKillSwitch(activeWorkspaceAgent.id, 3)}
                     className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-5 text-left"

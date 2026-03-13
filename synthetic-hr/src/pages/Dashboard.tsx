@@ -633,10 +633,13 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
 
   const [error, setError] = useState<string | null>(null);
 
-  const saveAgents = async (newAgents: AIAgent[]) => {
+  const saveAgents = async (newAgentsOrUpdater: AIAgent[] | ((currentAgents: AIAgent[]) => AIAgent[])) => {
     try {
       const previousAgents = agents;
-      const nextAgents = [...newAgents];
+      const resolvedAgents = typeof newAgentsOrUpdater === 'function'
+        ? newAgentsOrUpdater(previousAgents)
+        : newAgentsOrUpdater;
+      const nextAgents = [...resolvedAgents];
 
       const prevMap = new Map(previousAgents.map(a => [a.id, a]));
       const nextIds = new Set(nextAgents.map(a => a.id));
@@ -835,26 +838,15 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
           </div>
 
           <nav className="flex-1 space-y-1" role="navigation" aria-label="Main navigation">
-            {/* Primary Navigation */}
             {[
               { id: 'getting-started', icon: Sparkles, label: 'Getting Started', badge: needsOnboarding ? 'Recommended' : null },
               { id: 'overview', icon: BarChart3, label: 'Overview' },
               { id: 'fleet', icon: Users, label: 'Fleet' },
-              { id: 'templates', icon: Zap, label: 'Agent Templates' },
-              { id: 'playbooks', icon: ClipboardList, label: 'Playbooks' },
-              { id: 'jobs', icon: ListChecks, label: 'Jobs & Approvals' },
-              { id: 'work-items', icon: ListTodo, label: 'Work Items' },
-              { id: 'connect', icon: PlugZap, label: 'Advanced Setup' },
-              { id: 'action-policies', icon: Shield, label: 'Action Policies' },
-              { id: 'incidents', icon: AlertTriangle, label: 'Incidents' },
-              { id: 'blackbox', icon: Database, label: 'Black Box' },
-              { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
               { id: 'integrations', icon: Link2, label: 'Integrations' },
-              { id: 'costs', icon: DollarSign, label: 'Costs' },
-              { id: 'api-access', icon: Key, label: 'API Access' },
-              { id: 'coverage', icon: Eye, label: 'Coverage' },
+              { id: 'conversations', icon: MessageSquare, label: 'Operations' },
+              { id: 'incidents', icon: AlertTriangle, label: 'Governance' },
               { id: 'settings', icon: Settings, label: 'Settings' },
-	            ].map((item) => (
+            ].map((item) => (
 	              <button
 	                key={item.id}
 	                onClick={() => navigateTo(item.id)}

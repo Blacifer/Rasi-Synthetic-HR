@@ -63,6 +63,38 @@ type IntegrationSummaryRow = {
   last_sync_at: string | null;
 };
 
+type AgentWorkspaceConversation = {
+  id: string;
+  user: string;
+  topic: string;
+  preview: string;
+  status: string;
+  platform: string;
+  timestamp: string;
+};
+
+type AgentWorkspaceIncident = {
+  id: string;
+  title: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  status: string;
+  type: string;
+  createdAt: string;
+};
+
+type AgentWorkspaceAnalytics = {
+  totalCost: number;
+  totalTokens: number;
+  totalRequests: number;
+  avgCostPerRequest: number;
+  dailyAverage: number;
+  trend: Array<{
+    date: string;
+    cost: number;
+    requests: number;
+  }>;
+};
+
 const toIsoDay = (value: Date) => value.toISOString().split('T')[0];
 
 const buildDaySeries = (days: number) => {
@@ -130,6 +162,41 @@ const writeAgentPublishMetadata = (agent: any, updates: AgentPublishMetadata) =>
   return metadata;
 };
 
+const riskLevelFromScore = (score: number): 'low' | 'medium' | 'high' => {
+  if (score >= 70) return 'high';
+  if (score >= 35) return 'medium';
+  return 'low';
+};
+
+const normalizeWorkspaceConversation = (raw: any): AgentWorkspaceConversation => {
+  const metadata = raw?.metadata || {};
+  const preview = metadata.preview
+    || metadata.last_user_message
+    || metadata.summary
+    || `Conversation on ${raw?.platform || 'unknown platform'}`;
+  const trimmed = String(preview || '').trim();
+  const topic = metadata.topic || trimmed.split(/[.!?]/)[0] || 'Conversation';
+
+  return {
+    id: raw.id,
+    user: metadata.user_email || metadata.customer_email || raw.user_id || 'Unknown user',
+    topic: String(topic).slice(0, 64),
+    preview: trimmed,
+    status: raw.status || 'unknown',
+    platform: raw.platform || 'internal',
+    timestamp: raw.started_at || raw.created_at || new Date().toISOString(),
+  };
+};
+
+const normalizeWorkspaceIncident = (raw: any): AgentWorkspaceIncident => ({
+  id: raw.id,
+  title: raw.title || 'Untitled incident',
+  severity: raw.severity || 'low',
+  status: raw.status || 'open',
+  type: raw.incident_type || 'other',
+  createdAt: raw.created_at || new Date().toISOString(),
+});
+
 const enrichAgentRecords = async (
   req: Request,
   orgId: string,
@@ -182,6 +249,167 @@ const enrichAgentRecords = async (
       lastIntegrationSyncAt: connectedTargets[0]?.lastSyncAt || null,
     };
   });
+};
+
+const getAgentWorkspaceData = async (req: Request, orgId: string, id: string) => {
+  const query = new URLSearchParams();
+  query.set('id', eq(id));
+  query.set('organization_id', eq(orgId));
+
+  const rawData = await supabaseRestAsUser(getUserJwt(req), 'ai_agents', query) as any[];
+  if (!rawData || rawData.length === 0) {
+    throw new Error('Agent not found');
+  }
+
+  const rawAgent = rawData[0];
+  const permissions = new Set(Array.isArray((req.user as any)?.permissions) ? (req.user as any).permissions : []);
+  const canReadDashboard = permissions.has('dashboard.read');
+  const canReadIncidents = permissions.has('incidents.read');
+  const canReadCosts = permissions.has('costs.read');
+
+  let conversationCount = 0;
+  let conversations: AgentWorkspaceConversation[] = [];
+  let incidents: AgentWorkspaceIncident[] = [];
+  let analytics: AgentWorkspaceAnalytics = {
+    totalCost: 0,
+    totalTokens: 0,
+    totalRequests: 0,
+    avgCostPerRequest: 0,
+    dailyAverage: 0,
+    trend: buildDaySeries(7).map((date) => ({ date, cost: 0, requests: 0 })),
+  };
+
+  if (canReadDashboard) {
+    try {
+      const conversationQuery = new URLSearchParams();
+      conversationQuery.set('organization_id', eq(orgId));
+      conversationQuery.set('agent_id', eq(id));
+      conversationQuery.set('order', 'created_at.desc');
+      conversationQuery.set('limit', '6');
+      const conversationRows = (await supabaseRestAsUser(getUserJwt(req), 'conversations', conversationQuery)) as any[];
+      conversations = (conversationRows || []).map(normalizeWorkspaceConversation);
+    } catch (err: any) {
+      logger.warn('Failed to load workspace conversations', { error: err?.message || err, org_id: orgId, agent_id: id });
+    }
+  }
+
+  if (canReadIncidents) {
+    try {
+      const incidentQuery = new URLSearchParams();
+      incidentQuery.set('organization_id', eq(orgId));
+      incidentQuery.set('agent_id', eq(id));
+      incidentQuery.set('order', 'created_at.desc');
+      incidentQuery.set('limit', '6');
+      const incidentRows = (await supabaseRestAsUser(getUserJwt(req), 'incidents', incidentQuery)) as any[];
+      incidents = (incidentRows || []).map(normalizeWorkspaceIncident);
+    } catch (err: any) {
+      logger.warn('Failed to load workspace incidents', { error: err?.message || err, org_id: orgId, agent_id: id });
+    }
+  }
+
+  if (canReadCosts) {
+    try {
+      const allCostsQuery = new URLSearchParams();
+      allCostsQuery.set('organization_id', eq(orgId));
+      allCostsQuery.set('agent_id', eq(id));
+      allCostsQuery.set('limit', '10000');
+      const allCostRows = (await supabaseRestAsUser(getUserJwt(req), 'cost_tracking', allCostsQuery)) as any[];
+
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const trendQuery = new URLSearchParams();
+      trendQuery.set('organization_id', eq(orgId));
+      trendQuery.set('agent_id', eq(id));
+      trendQuery.set('date', gte(toIsoDay(sevenDaysAgo)));
+      trendQuery.set('order', 'date.asc');
+      trendQuery.set('limit', '10000');
+      const trendRows = (await supabaseRestAsUser(getUserJwt(req), 'cost_tracking', trendQuery)) as any[];
+
+      conversationCount = (allCostRows || []).reduce((sum, row) => sum + Number(row?.request_count || 0), 0);
+      if (!Number.isFinite(conversationCount) || conversationCount < 0) conversationCount = 0;
+
+      const totalCost = (allCostRows || []).reduce((sum, row) => sum + Number(row?.cost_usd || 0), 0);
+      const totalTokens = (allCostRows || []).reduce((sum, row) => sum + Number(row?.total_tokens || 0), 0);
+      const totalRequests = conversationCount;
+      const trendSeed = Object.fromEntries(buildDaySeries(7).map((date) => [date, { date, cost: 0, requests: 0 }]));
+
+      for (const row of trendRows || []) {
+        const date = typeof row?.date === 'string' ? row.date : null;
+        if (!date || !trendSeed[date]) continue;
+        trendSeed[date].cost += Number(row?.cost_usd || 0);
+        trendSeed[date].requests += Number(row?.request_count || 0);
+      }
+
+      analytics = {
+        totalCost,
+        totalTokens,
+        totalRequests,
+        avgCostPerRequest: totalRequests > 0 ? totalCost / totalRequests : 0,
+        dailyAverage: allCostRows && allCostRows.length > 0 ? totalCost / allCostRows.length : 0,
+        trend: Object.values(trendSeed),
+      };
+    } catch (err: any) {
+      logger.warn('Failed to load workspace analytics', { error: err?.message || err, org_id: orgId, agent_id: id });
+    }
+  }
+
+  const [agent] = await enrichAgentRecords(req, orgId, [rawAgent], new Map([[id, conversationCount]]));
+  const openIncidentCount = incidents.filter((incident) => !['resolved', 'false_positive'].includes(incident.status)).length;
+  const criticalIncidentCount = incidents.filter((incident) => incident.severity === 'critical').length;
+  const liveTargetCount = (agent.connectedTargets || []).filter((target: any) => target.status === 'connected').length;
+  const connectedTargetCount = (agent.connectedTargets || []).length;
+  const lastActivityAt = [
+    ...conversations.map((conversation) => conversation.timestamp),
+    ...incidents.map((incident) => incident.createdAt),
+    agent.lastIntegrationSyncAt,
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] || null;
+
+  return {
+    agent,
+    summary: {
+      openIncidentCount,
+      criticalIncidentCount,
+      liveTargetCount,
+      connectedTargetCount,
+      totalConversationCount: agent.conversations || conversationCount,
+      lastActivityAt,
+    },
+    conversations,
+    incidents,
+    analytics,
+  };
+};
+
+const getAgentRecord = async (req: Request, orgId: string, id: string) => {
+  const query = new URLSearchParams();
+  query.set('id', eq(id));
+  query.set('organization_id', eq(orgId));
+  const rows = await supabaseRestAsUser(getUserJwt(req), 'ai_agents', query) as any[];
+  if (!rows || rows.length === 0) {
+    throw new Error('Agent not found');
+  }
+  return rows[0];
+};
+
+const patchAgentRecord = async (req: Request, orgId: string, id: string, body: Record<string, unknown>) => {
+  const patchQuery = new URLSearchParams();
+  patchQuery.set('id', eq(id));
+  patchQuery.set('organization_id', eq(orgId));
+  const rows = await supabaseRestAsUser(getUserJwt(req), 'ai_agents', patchQuery, {
+    method: 'PATCH',
+    body: {
+      ...body,
+      updated_at: new Date().toISOString(),
+    },
+  }) as any[];
+
+  if (!rows || rows.length === 0) {
+    throw new Error('Agent not found');
+  }
+
+  return rows[0];
 };
 
 // ============ AI AGENTS ============
@@ -294,6 +522,22 @@ router.get('/agents/:id', requirePermission('agents.read'), async (req: Request,
     res.json({ success: true, data });
   } catch (error: any) {
     errorResponse(res, error);
+  }
+});
+
+router.get('/agents/:id/workspace', requirePermission('agents.read'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) {
+      return errorResponse(res, new Error('Organization not found'), 400);
+    }
+
+    const data = await getAgentWorkspaceData(req, orgId, id);
+    res.json({ success: true, data });
+  } catch (error: any) {
+    const statusCode = error?.message === 'Agent not found' ? 404 : 500;
+    errorResponse(res, error, statusCode);
   }
 });
 
@@ -628,6 +872,189 @@ router.put('/agents/:id/publish', requirePermission('agents.update'), async (req
     });
   } catch (error: any) {
     errorResponse(res, error);
+  }
+});
+
+router.post('/agents/:id/pause', requirePermission('agents.update'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) {
+      return errorResponse(res, new Error('Organization not found'), 400);
+    }
+
+    const agent = await patchAgentRecord(req, orgId, id, {
+      status: 'paused',
+      lifecycle_state: 'idle',
+    });
+
+    await auditLog.log({
+      user_id: req.user?.id || 'unknown',
+      action: 'agent.paused',
+      resource_type: 'agent',
+      resource_id: id,
+      organization_id: orgId,
+      metadata: {
+        reason: typeof req.body?.reason === 'string' ? req.body.reason : 'Paused from fleet workspace',
+        performed_by_email: req.user?.email || null,
+      },
+    });
+
+    const [data] = await enrichAgentRecords(req, orgId, [agent], new Map());
+    res.json({ success: true, data, message: 'Agent paused' });
+  } catch (error: any) {
+    const statusCode = error?.message === 'Agent not found' ? 404 : 500;
+    errorResponse(res, error, statusCode);
+  }
+});
+
+router.post('/agents/:id/resume', requirePermission('agents.update'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) {
+      return errorResponse(res, new Error('Organization not found'), 400);
+    }
+
+    const existingAgent = await getAgentRecord(req, orgId, id);
+    if (existingAgent.status === 'terminated') {
+      return errorResponse(res, new Error('Terminated agents cannot be resumed'), 400);
+    }
+
+    const publish = readAgentPublishMetadata(existingAgent);
+    const agent = await patchAgentRecord(req, orgId, id, {
+      status: 'active',
+      lifecycle_state: publish.publish_status === 'live' ? 'processing' : 'idle',
+    });
+
+    await auditLog.log({
+      user_id: req.user?.id || 'unknown',
+      action: 'agent.resumed',
+      resource_type: 'agent',
+      resource_id: id,
+      organization_id: orgId,
+      metadata: {
+        reason: typeof req.body?.reason === 'string' ? req.body.reason : 'Resumed from fleet workspace',
+        performed_by_email: req.user?.email || null,
+      },
+    });
+
+    const [data] = await enrichAgentRecords(req, orgId, [agent], new Map());
+    res.json({ success: true, data, message: 'Agent resumed' });
+  } catch (error: any) {
+    const statusCode = error?.message === 'Agent not found' ? 404 : 500;
+    errorResponse(res, error, statusCode);
+  }
+});
+
+router.post('/agents/:id/go-live', requirePermission('agents.update'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) {
+      return errorResponse(res, new Error('Organization not found'), 400);
+    }
+
+    const existingAgent = await getAgentRecord(req, orgId, id);
+    const publish = readAgentPublishMetadata(existingAgent);
+    if ((publish.integration_ids || []).length === 0) {
+      return errorResponse(res, new Error('Connect at least one target before going live'), 400);
+    }
+
+    const agent = await patchAgentRecord(req, orgId, id, {
+      status: existingAgent.status === 'terminated' ? 'terminated' : (existingAgent.status || 'active'),
+      lifecycle_state: existingAgent.status === 'terminated' ? existingAgent.lifecycle_state : 'processing',
+      metadata: writeAgentPublishMetadata(existingAgent, {
+        publish_status: 'live',
+        primary_pack: publish.primary_pack ?? null,
+        integration_ids: publish.integration_ids || [],
+      }),
+    });
+
+    await auditLog.log({
+      user_id: req.user?.id || 'unknown',
+      action: 'agent.published',
+      resource_type: 'agent',
+      resource_id: id,
+      organization_id: orgId,
+      metadata: {
+        primary_pack: publish.primary_pack ?? null,
+        integration_ids: publish.integration_ids || [],
+        performed_by_email: req.user?.email || null,
+      },
+    });
+
+    const [data] = await enrichAgentRecords(req, orgId, [agent], new Map());
+    res.json({ success: true, data, message: 'Agent is now live' });
+  } catch (error: any) {
+    const statusCode = error?.message === 'Agent not found' ? 404 : 500;
+    errorResponse(res, error, statusCode);
+  }
+});
+
+router.post('/agents/:id/escalate', requirePermission('incidents.escalate'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) {
+      return errorResponse(res, new Error('Organization not found'), 400);
+    }
+
+    const existingAgent = await getAgentRecord(req, orgId, id);
+    const nextRiskScore = Math.min(100, Number(existingAgent.risk_score || 0) + 15);
+    const notes = typeof req.body?.notes === 'string' && req.body.notes.trim().length > 0
+      ? req.body.notes.trim()
+      : 'Escalated from fleet workspace for human review';
+    const assignee = typeof req.body?.assignee === 'string' && req.body.assignee.trim().length > 0
+      ? req.body.assignee.trim()
+      : req.user?.email || 'Human review queue';
+
+    const agent = await patchAgentRecord(req, orgId, id, {
+      status: existingAgent.status === 'terminated' ? 'terminated' : 'paused',
+      lifecycle_state: existingAgent.status === 'terminated' ? existingAgent.lifecycle_state : 'error',
+      risk_score: nextRiskScore,
+      risk_level: riskLevelFromScore(nextRiskScore),
+    });
+
+    const incidentRows = await supabaseRestAsUser(getUserJwt(req), 'incidents', '', {
+      method: 'POST',
+      body: {
+        organization_id: orgId,
+        agent_id: id,
+        incident_type: 'escalation',
+        severity: 'high',
+        title: `Human review required for ${existingAgent.name}`,
+        description: notes,
+        status: 'open',
+        escalated_to: assignee,
+      },
+    }) as any[];
+
+    await auditLog.log({
+      user_id: req.user?.id || 'unknown',
+      action: 'agent.escalated',
+      resource_type: 'agent',
+      resource_id: id,
+      organization_id: orgId,
+      metadata: {
+        notes,
+        assignee,
+        performed_by_email: req.user?.email || null,
+      },
+    });
+
+    const [data] = await enrichAgentRecords(req, orgId, [agent], new Map());
+    res.json({
+      success: true,
+      data: {
+        agent: data,
+        incident: Array.isArray(incidentRows) ? incidentRows[0] || null : null,
+      },
+      message: 'Agent escalated to human review',
+    });
+  } catch (error: any) {
+    const statusCode = error?.message === 'Agent not found' ? 404 : 500;
+    errorResponse(res, error, statusCode);
   }
 });
 

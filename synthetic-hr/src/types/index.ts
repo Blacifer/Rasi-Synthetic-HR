@@ -123,6 +123,55 @@ export interface AIAgent {
   lastIntegrationSyncAt?: string | null;
 }
 
+export interface AgentWorkspaceConversation {
+  id: string;
+  user: string;
+  topic: string;
+  preview: string;
+  status: string;
+  platform: string;
+  timestamp: string;
+}
+
+export interface AgentWorkspaceIncident {
+  id: string;
+  title: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  status: string;
+  type: string;
+  createdAt: string;
+}
+
+export interface AgentWorkspaceAnalytics {
+  totalCost: number;
+  totalTokens: number;
+  totalRequests: number;
+  avgCostPerRequest: number;
+  dailyAverage: number;
+  trend: Array<{
+    date: string;
+    cost: number;
+    requests: number;
+  }>;
+}
+
+export interface AgentWorkspaceSummary {
+  openIncidentCount: number;
+  criticalIncidentCount: number;
+  liveTargetCount: number;
+  connectedTargetCount: number;
+  totalConversationCount: number;
+  lastActivityAt: string | null;
+}
+
+export interface AgentWorkspaceData {
+  agent: AIAgent;
+  summary: AgentWorkspaceSummary;
+  conversations: AgentWorkspaceConversation[];
+  incidents: AgentWorkspaceIncident[];
+  analytics: AgentWorkspaceAnalytics;
+}
+
 // ==================== INCIDENT TYPES ====================
 export type IncidentSeverity = 'low' | 'medium' | 'high' | 'critical';
 export type IncidentStatus = 'open' | 'investigating' | 'resolved' | 'false_positive';
