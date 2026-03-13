@@ -27,6 +27,8 @@ import runtimesRoutes from './routes/runtimes';
 import jobsRoutes from './routes/jobs';
 import workItemsRoutes from './routes/work-items';
 import playbooksRoutes from './routes/playbooks';
+import eventsRoutes from './routes/events';
+import marketplaceRoutes from './routes/marketplace';
 import actionPoliciesRoutes from './routes/action-policies';
 import { initializeObservability, shutdownObservability, tracingMiddleware } from './lib/observability';
 import { validateEnvironment } from './lib/env-validation';
@@ -266,6 +268,10 @@ app.use('/auth', authRoutes);
 // Public API-key gateway routes (OpenAI-compatible)
 app.use('/v1', gatewayRoutes);
 
+// Inbound event receiver — third-party systems push agent events here.
+// Auth is handled inside the router via validateApiKey (no JWT required).
+app.use('/events', eventsRoutes);
+
 // Apply authentication middleware to all /api and /admin routes EXCEPT the OAuth callbacks
 app.use((req, res, next) => {
   // Explicit public endpoints under /api (token-based flows).
@@ -324,6 +330,7 @@ if (connectorsEnabled) {
   app.use('/api/connectors', connectorsRoutes);
 }
 app.use('/api/integrations', integrationsRoutes);
+app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api', webhooksRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/policies', policiesRoutes);

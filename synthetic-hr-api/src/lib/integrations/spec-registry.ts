@@ -91,6 +91,13 @@ export const PHASE1_INTEGRATIONS: IntegrationSpec[] = [
       gstReturns: { method: 'POST', path: '/gst/returns' },
       notices: { method: 'GET', path: '/notices' },
     },
+    capabilities: {
+      reads: ['compliance.tax_rules', 'compliance.status', 'compliance.notices'],
+      writes: [
+        { id: 'compliance.gst.file', label: 'File GST return', risk: 'high' },
+        { id: 'compliance.tds.calculate', label: 'Calculate TDS', risk: 'medium' },
+      ],
+    },
     aiFeatures: {
       enabled: true,
       capabilities: ['compliance_monitoring', 'tax_calculation', 'deadline_prediction', 'anomaly_detection'],
@@ -119,6 +126,13 @@ export const PHASE1_INTEGRATIONS: IntegrationSpec[] = [
       attendance: { method: 'GET', path: '/attendance' },
       leave: { method: 'GET', path: '/leave' },
       performance: { method: 'GET', path: '/performance' },
+    },
+    capabilities: {
+      reads: ['hr.employees', 'hr.attendance', 'hr.leaves', 'hr.performance'],
+      writes: [
+        { id: 'hr.employee.update', label: 'Update employee record', risk: 'medium' },
+        { id: 'hr.leave.approve', label: 'Approve leave request', risk: 'medium' },
+      ],
     },
     aiFeatures: {
       enabled: true,
@@ -186,6 +200,12 @@ export const PHASE1_INTEGRATIONS: IntegrationSpec[] = [
       stockItems: { method: 'GET', path: '/stockitems', format: 'xml' },
       postVoucher: { method: 'POST', path: '/vouchers', format: 'xml' },
     },
+    capabilities: {
+      reads: ['finance.ledgers', 'finance.vouchers', 'finance.transactions'],
+      writes: [
+        { id: 'finance.voucher.post', label: 'Post voucher / journal entry', risk: 'money' },
+      ],
+    },
     aiFeatures: {
       enabled: true,
       capabilities: ['expense_analytics', 'budget_prediction', 'anomaly_detection', 'trend_analysis'],
@@ -222,6 +242,13 @@ export const PHASE2_INTEGRATIONS: IntegrationSpec[] = [
       leaves: { method: 'GET', path: '/leaves' },
       payroll: { method: 'GET', path: '/payroll' },
     },
+    capabilities: {
+      reads: ['hr.employees', 'hr.attendance', 'hr.leaves', 'hr.payroll'],
+      writes: [
+        { id: 'hr.leave.approve', label: 'Approve leave request', risk: 'medium' },
+        { id: 'hr.attendance.update', label: 'Update attendance record', risk: 'low' },
+      ],
+    },
     aiFeatures: {
       enabled: true,
       capabilities: ['workforce_planning', 'attendance_analytics', 'leave_prediction', 'payroll_anomaly'],
@@ -250,6 +277,13 @@ export const PHASE2_INTEGRATIONS: IntegrationSpec[] = [
       jobOpenings: { method: 'GET', path: '/JobOpenings' },
       createJob: { method: 'POST', path: '/JobOpenings' },
       parseResume: { method: 'POST', path: '/parse/resume' },
+    },
+    capabilities: {
+      reads: ['recruitment.candidates', 'recruitment.jobs', 'recruitment.applications'],
+      writes: [
+        { id: 'recruitment.candidate.create', label: 'Create candidate record', risk: 'low' },
+        { id: 'recruitment.job.create', label: 'Create job opening', risk: 'medium' },
+      ],
     },
     aiFeatures: {
       enabled: true,
@@ -281,6 +315,10 @@ export const PHASE2_INTEGRATIONS: IntegrationSpec[] = [
       candidates: { method: 'GET', path: '/candidates' },
       candidateProfile: { method: 'GET', path: '/candidates/{id}/profile' },
     },
+    capabilities: {
+      reads: ['recruitment.candidates', 'recruitment.jobs'],
+      writes: [],
+    },
     aiFeatures: {
       enabled: true,
       capabilities: ['candidate_matching', 'skill_assessment', 'mass_recruitment', 'availability_prediction'],
@@ -311,6 +349,12 @@ export const PHASE2_INTEGRATIONS: IntegrationSpec[] = [
       eKyc: { method: 'POST', path: '/e-kyc' },
       otp: { method: 'POST', path: '/otp' },
       status: { method: 'GET', path: '/status' },
+    },
+    capabilities: {
+      reads: ['identity.kyc'],
+      writes: [
+        { id: 'identity.kyc.verify', label: 'Verify Aadhaar (eKYC)', risk: 'high' },
+      ],
     },
     aiFeatures: {
       enabled: true,
@@ -344,6 +388,12 @@ export const PHASE3_INTEGRATIONS: IntegrationSpec[] = [
       certificates: { method: 'GET', path: '/certificates' },
       verify: { method: 'POST', path: '/verify' },
     },
+    capabilities: {
+      reads: ['documents.files', 'documents.certificates'],
+      writes: [
+        { id: 'documents.certificate.verify', label: 'Verify certificate', risk: 'medium' },
+      ],
+    },
     aiFeatures: {
       enabled: true,
       capabilities: ['document_processing', 'certificate_verification', 'ocr', 'fraud_detection'],
@@ -375,6 +425,12 @@ export const PHASE3_INTEGRATIONS: IntegrationSpec[] = [
       criminalCheck: { method: 'POST', path: '/verification/criminal' },
       status: { method: 'GET', path: '/verification/{id}/status' },
     },
+    capabilities: {
+      reads: ['hr.bgv_status'],
+      writes: [
+        { id: 'hr.bgv.initiate', label: 'Initiate background verification', risk: 'high' },
+      ],
+    },
     aiFeatures: {
       enabled: true,
       capabilities: ['risk_scoring', 'verification_automation', 'fraud_detection', 'pattern_analysis'],
@@ -403,6 +459,12 @@ export const PHASE3_INTEGRATIONS: IntegrationSpec[] = [
       learners: { method: 'GET', path: '/learners' },
       skills: { method: 'GET', path: '/skills' },
       recommendations: { method: 'POST', path: '/recommendations' },
+    },
+    capabilities: {
+      reads: ['lms.courses', 'lms.learner_progress', 'lms.skills'],
+      writes: [
+        { id: 'lms.course.assign', label: 'Assign course to employee', risk: 'low' },
+      ],
     },
     aiFeatures: {
       enabled: true,
@@ -435,6 +497,13 @@ export const PHASE3_INTEGRATIONS: IntegrationSpec[] = [
       transactions: { method: 'GET', path: '/transactions' },
       payouts: { method: 'POST', path: '/payouts' },
       refunds: { method: 'GET', path: '/refunds' },
+    },
+    capabilities: {
+      reads: ['finance.transactions', 'finance.refunds', 'finance.payouts'],
+      writes: [
+        { id: 'finance.refund.create', label: 'Create refund', risk: 'money' },
+        { id: 'finance.payout.initiate', label: 'Initiate payout', risk: 'money' },
+      ],
     },
     aiFeatures: {
       enabled: true,
@@ -709,6 +778,13 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
       token: { method: 'POST', path: 'https://{subdomain}.keka.com/oauth/token' },
       employees: { method: 'GET', path: 'https://{subdomain}.keka.com/api/v1/employees' },
     },
+    capabilities: {
+      reads: ['hr.employees', 'hr.attendance'],
+      writes: [
+        { id: 'hr.employee.update', label: 'Update employee record', risk: 'medium' },
+        { id: 'hr.leave.approve', label: 'Approve leave request', risk: 'medium' },
+      ],
+    },
   },
   {
     id: 'razorpayx',
@@ -732,6 +808,12 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     endpoints: {
       fundAccounts: { method: 'GET', path: '/fund_accounts' },
     },
+    capabilities: {
+      reads: ['finance.payroll', 'finance.fund_accounts'],
+      writes: [
+        { id: 'finance.payout.initiate', label: 'Initiate payout', risk: 'money' },
+      ],
+    },
   },
   {
     id: 'deel',
@@ -752,6 +834,13 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     endpoints: {
       me: { method: 'GET', path: 'https://api.deel.com/rest/v2/profile' },
     },
+    capabilities: {
+      reads: ['hr.employees', 'hr.contracts', 'finance.payroll'],
+      writes: [
+        { id: 'hr.contract.create', label: 'Create contractor contract', risk: 'high' },
+        { id: 'finance.payroll.approve', label: 'Approve payroll run', risk: 'money' },
+      ],
+    },
   },
   {
     id: 'gusto',
@@ -771,6 +860,12 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     },
     endpoints: {
       me: { method: 'GET', path: 'https://api.gusto.com/v1/me' },
+    },
+    capabilities: {
+      reads: ['hr.employees', 'finance.payroll'],
+      writes: [
+        { id: 'finance.payroll.run', label: 'Run payroll', risk: 'money' },
+      ],
     },
   },
   {
@@ -800,6 +895,13 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     endpoints: {
       authTest: { method: 'POST', path: 'https://slack.com/api/auth.test' },
     },
+    capabilities: {
+      reads: ['comms.channels', 'comms.users'],
+      writes: [
+        { id: 'comms.message.send', label: 'Send Slack message', risk: 'medium' },
+        { id: 'comms.channel.create', label: 'Create Slack channel', risk: 'low' },
+      ],
+    },
   },
   {
     id: 'teams',
@@ -819,6 +921,12 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     },
     endpoints: {
       me: { method: 'GET', path: 'https://graph.microsoft.com/v1.0/me' },
+    },
+    capabilities: {
+      reads: ['comms.channels', 'comms.users'],
+      writes: [
+        { id: 'comms.message.send', label: 'Send Teams channel message', risk: 'medium' },
+      ],
     },
   },
   {
@@ -843,6 +951,12 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     endpoints: {
       app: { method: 'GET', path: '/app' },
     },
+    capabilities: {
+      reads: [],
+      writes: [
+        { id: 'comms.whatsapp.send', label: 'Send WhatsApp message', risk: 'medium' },
+      ],
+    },
   },
   {
     id: 'okta',
@@ -866,6 +980,14 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     endpoints: {
       userinfo: { method: 'GET', path: 'https://{domain}/oauth2/v1/userinfo' },
     },
+    capabilities: {
+      reads: ['identity.users', 'identity.groups'],
+      writes: [
+        { id: 'identity.user.provision', label: 'Provision user account', risk: 'high' },
+        { id: 'identity.user.deactivate', label: 'Deactivate user', risk: 'high' },
+        { id: 'identity.group.assign', label: 'Assign user to group', risk: 'medium' },
+      ],
+    },
   },
   {
     id: 'flock',
@@ -885,6 +1007,12 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     },
     endpoints: {
       users: { method: 'GET', path: 'https://api.flock.com/v1/users.list' },
+    },
+    capabilities: {
+      reads: [],
+      writes: [
+        { id: 'comms.message.send', label: 'Send Flock message', risk: 'medium' },
+      ],
     },
   },
   {
@@ -908,6 +1036,134 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     },
     endpoints: {
       establishment: { method: 'GET', path: '/establishment' },
+    },
+    capabilities: {
+      reads: ['compliance.pf_status'],
+      writes: [
+        { id: 'compliance.pf.file', label: 'File PF return', risk: 'high' },
+      ],
+    },
+  },
+  {
+    id: 'salesforce',
+    name: 'Salesforce',
+    category: 'CRM',
+    description: 'Enterprise CRM for leads, contacts, opportunities, and pipeline automation.',
+    authType: 'oauth2',
+    tags: ['CRM', 'GLOBAL', 'ENTERPRISE'],
+    status: 'READY',
+    color: '#00A1E0',
+    priority: 4,
+    oauthConfig: {
+      authorizationUrl: 'https://login.salesforce.com/services/oauth2/authorize',
+      tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
+      scopes: ['api', 'refresh_token', 'offline_access'],
+      redirectPath: `${API_CALLBACK_BASE}/salesforce`,
+    },
+    endpoints: {
+      userinfo: { method: 'GET', path: 'https://login.salesforce.com/services/oauth2/userinfo' },
+      leads: { method: 'GET', path: '/services/data/v59.0/sobjects/Lead' },
+      contacts: { method: 'GET', path: '/services/data/v59.0/sobjects/Contact' },
+      opportunities: { method: 'GET', path: '/services/data/v59.0/sobjects/Opportunity' },
+    },
+    capabilities: {
+      reads: ['sales.leads', 'sales.contacts', 'sales.opportunities'],
+      writes: [
+        { id: 'sales.lead.create', label: 'Create lead', risk: 'medium' },
+        { id: 'sales.lead.update', label: 'Update lead / contact', risk: 'low' },
+        { id: 'sales.opportunity.update', label: 'Update opportunity stage', risk: 'low' },
+      ],
+    },
+  },
+  {
+    id: 'intercom',
+    name: 'Intercom',
+    category: 'SUPPORT',
+    description: 'Customer messaging and support platform for live chat, tickets, and product tours.',
+    authType: 'oauth2',
+    tags: ['SUPPORT', 'GLOBAL'],
+    status: 'READY',
+    color: '#1F8DED',
+    priority: 4,
+    oauthConfig: {
+      authorizationUrl: 'https://app.intercom.com/oauth',
+      tokenUrl: 'https://api.intercom.io/auth/eagle/token',
+      scopes: ['conversations_read', 'conversations_write', 'contacts_read', 'contacts_write'],
+      redirectPath: `${API_CALLBACK_BASE}/intercom`,
+    },
+    endpoints: {
+      me: { method: 'GET', path: 'https://api.intercom.io/me' },
+      conversations: { method: 'GET', path: 'https://api.intercom.io/conversations' },
+      contacts: { method: 'GET', path: 'https://api.intercom.io/contacts' },
+    },
+    capabilities: {
+      reads: ['support.tickets', 'support.contacts'],
+      writes: [
+        { id: 'support.ticket.reply', label: 'Reply to conversation', risk: 'medium' },
+        { id: 'support.ticket.update_status', label: 'Close / snooze conversation', risk: 'low' },
+      ],
+    },
+  },
+  {
+    id: 'quickbooks',
+    name: 'QuickBooks',
+    category: 'FINANCE',
+    description: 'Accounting platform for invoices, expenses, payroll reporting, and financial analytics.',
+    authType: 'oauth2',
+    tags: ['FINANCE', 'ACCOUNTING', 'GLOBAL'],
+    status: 'READY',
+    color: '#2CA01C',
+    priority: 4,
+    oauthConfig: {
+      authorizationUrl: 'https://appcenter.intuit.com/connect/oauth2',
+      tokenUrl: 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer',
+      scopes: ['com.intuit.quickbooks.accounting'],
+      redirectPath: `${API_CALLBACK_BASE}/quickbooks`,
+    },
+    endpoints: {
+      companyInfo: { method: 'GET', path: '/v3/company/{realmId}/companyinfo/{realmId}' },
+      invoices: { method: 'GET', path: '/v3/company/{realmId}/query?query=select * from Invoice' },
+      expenses: { method: 'GET', path: '/v3/company/{realmId}/query?query=select * from Purchase' },
+    },
+    capabilities: {
+      reads: ['finance.invoices', 'finance.expenses', 'finance.transactions'],
+      writes: [
+        { id: 'finance.invoice.create', label: 'Create invoice', risk: 'money' },
+        { id: 'finance.expense.create', label: 'Log expense', risk: 'medium' },
+      ],
+    },
+  },
+  {
+    id: 'servicenow',
+    name: 'ServiceNow',
+    category: 'ITSM',
+    description: 'Enterprise IT service management for incidents, change requests, and asset tracking.',
+    authType: 'api_key',
+    tags: ['ITSM', 'ENTERPRISE', 'GLOBAL'],
+    status: 'READY',
+    color: '#81B5A1',
+    priority: 4,
+    apiKeyConfig: {
+      requiredFields: [
+        { name: 'instance', label: 'Instance Name', type: 'text', placeholder: 'yourcompany', required: true, description: 'ServiceNow instance name (yourcompany.service-now.com)' },
+        { name: 'username', label: 'Username', type: 'text', placeholder: 'admin', required: true, description: 'ServiceNow username' },
+        { name: 'password', label: 'Password', type: 'password', placeholder: '••••••••', required: true, description: 'ServiceNow password or API token' },
+      ],
+      testEndpoint: '/api/now/table/sys_user?sysparm_limit=1',
+      baseUrl: 'https://{instance}.service-now.com',
+    },
+    endpoints: {
+      incidents: { method: 'GET', path: '/api/now/table/incident' },
+      createIncident: { method: 'POST', path: '/api/now/table/incident' },
+      changeRequests: { method: 'GET', path: '/api/now/table/change_request' },
+    },
+    capabilities: {
+      reads: ['itsm.incidents', 'itsm.changes', 'itsm.assets'],
+      writes: [
+        { id: 'itsm.incident.create', label: 'Create incident', risk: 'medium' },
+        { id: 'itsm.incident.update', label: 'Update incident status', risk: 'low' },
+        { id: 'itsm.change.create', label: 'Create change request', risk: 'high' },
+      ],
     },
   },
 ];

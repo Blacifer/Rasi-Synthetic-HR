@@ -2889,6 +2889,45 @@ export const actionPoliciesApi = {
   },
 };
 
+export type MarketplaceApp = {
+  id: string;
+  name: string;
+  developer: string;
+  category: string;
+  description: string;
+  permissions: string[];
+  relatedAgentIds: string[];
+  installMethod: 'free' | 'api_key' | 'oauth2';
+  requiredFields?: Array<{ name: string; label: string; type: 'text' | 'password'; placeholder?: string; required: boolean }>;
+  installCount: number;
+  featured: boolean;
+  badge?: string;
+  colorHex: string;
+  logoLetter: string;
+  installed: boolean;
+};
+
+export const marketplaceApi = {
+  async getAll(): Promise<ApiResponse<MarketplaceApp[]>> {
+    return authenticatedFetch<MarketplaceApp[]>('/marketplace/apps', { method: 'GET' });
+  },
+
+  async getInstalled(): Promise<ApiResponse<MarketplaceApp[]>> {
+    return authenticatedFetch<MarketplaceApp[]>('/marketplace/apps/installed', { method: 'GET' });
+  },
+
+  async install(appId: string, credentials: Record<string, string> = {}): Promise<ApiResponse<{ integration_id?: string; oauth?: boolean; state?: string; message: string }>> {
+    return authenticatedFetch(`/marketplace/apps/${encodeURIComponent(appId)}/install`, {
+      method: 'POST',
+      body: JSON.stringify({ credentials }),
+    });
+  },
+
+  async uninstall(appId: string): Promise<ApiResponse<{ message: string }>> {
+    return authenticatedFetch(`/marketplace/apps/${encodeURIComponent(appId)}`, { method: 'DELETE' });
+  },
+};
+
 /**
  * Export all API methods
  */
@@ -2921,6 +2960,7 @@ export const api = {
   workItems: workItemsApi,
   playbooks: playbooksApi,
   actionPolicies: actionPoliciesApi,
+  marketplace: marketplaceApi,
 };
 
 export default api;
