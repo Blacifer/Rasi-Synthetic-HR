@@ -268,6 +268,14 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
     status: string;
     lastSyncAt?: string | null;
   }) => {
+    void api.agents.updatePublishState(payload.agentId, {
+      publish_status: payload.status === 'connected' ? 'live' : 'ready',
+      primary_pack: payload.packId,
+      integration_ids: Array.from(new Set([
+        ...(agentConnections[payload.agentId]?.integrationIds || agents.find((agent) => agent.id === payload.agentId)?.integrationIds || []),
+        payload.integrationId,
+      ])),
+    });
     setAgentConnections((current) => {
       const existing = current[payload.agentId] || { integrationIds: [], primaryPack: payload.packId };
       const next = {
@@ -281,7 +289,7 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
       return next;
     });
     setFleetWorkspaceAgentId(payload.agentId);
-  }, [user?.organizationName]);
+  }, [agentConnections, agents, user?.organizationName]);
 
   useEffect(() => {
     setMounted(true);
@@ -382,6 +390,15 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
           auto_throttle: a.auto_throttle || false,
         }));
         setAgents(normalizedAgents);
+        setAgentConnections(Object.fromEntries(
+          normalizedAgents.map((agent) => [
+            agent.id,
+            {
+              integrationIds: agent.integrationIds || [],
+              primaryPack: agent.primaryPack || suggestPackForAgent(agent),
+            },
+          ]),
+        ));
       } else {
         setAgents([]);
         failures.push(agentsRes.error || 'fleet data');
@@ -464,7 +481,7 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
     }
 
     setLoading(false);
-  }, [isDemoMode, user?.organizationName]);
+  }, [isDemoMode, suggestPackForAgent, user?.organizationName]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -1084,6 +1101,7 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
                     entryMode={integrationAgentId || fleetWorkspaceAgentId ? 'publish' : 'browse'}
                     onNavigate={navigateTo}
                     onIntegrationConnected={handleIntegrationConnected}
+                    onIntegrationDisconnected={() => { void refreshData(); }}
                   />
                 )}
                 {currentPage === 'templates' && (

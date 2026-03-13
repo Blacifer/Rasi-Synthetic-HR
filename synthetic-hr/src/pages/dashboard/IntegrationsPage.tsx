@@ -101,6 +101,7 @@ type IntegrationsPageProps = {
     status: string;
     lastSyncAt?: string | null;
   }) => void;
+  onIntegrationDisconnected?: () => void;
 };
 const PUBLISH_CONTEXT_STORAGE_KEY = 'synthetic_hr_publish_context';
 
@@ -150,7 +151,7 @@ function parseOAuthToastFromQuery() {
   const service = params.get('service');
   const message = params.get('message');
 
-  if (!status) return;
+  if (!status) return null;
 
   if (status === 'connected') {
     toast.success(`Connected ${service || 'integration'}.`);
@@ -167,6 +168,8 @@ function parseOAuthToastFromQuery() {
   } catch {
     // ignore
   }
+
+  return { status, service, message };
 }
 
 function readLabel(readId: string): { label: string; icon: any } {
@@ -284,6 +287,7 @@ export default function IntegrationsPage({
   entryMode = 'browse',
   onNavigate,
   onIntegrationConnected,
+  onIntegrationDisconnected,
 }: IntegrationsPageProps) {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<IntegrationRow[]>([]);
@@ -624,6 +628,7 @@ export default function IntegrationsPage({
       }
       toast.success('Disconnected.');
       await load();
+      onIntegrationDisconnected?.();
     } finally {
       setVaultBusy((prev) => ({ ...prev, [providerId]: null }));
     }
@@ -684,10 +689,25 @@ export default function IntegrationsPage({
   };
 
   useEffect(() => {
-    parseOAuthToastFromQuery();
+    const oauthResult = parseOAuthToastFromQuery();
+    if (oauthResult?.status === 'connected' && oauthResult.service && effectiveAgentId) {
+      void api.agents.updatePublishState(effectiveAgentId, {
+        publish_status: 'live',
+        primary_pack: activePack,
+        integration_ids: Array.from(new Set([...(selectedAgent?.integrationIds || []), oauthResult.service])),
+      });
+      onIntegrationConnected?.({
+        agentId: effectiveAgentId,
+        integrationId: oauthResult.service,
+        integrationName: oauthResult.service,
+        packId: activePack,
+        status: 'connected',
+        lastSyncAt: new Date().toISOString(),
+      });
+    }
     void load();
     void loadActionCatalog();
-  }, []);
+  }, [activePack, effectiveAgentId, onIntegrationConnected, selectedAgent?.integrationIds]);
 
   useEffect(() => {
     if (selectedAgent) {

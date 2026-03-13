@@ -3,7 +3,7 @@ import {
   Users, DollarSign, Shield, AlertTriangle, CheckCircle, XCircle,
   ChevronDown, ChevronUp, Activity, Zap, Lock, Server, Eye, Phone, Bot,
   Brain, Target, TrendingUp, X, Plus, Search, Filter, Download, Copy, Trash2, Key,
-  ShieldAlert, ZapOff, Play, Rocket, Link2, MessageSquare, BarChart3, PauseCircle
+  ShieldAlert, ZapOff, Play, Rocket, Link2, MessageSquare, BarChart3, PauseCircle, Loader2, Clock3
 } from 'lucide-react';
 import type { AIAgent } from '../../types';
 import { toast } from '../../lib/toast';
@@ -22,6 +22,78 @@ interface FleetPageProps {
 }
 
 type WorkspaceTab = 'overview' | 'conversations' | 'integrations' | 'policies' | 'analytics' | 'controls';
+type WorkspaceConversation = {
+  id: string;
+  user: string;
+  topic: string;
+  preview: string;
+  status: string;
+  platform: string;
+  timestamp: string;
+};
+type WorkspaceIncident = {
+  id: string;
+  title: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  status: string;
+  type: string;
+  createdAt: string;
+};
+type WorkspaceAnalytics = {
+  totalCost: number;
+  totalTokens: number;
+  totalRequests: number;
+  avgCostPerRequest: number;
+  dailyAverage: number;
+  trend: Array<{
+    date: string;
+    cost: number;
+    requests: number;
+  }>;
+};
+type WorkspaceState = {
+  conversations: WorkspaceConversation[];
+  loadingConversations: boolean;
+  conversationsError: string | null;
+  incidents: WorkspaceIncident[];
+  loadingIncidents: boolean;
+  incidentsError: string | null;
+  analytics: WorkspaceAnalytics | null;
+  loadingAnalytics: boolean;
+  analyticsError: string | null;
+};
+
+function normalizeWorkspaceConversation(raw: any): WorkspaceConversation {
+  const metadata = raw?.metadata || {};
+  const preview =
+    metadata.preview ||
+    metadata.last_user_message ||
+    metadata.summary ||
+    `Conversation on ${raw?.platform || 'unknown platform'}`;
+  const trimmed = String(preview || '').trim();
+  const topic = metadata.topic || trimmed.split(/[.!?]/)[0] || 'Conversation';
+
+  return {
+    id: raw.id,
+    user: metadata.user_email || metadata.customer_email || raw.user_id || 'Unknown user',
+    topic: topic.slice(0, 64),
+    preview: trimmed,
+    status: raw.status || 'unknown',
+    platform: raw.platform || 'internal',
+    timestamp: raw.started_at || raw.created_at || new Date().toISOString(),
+  };
+}
+
+function normalizeWorkspaceIncident(raw: any): WorkspaceIncident {
+  return {
+    id: raw.id,
+    title: raw.title || 'Untitled incident',
+    severity: raw.severity || 'low',
+    status: raw.status || 'open',
+    type: raw.incident_type || 'other',
+    createdAt: raw.created_at || new Date().toISOString(),
+  };
+}
 
 export default function FleetPage({
   agents,
@@ -38,6 +110,19 @@ export default function FleetPage({
   const [configureAgentId, setConfigureAgentId] = useState<string | null>(null);
   const [workspaceAgentId, setWorkspaceAgentId] = useState<string | null>(selectedAgentId || null);
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('overview');
+  const [workspaceState, setWorkspaceState] = useState<WorkspaceState>({
+    conversations: [],
+    loadingConversations: false,
+    conversationsError: null,
+    incidents: [],
+    loadingIncidents: false,
+    incidentsError: null,
+    analytics: null,
+    loadingAnalytics: false,
+    analyticsError: null,
+  });
+  const [policyDraft, setPolicyDraft] = useState({ systemPrompt: '', operationalPolicy: '' });
+  const [policySaving, setPolicySaving] = useState(false);
   const [editBudget, setEditBudget] = useState<Record<string, { budget: number; autoThrottle: boolean }>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'paused' | 'terminated'>('all');
@@ -88,6 +173,91 @@ export default function FleetPage({
     setWorkspaceAgentId(selectedAgentId);
     setWorkspaceTab('overview');
   }, [selectedAgentId]);
+
+  useEffect(() => {
+    const agent = workspaceAgentId ? agents.find((item) => item.id === workspaceAgentId) : null;
+    setPolicyDraft({
+      systemPrompt: agent?.system_prompt || '',
+      operationalPolicy: String((agent as any)?.config?.operational_policy || ''),
+    });
+  }, [agents, workspaceAgentId]);
+
+  useEffect(() => {
+    if (!workspaceAgentId) {
+      setWorkspaceState({
+        conversations: [],
+        loadingConversations: false,
+        conversationsError: null,
+        incidents: [],
+        loadingIncidents: false,
+        incidentsError: null,
+        analytics: null,
+        loadingAnalytics: false,
+        analyticsError: null,
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setWorkspaceState((current) => ({
+      ...current,
+      loadingConversations: true,
+      conversationsError: null,
+      loadingIncidents: true,
+      incidentsError: null,
+      loadingAnalytics: true,
+      analyticsError: null,
+    }));
+
+    (async () => {
+      const [conversationResponse, incidentResponse, insightsResponse, trendResponse] = await Promise.all([
+        api.conversations.getAll({ agent_id: workspaceAgentId, limit: 6 }),
+        api.incidents.getAll({ agent_id: workspaceAgentId, limit: 6 }),
+        api.costs.getInsights({ agentId: workspaceAgentId }),
+        api.costs.getTrend({ agentId: workspaceAgentId, days: 7 }),
+      ]);
+      if (cancelled) return;
+
+      setWorkspaceState({
+        conversations: conversationResponse.success && Array.isArray(conversationResponse.data)
+          ? conversationResponse.data.map(normalizeWorkspaceConversation)
+          : [],
+        loadingConversations: false,
+        conversationsError: conversationResponse.success
+          ? null
+          : (conversationResponse.error || 'Failed to load recent conversations.'),
+        incidents: incidentResponse.success && Array.isArray(incidentResponse.data)
+          ? incidentResponse.data.map(normalizeWorkspaceIncident)
+          : [],
+        loadingIncidents: false,
+        incidentsError: incidentResponse.success
+          ? null
+          : (incidentResponse.error || 'Failed to load incidents.'),
+        analytics: insightsResponse.success && trendResponse.success
+          ? {
+              totalCost: insightsResponse.data?.insights?.totalCost || 0,
+              totalTokens: insightsResponse.data?.insights?.totalTokens || 0,
+              totalRequests: (trendResponse.data?.trend || []).reduce((sum, item) => sum + (item.requests || 0), 0),
+              avgCostPerRequest: insightsResponse.data?.insights?.avgCostPerRequest || 0,
+              dailyAverage: insightsResponse.data?.insights?.dailyAverage || 0,
+              trend: (trendResponse.data?.trend || []).map((item) => ({
+                date: item.date,
+                cost: item.cost || 0,
+                requests: item.requests || 0,
+              })),
+            }
+          : null,
+        loadingAnalytics: false,
+        analyticsError: insightsResponse.success && trendResponse.success
+          ? null
+          : (insightsResponse.error || trendResponse.error || 'Failed to load analytics.'),
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceAgentId]);
 
   useEffect(() => {
     if (!deployAgentId) return;
@@ -271,6 +441,44 @@ export default function FleetPage({
     setConfigureAgentId(null);
   };
 
+  const saveWorkspacePolicies = async () => {
+    if (!activeWorkspaceAgent) return;
+    setPolicySaving(true);
+    try {
+      const response = await api.agents.update(activeWorkspaceAgent.id, {
+        system_prompt: policyDraft.systemPrompt,
+        config: {
+          ...((activeWorkspaceAgent as any).config || {}),
+          operational_policy: policyDraft.operationalPolicy,
+        },
+      });
+      if (!response.success || !response.data) {
+        throw new Error(response.error || 'Failed to save policy changes.');
+      }
+      const updatedAgent = response.data as AIAgent;
+      setAgents(agents.map((agent) => (
+        agent.id === activeWorkspaceAgent.id
+          ? {
+              ...agent,
+              ...updatedAgent,
+              system_prompt: updatedAgent.system_prompt ?? policyDraft.systemPrompt,
+              config: {
+                ...((agent as any).config || {}),
+                ...((updatedAgent as any).config || {}),
+                operational_policy: policyDraft.operationalPolicy,
+              },
+            }
+          : agent
+      )));
+      toast.success('Persona and policy updated.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save policy changes.';
+      toast.error(message);
+    } finally {
+      setPolicySaving(false);
+    }
+  };
+
   const openDeploy = (agent: AIAgent) => {
     setDeployAgentId(agent.id);
   };
@@ -389,6 +597,8 @@ export default function FleetPage({
   };
 
   const activeWorkspaceAgent = workspaceAgentId ? agents.find((agent) => agent.id === workspaceAgentId) || null : null;
+  const openIncidentCount = workspaceState.incidents.filter((incident) => incident.status !== 'resolved' && incident.status !== 'false_positive').length;
+  const criticalIncidentCount = workspaceState.incidents.filter((incident) => incident.severity === 'critical').length;
 
   const filteredAgents = agents.filter(a => {
     const q = searchQuery.toLowerCase();
@@ -818,6 +1028,115 @@ export default function FleetPage({
                       </div>
                     </div>
                   </div>
+                  <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Live channels</div>
+                          <div className="text-sm text-slate-400 mt-1">Connected systems this agent is currently attached to.</div>
+                        </div>
+                        <Link2 className="w-4 h-4 text-blue-200" />
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {(activeWorkspaceAgent.connectedTargets || []).length === 0 ? (
+                          <div className="text-sm text-slate-400">No connected channels yet.</div>
+                        ) : (
+                          (activeWorkspaceAgent.connectedTargets || []).slice(0, 3).map((target) => (
+                            <div key={target.integrationId} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/30 px-3 py-2">
+                              <div>
+                                <div className="text-sm font-medium text-white">{target.integrationName}</div>
+                                <div className="text-xs text-slate-500 mt-1">{target.packId} • {target.lastSyncAt ? new Date(target.lastSyncAt).toLocaleString() : 'No sync yet'}</div>
+                              </div>
+                              <span className={`text-[11px] px-2 py-0.5 rounded-full border ${
+                                target.status === 'connected'
+                                  ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
+                                  : 'border-amber-400/20 bg-amber-400/10 text-amber-100'
+                              }`}>
+                                {target.status}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Recent conversations</div>
+                          <div className="text-sm text-slate-400 mt-1">Latest customer or operator interactions for this agent.</div>
+                        </div>
+                        {workspaceState.loadingConversations ? <Loader2 className="w-4 h-4 animate-spin text-slate-400" /> : <MessageSquare className="w-4 h-4 text-slate-300" />}
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {workspaceState.conversationsError ? (
+                          <div className="text-sm text-rose-200">{workspaceState.conversationsError}</div>
+                        ) : workspaceState.conversations.length === 0 ? (
+                          <div className="text-sm text-slate-400">No recent conversations yet.</div>
+                        ) : (
+                          workspaceState.conversations.slice(0, 3).map((conversation) => (
+                            <button
+                              key={conversation.id}
+                              onClick={() => onOpenOperationsPage?.('conversations', { agentId: activeWorkspaceAgent.id })}
+                              className="w-full text-left rounded-xl border border-white/10 bg-slate-950/30 px-3 py-2 hover:bg-slate-950/50 transition-colors"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-sm font-medium text-white truncate">{conversation.topic}</div>
+                                <span className="text-[11px] text-slate-500">{new Date(conversation.timestamp).toLocaleString()}</span>
+                              </div>
+                              <div className="text-xs text-slate-400 mt-1 line-clamp-2">{conversation.preview}</div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Risk signals</div>
+                          <div className="text-sm text-slate-400 mt-1">Current operational risk, driven by incidents and controls.</div>
+                        </div>
+                        {workspaceState.loadingIncidents ? <Loader2 className="w-4 h-4 animate-spin text-slate-400" /> : <AlertTriangle className="w-4 h-4 text-amber-300" />}
+                      </div>
+                      <div className="mt-4 grid grid-cols-2 gap-3">
+                        <div className="rounded-xl border border-white/10 bg-slate-950/30 px-3 py-3">
+                          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Open incidents</div>
+                          <div className="text-2xl font-semibold text-white mt-2">{openIncidentCount}</div>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-slate-950/30 px-3 py-3">
+                          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Critical</div>
+                          <div className="text-2xl font-semibold text-white mt-2">{criticalIncidentCount}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Latest incident</div>
+                      {workspaceState.incidentsError ? (
+                        <div className="text-sm text-rose-200 mt-3">{workspaceState.incidentsError}</div>
+                      ) : workspaceState.incidents.length === 0 ? (
+                        <div className="text-sm text-slate-400 mt-3">No incidents recorded for this agent.</div>
+                      ) : (
+                        <div className="mt-3 rounded-xl border border-white/10 bg-slate-950/30 px-3 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-medium text-white">{workspaceState.incidents[0].title}</div>
+                            <span className={`text-[11px] px-2 py-0.5 rounded-full border ${
+                              workspaceState.incidents[0].severity === 'critical'
+                                ? 'border-rose-400/20 bg-rose-400/10 text-rose-100'
+                                : workspaceState.incidents[0].severity === 'high'
+                                  ? 'border-orange-400/20 bg-orange-400/10 text-orange-100'
+                                  : workspaceState.incidents[0].severity === 'medium'
+                                    ? 'border-amber-400/20 bg-amber-400/10 text-amber-100'
+                                    : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
+                            }`}>
+                              {workspaceState.incidents[0].severity}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-500 mt-2">{new Date(workspaceState.incidents[0].createdAt).toLocaleString()} • {workspaceState.incidents[0].status}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                   <h3 className="text-sm font-semibold text-white">Next best action</h3>
@@ -835,19 +1154,66 @@ export default function FleetPage({
             ) : null}
 
             {workspaceTab === 'conversations' ? (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-white">Conversation operations</h3>
-                    <p className="text-sm text-slate-400 mt-1">Open the org-wide inbox pre-filtered to this agent for review, takeovers, and transcript checks.</p>
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-white">Recent conversations</h3>
+                      <p className="text-sm text-slate-400 mt-1">Review the latest interactions here, then open the full inbox only when you need deeper investigation.</p>
+                    </div>
+                    <button
+                      onClick={() => onOpenOperationsPage?.('conversations', { agentId: activeWorkspaceAgent.id })}
+                      className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10 inline-flex items-center gap-2"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      Open full inbox
+                    </button>
                   </div>
-                  <button
-                    onClick={() => onOpenOperationsPage?.('conversations', { agentId: activeWorkspaceAgent.id })}
-                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10 inline-flex items-center gap-2"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                    Open conversations
-                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  {workspaceState.loadingConversations ? (
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-slate-300 inline-flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading recent conversations...
+                    </div>
+                  ) : workspaceState.conversationsError ? (
+                    <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-5 text-rose-100">
+                      {workspaceState.conversationsError}
+                    </div>
+                  ) : workspaceState.conversations.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-5 text-sm text-slate-400">
+                      No conversations recorded for this agent yet.
+                    </div>
+                  ) : (
+                    workspaceState.conversations.map((conversation) => (
+                      <div key={conversation.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="text-sm font-semibold text-white truncate">{conversation.topic}</h4>
+                              <span className="text-[11px] px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-slate-300">
+                                {conversation.status}
+                              </span>
+                              <span className="text-[11px] px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-slate-300">
+                                {conversation.platform}
+                              </span>
+                            </div>
+                            <div className="mt-2 text-xs text-slate-500 inline-flex items-center gap-1">
+                              <Clock3 className="w-3.5 h-3.5" />
+                              {new Date(conversation.timestamp).toLocaleString()} • {conversation.user}
+                            </div>
+                            <p className="mt-3 text-sm text-slate-300 line-clamp-3">{conversation.preview}</p>
+                          </div>
+                          <button
+                            onClick={() => onOpenOperationsPage?.('conversations', { agentId: activeWorkspaceAgent.id })}
+                            className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10"
+                          >
+                            Review
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             ) : null}
@@ -890,9 +1256,20 @@ export default function FleetPage({
                             {target.status}
                           </span>
                         </div>
-                        <p className="text-xs text-slate-500 mt-4">
-                          Last sync: {target.lastSyncAt ? new Date(target.lastSyncAt).toLocaleString() : 'No sync yet'}
-                        </p>
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="rounded-xl border border-white/10 bg-slate-950/30 px-3 py-2">
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Last sync</div>
+                            <div className="text-sm text-white mt-1">
+                              {target.lastSyncAt ? new Date(target.lastSyncAt).toLocaleString() : 'No sync yet'}
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-slate-950/30 px-3 py-2">
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Operating mode</div>
+                            <div className="text-sm text-white mt-1">
+                              {target.status === 'connected' ? 'Live traffic enabled' : 'Needs attention'}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     ))
                   )}
@@ -901,69 +1278,249 @@ export default function FleetPage({
             ) : null}
 
             {workspaceTab === 'policies' ? (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-white">Persona and policy controls</h3>
-                    <p className="text-sm text-slate-400 mt-1">Edit behavior, escalation rules, and guardrails without leaving the platform.</p>
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-white">Persona and policy controls</h3>
+                      <p className="text-sm text-slate-400 mt-1">Edit the core prompt and operating policy here. Use the full editor only when you need deeper persona work.</p>
+                    </div>
+                    <button
+                      onClick={() => onOpenOperationsPage?.('persona', { agentId: activeWorkspaceAgent.id })}
+                      className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10"
+                    >
+                      Open full editor
+                    </button>
                   </div>
+                </div>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                    <label className="block">
+                      <div className="text-sm font-semibold text-white">System prompt</div>
+                      <div className="text-sm text-slate-400 mt-1">Primary instructions that define how this agent should behave.</div>
+                      <textarea
+                        value={policyDraft.systemPrompt}
+                        onChange={(e) => setPolicyDraft((current) => ({ ...current, systemPrompt: e.target.value }))}
+                        rows={12}
+                        className="mt-4 w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                        placeholder="Describe the role, tone, escalation triggers, and hard constraints for this agent."
+                      />
+                    </label>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                    <label className="block">
+                      <div className="text-sm font-semibold text-white">Operational policy</div>
+                      <div className="text-sm text-slate-400 mt-1">Plain-English rules for approvals, refunds, escalations, or anything this agent must never do.</div>
+                      <textarea
+                        value={policyDraft.operationalPolicy}
+                        onChange={(e) => setPolicyDraft((current) => ({ ...current, operationalPolicy: e.target.value }))}
+                        rows={12}
+                        className="mt-4 w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                        placeholder="Example: Refunds above $100 require human approval. Escalate legal threats immediately. Never promise timelines not in policy."
+                      />
+                    </label>
+                  </div>
+                </div>
+                <div className="flex justify-end">
                   <button
-                    onClick={() => onOpenOperationsPage?.('persona', { agentId: activeWorkspaceAgent.id })}
-                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10"
+                    onClick={() => void saveWorkspacePolicies()}
+                    disabled={policySaving}
+                    className="rounded-xl bg-blue-500/20 border border-blue-400/30 px-4 py-2 text-sm font-semibold text-blue-100 hover:bg-blue-500/25 disabled:opacity-60 inline-flex items-center gap-2"
                   >
-                    Open persona editor
+                    {policySaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+                    Save policy changes
                   </button>
                 </div>
               </div>
             ) : null}
 
             {workspaceTab === 'analytics' ? (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-white">Usage and effectiveness</h3>
-                    <p className="text-sm text-slate-400 mt-1">Jump to org-wide analytics while keeping this agent as the operating context.</p>
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-white">Usage and effectiveness</h3>
+                      <p className="text-sm text-slate-400 mt-1">Watch spend, traffic, and short-term trends here before you dive into the full analytics surface.</p>
+                    </div>
+                    <button
+                      onClick={() => onOpenOperationsPage?.('costs', { agentId: activeWorkspaceAgent.id })}
+                      className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10 inline-flex items-center gap-2"
+                    >
+                      <BarChart3 className="w-4 h-4" />
+                      Open analytics
+                    </button>
                   </div>
-                  <button
-                    onClick={() => onOpenOperationsPage?.('costs', { agentId: activeWorkspaceAgent.id })}
-                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10 inline-flex items-center gap-2"
-                  >
-                    <BarChart3 className="w-4 h-4" />
-                    Open analytics
-                  </button>
                 </div>
+                {workspaceState.loadingAnalytics ? (
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-slate-300 inline-flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading analytics...
+                  </div>
+                ) : workspaceState.analyticsError ? (
+                  <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-5 text-rose-100">
+                    {workspaceState.analyticsError}
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                        <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Total spend</div>
+                        <div className="mt-3 text-2xl font-semibold text-white">${(workspaceState.analytics?.totalCost || 0).toFixed(2)}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                        <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Requests</div>
+                        <div className="mt-3 text-2xl font-semibold text-white">{(workspaceState.analytics?.totalRequests || 0).toLocaleString()}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                        <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Tokens</div>
+                        <div className="mt-3 text-2xl font-semibold text-white">{(workspaceState.analytics?.totalTokens || 0).toLocaleString()}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                        <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Avg cost / request</div>
+                        <div className="mt-3 text-2xl font-semibold text-white">${(workspaceState.analytics?.avgCostPerRequest || 0).toFixed(4)}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                        <div className="text-sm font-semibold text-white">7-day trend</div>
+                        <div className="text-sm text-slate-400 mt-1">Recent daily spend and request activity for this agent.</div>
+                        <div className="mt-4 space-y-3">
+                          {(workspaceState.analytics?.trend || []).length === 0 ? (
+                            <div className="text-sm text-slate-400">No recent trend data available.</div>
+                          ) : (
+                            (workspaceState.analytics?.trend || []).map((point) => (
+                              <div key={point.date} className="grid grid-cols-[120px_1fr_auto] items-center gap-3">
+                                <div className="text-xs text-slate-500">{point.date}</div>
+                                <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full bg-cyan-400"
+                                    style={{ width: `${Math.min(100, (point.cost / Math.max(...((workspaceState.analytics?.trend || []).map((item) => item.cost || 0)), 1)) * 100)}%` }}
+                                  />
+                                </div>
+                                <div className="text-xs text-slate-300">${point.cost.toFixed(2)} • {point.requests} req</div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                        <div className="text-sm font-semibold text-white">Efficiency snapshot</div>
+                        <div className="text-sm text-slate-400 mt-1">Quick read on cost posture and usage intensity.</div>
+                        <div className="mt-4 space-y-3">
+                          <div className="rounded-xl border border-white/10 bg-slate-950/30 px-4 py-3">
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Daily average spend</div>
+                            <div className="text-lg font-semibold text-white mt-2">${(workspaceState.analytics?.dailyAverage || 0).toFixed(2)}</div>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-slate-950/30 px-4 py-3">
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Budget usage</div>
+                            <div className="text-lg font-semibold text-white mt-2">
+                              {activeWorkspaceAgent.budget_limit > 0
+                                ? `${Math.min(100, Math.round(((activeWorkspaceAgent.current_spend || 0) / activeWorkspaceAgent.budget_limit) * 100))}% of budget`
+                                : 'No budget cap set'}
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-slate-950/30 px-4 py-3">
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Customer satisfaction</div>
+                            <div className="text-lg font-semibold text-white mt-2">{activeWorkspaceAgent.satisfaction}%</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             ) : null}
 
             {workspaceTab === 'controls' ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <button
-                  onClick={() => activeWorkspaceAgent.status === 'active'
-                    ? handleConfirmAction('Pause Agent', `Are you sure you want to pause ${activeWorkspaceAgent.name}?`, 'warning', () => updateAgentStatus(activeWorkspaceAgent.id, 'paused'))
-                    : updateAgentStatus(activeWorkspaceAgent.id, 'active')
-                  }
-                  className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-5 text-left"
-                >
-                  <PauseCircle className="w-5 h-5 text-amber-300" />
-                  <div className="mt-3 text-sm font-semibold text-white">{activeWorkspaceAgent.status === 'active' ? 'Pause agent' : 'Resume agent'}</div>
-                  <div className="mt-1 text-sm text-amber-100/80">Temporarily stop or resume live traffic.</div>
-                </button>
-                <button
-                  onClick={() => handleKillSwitch(activeWorkspaceAgent.id, 2)}
-                  className="rounded-2xl border border-orange-400/20 bg-orange-400/10 p-5 text-left"
-                >
-                  <AlertTriangle className="w-5 h-5 text-orange-300" />
-                  <div className="mt-3 text-sm font-semibold text-white">Escalate to human</div>
-                  <div className="mt-1 text-sm text-orange-100/80">Increase scrutiny and force review for risky behavior.</div>
-                </button>
-                <button
-                  onClick={() => handleKillSwitch(activeWorkspaceAgent.id, 3)}
-                  className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-5 text-left"
-                >
-                  <ShieldAlert className="w-5 h-5 text-rose-300" />
-                  <div className="mt-3 text-sm font-semibold text-white">Kill switch</div>
-                  <div className="mt-1 text-sm text-rose-100/80">Immediately shut down the agent if it is unsafe.</div>
-                </button>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                    <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Agent state</div>
+                    <div className="mt-3 text-2xl font-semibold text-white capitalize">{activeWorkspaceAgent.status}</div>
+                    <div className="mt-2 text-sm text-slate-400">Current lifecycle: {activeWorkspaceAgent.lifecycle_state}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                    <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Risk score</div>
+                    <div className="mt-3 text-2xl font-semibold text-white">{activeWorkspaceAgent.risk_score}/100</div>
+                    <div className="mt-2 text-sm text-slate-400">Risk level: {activeWorkspaceAgent.risk_level}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                    <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Incident pressure</div>
+                    <div className="mt-3 text-2xl font-semibold text-white">{openIncidentCount}</div>
+                    <div className="mt-2 text-sm text-slate-400">{criticalIncidentCount} critical incidents currently on record</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <button
+                    onClick={() => activeWorkspaceAgent.status === 'active'
+                      ? handleConfirmAction('Pause Agent', `Are you sure you want to pause ${activeWorkspaceAgent.name}?`, 'warning', () => updateAgentStatus(activeWorkspaceAgent.id, 'paused'))
+                      : updateAgentStatus(activeWorkspaceAgent.id, 'active')
+                    }
+                    className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-5 text-left"
+                  >
+                    <PauseCircle className="w-5 h-5 text-amber-300" />
+                    <div className="mt-3 text-sm font-semibold text-white">{activeWorkspaceAgent.status === 'active' ? 'Pause agent' : 'Resume agent'}</div>
+                    <div className="mt-1 text-sm text-amber-100/80">Temporarily stop or resume live traffic.</div>
+                  </button>
+                  <button
+                    onClick={() => handleKillSwitch(activeWorkspaceAgent.id, 2)}
+                    className="rounded-2xl border border-orange-400/20 bg-orange-400/10 p-5 text-left"
+                  >
+                    <AlertTriangle className="w-5 h-5 text-orange-300" />
+                    <div className="mt-3 text-sm font-semibold text-white">Escalate to human</div>
+                    <div className="mt-1 text-sm text-orange-100/80">Increase scrutiny and force review for risky behavior.</div>
+                  </button>
+                  <button
+                    onClick={() => handleKillSwitch(activeWorkspaceAgent.id, 3)}
+                    className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-5 text-left"
+                  >
+                    <ShieldAlert className="w-5 h-5 text-rose-300" />
+                    <div className="mt-3 text-sm font-semibold text-white">Kill switch</div>
+                    <div className="mt-1 text-sm text-rose-100/80">Immediately shut down the agent if it is unsafe.</div>
+                  </button>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-white">Recent incidents</h3>
+                      <p className="text-sm text-slate-400 mt-1">Use this to decide whether to pause, escalate, or fully stop the agent.</p>
+                    </div>
+                    <button
+                      onClick={() => onOpenOperationsPage?.('incidents', { agentId: activeWorkspaceAgent.id })}
+                      className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10"
+                    >
+                      Open incidents
+                    </button>
+                  </div>
+                  <div className="mt-4 grid grid-cols-1 gap-3">
+                    {workspaceState.loadingIncidents ? (
+                      <div className="text-sm text-slate-300 inline-flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Loading incidents...
+                      </div>
+                    ) : workspaceState.incidentsError ? (
+                      <div className="text-sm text-rose-200">{workspaceState.incidentsError}</div>
+                    ) : workspaceState.incidents.length === 0 ? (
+                      <div className="text-sm text-slate-400">No incidents recorded for this agent.</div>
+                    ) : (
+                      workspaceState.incidents.slice(0, 4).map((incident) => (
+                        <div key={incident.id} className="rounded-xl border border-white/10 bg-slate-950/30 px-4 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-medium text-white">{incident.title}</div>
+                            <span className="text-[11px] px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-slate-300">
+                              {incident.status}
+                            </span>
+                          </div>
+                          <div className="mt-2 text-xs text-slate-500">
+                            {incident.type} • {incident.severity} • {new Date(incident.createdAt).toLocaleString()}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             ) : null}
           </div>
