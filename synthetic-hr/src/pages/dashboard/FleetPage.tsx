@@ -3,25 +3,41 @@ import {
   Users, DollarSign, Shield, AlertTriangle, CheckCircle, XCircle,
   ChevronDown, ChevronUp, Activity, Zap, Lock, Server, Eye, Phone, Bot,
   Brain, Target, TrendingUp, X, Plus, Search, Filter, Download, Copy, Trash2, Key,
-  ShieldAlert, ZapOff, Play, Rocket
+  ShieldAlert, ZapOff, Play, Rocket, Link2, MessageSquare, BarChart3, PauseCircle
 } from 'lucide-react';
 import type { AIAgent } from '../../types';
 import { toast } from '../../lib/toast';
 import { validateAgentForm } from '../../lib/validation';
 import { api } from '../../lib/api-client';
 import { getFrontendConfig } from '../../lib/config';
+import { packDisplayBadge, type IntegrationPackId } from '../../lib/integration-packs';
 
 interface FleetPageProps {
   agents: AIAgent[];
   setAgents: (agents: AIAgent[]) => void;
+  selectedAgentId?: string | null;
+  onSelectAgent?: (agentId: string | null) => void;
+  onPublishAgent?: (agent: AIAgent, packId?: IntegrationPackId | null) => void;
+  onOpenOperationsPage?: (page: string, options?: { agentId?: string }) => void;
 }
 
-export default function FleetPage({ agents, setAgents }: FleetPageProps) {
+type WorkspaceTab = 'overview' | 'conversations' | 'integrations' | 'policies' | 'analytics' | 'controls';
+
+export default function FleetPage({
+  agents,
+  setAgents,
+  selectedAgentId,
+  onSelectAgent,
+  onPublishAgent,
+  onOpenOperationsPage,
+}: FleetPageProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [killSwitchAgent, setKillSwitchAgent] = useState<string | null>(null);
   const [highlightedAgentId, setHighlightedAgentId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [configureAgentId, setConfigureAgentId] = useState<string | null>(null);
+  const [workspaceAgentId, setWorkspaceAgentId] = useState<string | null>(selectedAgentId || null);
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('overview');
   const [editBudget, setEditBudget] = useState<Record<string, { budget: number; autoThrottle: boolean }>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'paused' | 'terminated'>('all');
@@ -66,6 +82,12 @@ export default function FleetPage({ agents, setAgents }: FleetPageProps) {
       localStorage.removeItem('rasi_safe_harbor_focus');
     }
   }, []);
+
+  useEffect(() => {
+    if (!selectedAgentId) return;
+    setWorkspaceAgentId(selectedAgentId);
+    setWorkspaceTab('overview');
+  }, [selectedAgentId]);
 
   useEffect(() => {
     if (!deployAgentId) return;
@@ -355,6 +377,19 @@ export default function FleetPage({ agents, setAgents }: FleetPageProps) {
     }
   };
 
+  const openWorkspace = (agentId: string, tab: WorkspaceTab = 'overview') => {
+    setWorkspaceAgentId(agentId);
+    setWorkspaceTab(tab);
+    onSelectAgent?.(agentId);
+  };
+
+  const closeWorkspace = () => {
+    setWorkspaceAgentId(null);
+    onSelectAgent?.(null);
+  };
+
+  const activeWorkspaceAgent = workspaceAgentId ? agents.find((agent) => agent.id === workspaceAgentId) || null : null;
+
   const filteredAgents = agents.filter(a => {
     const q = searchQuery.toLowerCase();
     const matchesSearch = !q || a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q) || a.model_name.toLowerCase().includes(q) || a.agent_type.toLowerCase().includes(q);
@@ -480,6 +515,15 @@ export default function FleetPage({ agents, setAgents }: FleetPageProps) {
                             Budget ₹{agent.budget_limit.toLocaleString()}
                           </span>
                         )}
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
+                          agent.publishStatus === 'live'
+                            ? 'bg-emerald-400/10 text-emerald-300 border-emerald-400/20'
+                            : agent.publishStatus === 'ready'
+                              ? 'bg-amber-400/10 text-amber-300 border-amber-400/20'
+                              : 'bg-slate-400/10 text-slate-300 border-slate-400/20'
+                        }`}>
+                          {agent.publishStatus === 'live' ? 'Live' : agent.publishStatus === 'ready' ? 'Ready to go live' : 'Not live yet'}
+                        </span>
                       </div>
                       <p className="text-slate-400 text-sm mb-2.5">{agent.description}</p>
                       <div className="flex flex-wrap gap-4 text-xs text-slate-500">
@@ -487,11 +531,33 @@ export default function FleetPage({ agents, setAgents }: FleetPageProps) {
                         <span>Provider: <span className="text-slate-300">{agent.platform}</span></span>
                         <span>Model: <span className="text-slate-300 font-mono">{agent.model_name}</span></span>
                         <span>Conversations: <span className="text-slate-300">{agent.conversations}</span></span>
+                        <span>Connected targets: <span className="text-slate-300">{agent.connectedTargets?.length || 0}</span></span>
+                        {agent.primaryPack ? (
+                          <span>Primary channel: <span className="text-slate-300">{agent.primaryPack}</span></span>
+                        ) : null}
                       </div>
                     </div>
 
                     {/* Action buttons — always visible */}
                     <div className="flex items-center gap-1 ml-4 shrink-0">
+                      <button
+                        onClick={() => onPublishAgent?.(agent, agent.primaryPack || null)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-blue-500/15 text-blue-200 border border-blue-400/30 hover:bg-blue-500/20"
+                        title="Connect this agent to a channel"
+                      >
+                        <Link2 className="w-3.5 h-3.5" />
+                        {agent.connectedTargets?.length ? 'Add channel' : 'Publish'}
+                      </button>
+
+                      <button
+                        onClick={() => openWorkspace(agent.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-white/5 text-slate-200 border border-white/10 hover:bg-white/10"
+                        title="Open agent workspace"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        Workspace
+                      </button>
+
                       {/* Deploy */}
                       <button
                         onClick={() => openDeploy(agent)}
@@ -678,6 +744,232 @@ export default function FleetPage({ agents, setAgents }: FleetPageProps) {
           })}
         </div>
       )}
+
+      {activeWorkspaceAgent ? (
+        <div className="rounded-2xl border border-blue-400/20 bg-blue-500/[0.04] overflow-hidden">
+          <div className="flex items-start justify-between gap-4 p-6 border-b border-white/10">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xl font-semibold text-white">{activeWorkspaceAgent.name} workspace</h2>
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${packDisplayBadge((activeWorkspaceAgent.primaryPack || 'it') as IntegrationPackId).cls}`}>
+                  {(activeWorkspaceAgent.primaryPack || 'it').replace('_', ' ')}
+                </span>
+                <span className="text-xs px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-slate-300">
+                  {activeWorkspaceAgent.connectedTargets?.length || 0} connected target{(activeWorkspaceAgent.connectedTargets?.length || 0) === 1 ? '' : 's'}
+                </span>
+              </div>
+              <p className="text-sm text-slate-300 mt-2 max-w-3xl">
+                Operate this agent from one place. Publish channels in Integrations, review conversations, adjust persona and policies, and intervene directly when needed.
+              </p>
+            </div>
+            <button onClick={closeWorkspace} className="text-slate-400 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="px-6 pt-4 flex flex-wrap gap-2">
+            {([
+              ['overview', 'Overview'],
+              ['conversations', 'Conversations'],
+              ['integrations', 'Integrations'],
+              ['policies', 'Policies / Persona'],
+              ['analytics', 'Analytics / Usage'],
+              ['controls', 'Controls'],
+            ] as Array<[WorkspaceTab, string]>).map(([tabId, label]) => (
+              <button
+                key={tabId}
+                onClick={() => setWorkspaceTab(tabId)}
+                className={`px-3 py-2 rounded-xl text-sm border transition-colors ${
+                  workspaceTab === tabId
+                    ? 'border-blue-400/30 bg-blue-500/15 text-blue-100'
+                    : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="p-6">
+            {workspaceTab === 'overview' ? (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 lg:col-span-2">
+                  <h3 className="text-sm font-semibold text-white">Publish status</h3>
+                  <p className="text-sm text-slate-400 mt-1">
+                    {activeWorkspaceAgent.publishStatus === 'live'
+                      ? 'This agent is live on connected systems and can be supervised from RASI.'
+                      : activeWorkspaceAgent.publishStatus === 'ready'
+                        ? 'This agent has channels prepared but still needs at least one active connection.'
+                        : 'This agent is not connected yet. Publish it to a real channel to start operating it.'}
+                  </p>
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Conversations</div>
+                      <div className="text-2xl font-semibold text-white mt-2">{activeWorkspaceAgent.conversations.toLocaleString()}</div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">CSAT</div>
+                      <div className="text-2xl font-semibold text-white mt-2">{activeWorkspaceAgent.satisfaction}%</div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Last sync</div>
+                      <div className="text-sm font-medium text-white mt-2">
+                        {activeWorkspaceAgent.lastIntegrationSyncAt ? new Date(activeWorkspaceAgent.lastIntegrationSyncAt).toLocaleString() : 'Not connected yet'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                  <h3 className="text-sm font-semibold text-white">Next best action</h3>
+                  <p className="text-sm text-slate-400 mt-1">
+                    Keep setup simple: choose where this agent should work, connect the provider, then supervise everything from here.
+                  </p>
+                  <button
+                    onClick={() => onPublishAgent?.(activeWorkspaceAgent, activeWorkspaceAgent.primaryPack || null)}
+                    className="mt-4 w-full rounded-xl bg-blue-500/20 border border-blue-400/30 px-4 py-3 text-sm font-semibold text-blue-100 hover:bg-blue-500/25"
+                  >
+                    {activeWorkspaceAgent.connectedTargets?.length ? 'Connect another channel' : 'Publish this agent'}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {workspaceTab === 'conversations' ? (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Conversation operations</h3>
+                    <p className="text-sm text-slate-400 mt-1">Open the org-wide inbox pre-filtered to this agent for review, takeovers, and transcript checks.</p>
+                  </div>
+                  <button
+                    onClick={() => onOpenOperationsPage?.('conversations', { agentId: activeWorkspaceAgent.id })}
+                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10 inline-flex items-center gap-2"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    Open conversations
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {workspaceTab === 'integrations' ? (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-white">Where this agent works</h3>
+                      <p className="text-sm text-slate-400 mt-1">Non-technical flow: pick a channel, connect it, and come back here to supervise operations.</p>
+                    </div>
+                    <button
+                      onClick={() => onPublishAgent?.(activeWorkspaceAgent, activeWorkspaceAgent.primaryPack || null)}
+                      className="rounded-xl bg-blue-500/20 border border-blue-400/30 px-4 py-2 text-sm font-semibold text-blue-100 hover:bg-blue-500/25 inline-flex items-center gap-2"
+                    >
+                      <Link2 className="w-4 h-4" />
+                      Connect this agent
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {(activeWorkspaceAgent.connectedTargets || []).length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-5 text-sm text-slate-400">
+                      No channels connected yet. Publish this agent into Integrations to make it live on support, sales, finance, or any other workflow.
+                    </div>
+                  ) : (
+                    (activeWorkspaceAgent.connectedTargets || []).map((target) => (
+                      <div key={target.integrationId} className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h4 className="font-semibold text-white">{target.integrationName}</h4>
+                            <p className="text-sm text-slate-400 mt-1">{target.packId} channel</p>
+                          </div>
+                          <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                            target.status === 'connected'
+                              ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
+                              : 'border-amber-400/20 bg-amber-400/10 text-amber-100'
+                          }`}>
+                            {target.status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-4">
+                          Last sync: {target.lastSyncAt ? new Date(target.lastSyncAt).toLocaleString() : 'No sync yet'}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {workspaceTab === 'policies' ? (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Persona and policy controls</h3>
+                    <p className="text-sm text-slate-400 mt-1">Edit behavior, escalation rules, and guardrails without leaving the platform.</p>
+                  </div>
+                  <button
+                    onClick={() => onOpenOperationsPage?.('persona', { agentId: activeWorkspaceAgent.id })}
+                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10"
+                  >
+                    Open persona editor
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {workspaceTab === 'analytics' ? (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Usage and effectiveness</h3>
+                    <p className="text-sm text-slate-400 mt-1">Jump to org-wide analytics while keeping this agent as the operating context.</p>
+                  </div>
+                  <button
+                    onClick={() => onOpenOperationsPage?.('costs', { agentId: activeWorkspaceAgent.id })}
+                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10 inline-flex items-center gap-2"
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                    Open analytics
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {workspaceTab === 'controls' ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button
+                  onClick={() => activeWorkspaceAgent.status === 'active'
+                    ? handleConfirmAction('Pause Agent', `Are you sure you want to pause ${activeWorkspaceAgent.name}?`, 'warning', () => updateAgentStatus(activeWorkspaceAgent.id, 'paused'))
+                    : updateAgentStatus(activeWorkspaceAgent.id, 'active')
+                  }
+                  className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-5 text-left"
+                >
+                  <PauseCircle className="w-5 h-5 text-amber-300" />
+                  <div className="mt-3 text-sm font-semibold text-white">{activeWorkspaceAgent.status === 'active' ? 'Pause agent' : 'Resume agent'}</div>
+                  <div className="mt-1 text-sm text-amber-100/80">Temporarily stop or resume live traffic.</div>
+                </button>
+                <button
+                  onClick={() => handleKillSwitch(activeWorkspaceAgent.id, 2)}
+                  className="rounded-2xl border border-orange-400/20 bg-orange-400/10 p-5 text-left"
+                >
+                  <AlertTriangle className="w-5 h-5 text-orange-300" />
+                  <div className="mt-3 text-sm font-semibold text-white">Escalate to human</div>
+                  <div className="mt-1 text-sm text-orange-100/80">Increase scrutiny and force review for risky behavior.</div>
+                </button>
+                <button
+                  onClick={() => handleKillSwitch(activeWorkspaceAgent.id, 3)}
+                  className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-5 text-left"
+                >
+                  <ShieldAlert className="w-5 h-5 text-rose-300" />
+                  <div className="mt-3 text-sm font-semibold text-white">Kill switch</div>
+                  <div className="mt-1 text-sm text-rose-100/80">Immediately shut down the agent if it is unsafe.</div>
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       {/* AI Employee Review Cards */}
       {agents.length > 0 && (
         <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-6">
