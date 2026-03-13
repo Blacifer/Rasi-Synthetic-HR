@@ -2,7 +2,7 @@ import { useState, useEffect, lazy, Suspense, useCallback, useRef } from 'react'
 import {
   Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
   DollarSign, Eye, Database, Building2, Key, CreditCard, Settings, X, Play, Link2,
-  TrendingUp, Sparkles, Webhook, ChevronLeft, MessageSquare, AlertTriangle, PlugZap, ClipboardList, ListChecks, ListTodo, Shield
+  TrendingUp, Sparkles, Webhook, ChevronLeft, MessageSquare, AlertTriangle, PlugZap, ClipboardList, ListChecks, ListTodo, Shield, Bot, ShoppingBag
 } from 'lucide-react';
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
 import { useApp } from '../context/AppContext';
@@ -38,6 +38,9 @@ const ModelFineTuningPage = lazy(() => import('./dashboard/ModelFineTuningPage')
 const CachingPage = lazy(() => import('./dashboard/CachingPage'));
 const ConversationsPage = lazy(() => import('./dashboard/ConversationsPage'));
 const CoverageStatusPage = lazy(() => import('./dashboard/CoverageStatusPage'));
+const DeveloperPage = lazy(() => import('./dashboard/DeveloperPage'));
+const DomainAgentLibraryPage = lazy(() => import('./dashboard/DomainAgentLibraryPage'));
+const MarketplacePage = lazy(() => import('./dashboard/MarketplacePage'));
 
 interface DashboardProps {
   isDemoMode?: boolean;
@@ -118,6 +121,27 @@ function readNotificationState(orgName?: string | null) {
 function writeNotificationState(orgName: string | null | undefined, ids: Iterable<string>) {
   if (typeof window === 'undefined') return;
   localStorage.setItem(getNotificationReadStorageKey(orgName), JSON.stringify(Array.from(ids)));
+}
+
+function readFocusedAgentWorkspace() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(AGENT_WORKSPACE_FOCUS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { agentId?: string };
+    return parsed?.agentId ? parsed.agentId : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeFocusedAgentWorkspace(agentId: string | null | undefined) {
+  if (typeof window === 'undefined') return;
+  if (!agentId) {
+    localStorage.removeItem(AGENT_WORKSPACE_FOCUS_STORAGE_KEY);
+    return;
+  }
+  localStorage.setItem(AGENT_WORKSPACE_FOCUS_STORAGE_KEY, JSON.stringify({ agentId }));
 }
 
 function buildCoverageNotifications(
@@ -218,6 +242,7 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
   const [fleetWorkspaceAgentId, setFleetWorkspaceAgentId] = useState<string | null>(null);
   const [integrationAgentId, setIntegrationAgentId] = useState<string | null>(null);
   const [integrationRecommendedPack, setIntegrationRecommendedPack] = useState<IntegrationPackId | null>(null);
+  const [domainAgentPreselect, setDomainAgentPreselect] = useState<{ packId: IntegrationPackId; agentId: string } | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [costData, setCostData] = useState<CostData[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
@@ -256,6 +281,7 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
   const openIntegrationsForAgent = useCallback((agent: AIAgent, packId?: IntegrationPackId | null) => {
     setIntegrationAgentId(agent.id);
     setFleetWorkspaceAgentId(agent.id);
+    writeFocusedAgentWorkspace(agent.id);
     setIntegrationRecommendedPack(packId || agent.primaryPack || suggestPackForAgent(agent));
     navigateTo('integrations', { userInitiated: false });
   }, [navigateTo, suggestPackForAgent]);
@@ -289,6 +315,7 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
       return next;
     });
     setFleetWorkspaceAgentId(payload.agentId);
+    writeFocusedAgentWorkspace(payload.agentId);
   }, [agentConnections, agents, user?.organizationName]);
 
   useEffect(() => {
@@ -299,6 +326,20 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
     if (!mounted) return;
     setAgentConnections(readAgentConnectionState(user?.organizationName));
   }, [mounted, user?.organizationName]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    const focusedAgentId = readFocusedAgentWorkspace();
+    if (focusedAgentId) {
+      setFleetWorkspaceAgentId(focusedAgentId);
+      setIntegrationAgentId(focusedAgentId);
+    }
+  }, [mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    writeFocusedAgentWorkspace(fleetWorkspaceAgentId);
+  }, [fleetWorkspaceAgentId, mounted]);
 
   const refreshData = useCallback(async () => {
     setLoading(true);
@@ -842,9 +883,15 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
               { id: 'getting-started', icon: Sparkles, label: 'Getting Started', badge: needsOnboarding ? 'Recommended' : null },
               { id: 'overview', icon: BarChart3, label: 'Overview' },
               { id: 'fleet', icon: Users, label: 'Fleet' },
+              { id: 'templates', icon: Zap, label: 'Templates' },
+              { id: 'agent-library', icon: Bot, label: 'Agent Library' },
+              { id: 'marketplace', icon: ShoppingBag, label: 'Marketplace' },
               { id: 'integrations', icon: Link2, label: 'Integrations' },
-              { id: 'conversations', icon: MessageSquare, label: 'Operations' },
-              { id: 'incidents', icon: AlertTriangle, label: 'Governance' },
+              { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
+              { id: 'incidents', icon: AlertTriangle, label: 'Incidents' },
+              { id: 'costs', icon: DollarSign, label: 'Costs' },
+              { id: 'model-comparison', icon: TrendingUp, label: 'Models' },
+              { id: 'api-access', icon: Key, label: 'API Access' },
               { id: 'settings', icon: Settings, label: 'Settings' },
             ].map((item) => (
 	              <button
@@ -861,6 +908,26 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
                     {item.badge}
                   </span>
                 ) : null}
+              </button>
+            ))}
+
+            <div className="px-2 pt-5 pb-2">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Advanced Tools</div>
+            </div>
+            {[
+              { id: 'developer', icon: PlugZap, label: 'Developer' },
+              { id: 'playbooks', icon: FileText, label: 'Playbooks' },
+              { id: 'blackbox', icon: Database, label: 'Black Box' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => navigateTo(item.id)}
+                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
+                aria-current={currentPage === item.id ? 'page' : undefined}
+                aria-label={item.label}
+              >
+                <item.icon className="w-5 h-5" aria-hidden="true" />
+                <span className="flex-1 min-w-0 text-left">{item.label}</span>
               </button>
             ))}
           </nav>
@@ -1059,7 +1126,7 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
                     onPublishAgent={openIntegrationsForAgent}
                     onOpenOperationsPage={(page, options) => {
                       if (options?.agentId) {
-                        localStorage.setItem(AGENT_WORKSPACE_FOCUS_STORAGE_KEY, JSON.stringify({ agentId: options.agentId }));
+                        writeFocusedAgentWorkspace(options.agentId);
                       }
                       navigateTo(page, { userInitiated: false });
                     }}
@@ -1092,6 +1159,10 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
                     recommendedPackId={integrationRecommendedPack}
                     entryMode={integrationAgentId || fleetWorkspaceAgentId ? 'publish' : 'browse'}
                     onNavigate={navigateTo}
+                    onActivateDomainAgent={(packId, agentId) => {
+                      setDomainAgentPreselect({ packId, agentId });
+                      navigateTo('agent-library', { userInitiated: false });
+                    }}
                     onIntegrationConnected={handleIntegrationConnected}
                     onIntegrationDisconnected={() => { void refreshData(); }}
                   />
@@ -1159,6 +1230,58 @@ export default function Dashboard({ isDemoMode }: DashboardProps) {
                 {currentPage === 'batch' && <BatchProcessingPage />}
                 {currentPage === 'fine-tuning' && <ModelFineTuningPage />}
                 {currentPage === 'caching' && <CachingPage />}
+                {currentPage === 'marketplace' && <MarketplacePage onNavigate={navigateTo} />}
+                {currentPage === 'developer' && <DeveloperPage onNavigate={navigateTo} />}
+                {currentPage === 'agent-library' && (
+                  <DomainAgentLibraryPage
+                    initialPackId={domainAgentPreselect?.packId}
+                    initialAgentId={domainAgentPreselect?.agentId}
+                    onNavigate={navigateTo}
+                    onDeploy={async (agentData) => {
+                      try {
+                        const created = await api.agents.create({
+                          name: agentData.name,
+                          description: agentData.description,
+                          agent_type: agentData.agent_type,
+                          platform: agentData.platform,
+                          model_name: agentData.model_name,
+                          config: { ...agentData.config, system_prompt: agentData.system_prompt },
+                        });
+                        if (created.success && created.data) {
+                          const d = created.data as any;
+                          const newAgent: AIAgent = {
+                            id: d.id,
+                            name: agentData.name,
+                            description: agentData.description,
+                            agent_type: agentData.agent_type,
+                            platform: agentData.platform,
+                            model_name: agentData.model_name,
+                            status: d.status || 'active',
+                            lifecycle_state: 'idle',
+                            risk_level: d.risk_level || 'low',
+                            risk_score: d.risk_score || 50,
+                            created_at: d.created_at || new Date().toISOString(),
+                            conversations: 0,
+                            satisfaction: 0,
+                            uptime: 100,
+                            budget_limit: d.budget_limit || 500,
+                            current_spend: 0,
+                            auto_throttle: false,
+                          };
+                          setAgents(prev => [...prev, newAgent]);
+                          addNotification('success', 'Domain Agent Deployed', `${agentData.name} has been added to your fleet.`);
+                          setDomainAgentPreselect(null);
+                          navigateTo('fleet', { userInitiated: false });
+                        } else {
+                          throw new Error('Agent creation rejected by server');
+                        }
+                      } catch (err) {
+                        console.error('Domain agent deploy error:', err);
+                        throw err;
+                      }
+                    }}
+                  />
+                )}
 	                {currentPage === 'pricing' && <PricingPage onNavigate={navigateTo} />}
 	                {currentPage === 'legal' && <SafeHarborPage onNavigate={navigateTo} userRole={role} />}
 	                {currentPage === 'settings' && <SettingsPage onNavigate={navigateTo} isDemoMode={!!isDemoMode} />}

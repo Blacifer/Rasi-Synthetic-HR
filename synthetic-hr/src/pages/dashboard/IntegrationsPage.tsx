@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
-import { INTEGRATION_PACKS, guessPackForIntegration, packDisplayBadge, type IntegrationPackId } from '../../lib/integration-packs';
+import { INTEGRATION_PACKS, PACK_DOMAIN_AGENTS, guessPackForIntegration, packDisplayBadge, type IntegrationPackId } from '../../lib/integration-packs';
 import type { AIAgent } from '../../types';
 import {
   AlertTriangle,
   ArrowRight,
   BadgeCheck,
+  Bot,
   Building2,
   CalendarDays,
   CheckCircle2,
@@ -24,6 +25,7 @@ import {
   Users,
   Wrench,
   X,
+  Zap,
 } from 'lucide-react';
 
 type CapabilityWrite = { id: string; label: string; risk: 'low' | 'medium' | 'high' | 'money' };
@@ -93,6 +95,7 @@ type IntegrationsPageProps = {
   recommendedPackId?: IntegrationPackId | null;
   entryMode?: 'publish' | 'browse';
   onNavigate?: (page: string) => void;
+  onActivateDomainAgent?: (packId: IntegrationPackId, agentId: string) => void;
   onIntegrationConnected?: (payload: {
     agentId: string;
     integrationId: string;
@@ -104,6 +107,7 @@ type IntegrationsPageProps = {
   onIntegrationDisconnected?: () => void;
 };
 const PUBLISH_CONTEXT_STORAGE_KEY = 'synthetic_hr_publish_context';
+const AGENT_WORKSPACE_FOCUS_STORAGE_KEY = 'synthetic_hr_agent_workspace_focus';
 
 function statusTone(status: string): 'connected' | 'pending' | 'error' | 'neutral' {
   if (status === 'connected') return 'connected';
@@ -286,6 +290,7 @@ export default function IntegrationsPage({
   recommendedPackId,
   entryMode = 'browse',
   onNavigate,
+  onActivateDomainAgent,
   onIntegrationConnected,
   onIntegrationDisconnected,
 }: IntegrationsPageProps) {
@@ -403,6 +408,11 @@ export default function IntegrationsPage({
   const effectiveAgentContext = selectedAgent || persistedContext || null;
   const effectiveAgentId = selectedAgent?.id || persistedContext?.agentId || null;
   const effectiveAgentName = selectedAgent?.name || persistedContext?.agentName || null;
+
+  const focusAgentWorkspace = useCallback((agentId: string | null | undefined) => {
+    if (!agentId) return;
+    localStorage.setItem(AGENT_WORKSPACE_FOCUS_STORAGE_KEY, JSON.stringify({ agentId }));
+  }, []);
 
   async function load() {
     setLoading(true);
@@ -691,15 +701,17 @@ export default function IntegrationsPage({
   useEffect(() => {
     const oauthResult = parseOAuthToastFromQuery();
     if (oauthResult?.status === 'connected' && oauthResult.service && effectiveAgentId) {
+      const connectedProvider = providerMap.get(oauthResult.service);
       void api.agents.updatePublishState(effectiveAgentId, {
         publish_status: 'live',
         primary_pack: activePack,
         integration_ids: Array.from(new Set([...(selectedAgent?.integrationIds || []), oauthResult.service])),
       });
+      focusAgentWorkspace(effectiveAgentId);
       onIntegrationConnected?.({
         agentId: effectiveAgentId,
         integrationId: oauthResult.service,
-        integrationName: oauthResult.service,
+        integrationName: connectedProvider?.name || oauthResult.service,
         packId: activePack,
         status: 'connected',
         lastSyncAt: new Date().toISOString(),
@@ -707,7 +719,7 @@ export default function IntegrationsPage({
     }
     void load();
     void loadActionCatalog();
-  }, [activePack, effectiveAgentId, onIntegrationConnected, selectedAgent?.integrationIds]);
+  }, [activePack, effectiveAgentId, focusAgentWorkspace, onIntegrationConnected, providerMap, selectedAgent?.integrationIds]);
 
   useEffect(() => {
     if (selectedAgent) {
@@ -958,6 +970,72 @@ export default function IntegrationsPage({
           );
           })}
       </div>
+
+      {/* Domain Agents for this pack */}
+      {(() => {
+        const agents = PACK_DOMAIN_AGENTS[activePack] || [];
+        if (agents.length === 0) return null;
+        return (
+          <div className="mt-8">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Bot className="w-4 h-4 text-blue-300" />
+                  <h2 className="text-lg font-semibold text-white">
+                    Domain Agents • {INTEGRATION_PACKS.find((p) => p.id === activePack)?.name || 'Pack'}
+                  </h2>
+                </div>
+                <p className="text-sm text-slate-400 mt-1">
+                  Pre-built agents optimised for this pack. Connect one to start automating across your integrations.
+                </p>
+              </div>
+              <button
+                onClick={() => onNavigate?.('agent-library')}
+                className="px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm font-semibold shrink-0"
+              >
+                Browse all agents
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {agents.map((agent) => (
+                <div
+                  key={agent.id}
+                  className="rounded-2xl border border-blue-400/15 bg-blue-500/[0.04] p-5 flex flex-col gap-3"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg border border-blue-400/20 bg-blue-500/10 flex items-center justify-center shrink-0">
+                        <Bot className="w-4 h-4 text-blue-300" />
+                      </div>
+                      <div className="font-semibold text-white">{agent.name}</div>
+                    </div>
+                    <button
+                      onClick={() => onActivateDomainAgent
+                        ? onActivateDomainAgent(activePack as any, agent.id)
+                        : onNavigate?.('agent-library')}
+                      className="px-3 py-1.5 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-xs font-semibold shrink-0"
+                    >
+                      Deploy
+                    </button>
+                  </div>
+                  <p className="text-sm text-slate-400">{agent.description}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {agent.sampleActions.map((action) => (
+                      <span
+                        key={action}
+                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-300"
+                      >
+                        <Zap className="w-3 h-3 text-amber-300/70" />
+                        {action}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="mt-8">
         <div className="flex items-center justify-between">
@@ -1800,7 +1878,10 @@ export default function IntegrationsPage({
               {entryMode === 'publish' && effectiveAgentContext ? (
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button
-                    onClick={() => onNavigate?.('fleet')}
+                    onClick={() => {
+                      focusAgentWorkspace(effectiveAgentId);
+                      onNavigate?.('fleet');
+                    }}
                     className="px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 hover:bg-blue-500/25 transition-colors text-sm font-semibold"
                   >
                     Open agent workspace

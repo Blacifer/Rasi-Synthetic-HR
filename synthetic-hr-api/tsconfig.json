@@ -12,10 +12,11 @@
     "resolveJsonModule": true,
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "types": ["jest", "node"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/__tests__/**"],
+  "exclude": ["node_modules", "dist"],
   "ts-node": {
     "include": ["src/**/*", "src/__tests__/**/*"],
     "transpileOnly": true

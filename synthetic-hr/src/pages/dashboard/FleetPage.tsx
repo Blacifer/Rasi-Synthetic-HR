@@ -5,7 +5,7 @@ import {
   Brain, Target, TrendingUp, X, Plus, Search, Filter, Download, Copy, Trash2, Key,
   ShieldAlert, ZapOff, Play, Rocket, Link2, MessageSquare, BarChart3, PauseCircle, Loader2, Clock3
 } from 'lucide-react';
-import type { AIAgent, AgentWorkspaceAnalytics, AgentWorkspaceConversation, AgentWorkspaceIncident, AgentWorkspaceSummary } from '../../types';
+import type { AIAgent, AgentPackId, AgentWorkspaceAnalytics, AgentWorkspaceConversation, AgentWorkspaceIncident, AgentWorkspaceSummary } from '../../types';
 import { toast } from '../../lib/toast';
 import { validateAgentForm } from '../../lib/validation';
 import { api } from '../../lib/api-client';
@@ -330,6 +330,28 @@ export default function FleetPage({
           }
         : agent
     )));
+  };
+
+  const syncAgentPublishState = async (agentId: string) => {
+    const response = await api.agents.getPublishState(agentId);
+    if (!response.success || !response.data) {
+      throw new Error(response.error || 'Failed to refresh publish state.');
+    }
+
+    const currentAgent = agents.find((agent) => agent.id === agentId);
+    if (!currentAgent) return;
+
+    await mergeAgent({
+      ...currentAgent,
+      publishStatus: response.data.publishStatus,
+      primaryPack: (response.data.primaryPack || currentAgent.primaryPack || null) as IntegrationPackId | null,
+      integrationIds: response.data.integrationIds || [],
+      connectedTargets: (response.data.connectedTargets || []).map((target) => ({
+        ...target,
+        packId: target.packId as AgentPackId,
+      })),
+      lastIntegrationSyncAt: response.data.lastIntegrationSyncAt || null,
+    });
   };
 
   const runAgentAction = async (
@@ -1335,7 +1357,14 @@ export default function FleetPage({
                             onClick={() => void runAgentAction(
                               activeWorkspaceAgent.id,
                               `disconnect:${target.integrationId}`,
-                              () => api.integrations.disconnect(target.integrationId),
+                              async () => {
+                                const disconnect = await api.integrations.disconnect(target.integrationId);
+                                if (!disconnect.success) {
+                                  return disconnect;
+                                }
+                                await syncAgentPublishState(activeWorkspaceAgent.id);
+                                return { success: true, data: { id: activeWorkspaceAgent.id } };
+                              },
                               `${target.integrationName} disconnected.`
                             )}
                             className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-100 hover:bg-rose-400/15"
