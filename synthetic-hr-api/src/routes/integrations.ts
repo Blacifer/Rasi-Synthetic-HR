@@ -1197,6 +1197,11 @@ router.get('/oauth/callback/:service', async (req, res) => {
       await upsertCredential(rest, integration.id, 'team_id', String(token.team.id), false, null);
     }
 
+    // For Zoho: store api_domain returned in the token response (required for API calls).
+    if ((service === 'zoho_people' || service === 'zoho_recruit' || service === 'zoho_learn') && token?.api_domain) {
+      await upsertCredential(rest, integration.id, 'api_domain', String(token.api_domain), false, null);
+    }
+
     await writeConnectionLog(rest, integration.id, 'connect', 'success', 'OAuth integration connected', { service, authType: 'oauth2' });
 
     const returnTo = safeReturnPath(parsedState.returnTo) || '/dashboard/integrations';
