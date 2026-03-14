@@ -914,9 +914,11 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     color: '#6264A7',
     priority: 4,
     oauthConfig: {
-      authorizationUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
-      tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-      scopes: ['offline_access', 'Channel.ReadBasic.All', 'ChannelMessage.Send', 'Team.ReadBasic.All', 'User.Read.All'],
+      // Teams permissions are work/school-account-only — must use 'organizations'
+      // endpoint, not 'common' (which includes personal accounts that don't have Teams).
+      authorizationUrl: 'https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize',
+      tokenUrl: 'https://login.microsoftonline.com/organizations/oauth2/v2.0/token',
+      scopes: ['openid', 'offline_access', 'User.Read', 'Channel.ReadBasic.All', 'ChannelMessage.Send', 'Team.ReadBasic.All'],
       redirectPath: `${API_CALLBACK_BASE}/teams`,
     },
     endpoints: {
