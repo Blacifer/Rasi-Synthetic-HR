@@ -68,11 +68,29 @@ if (process.env.NODE_ENV === 'production') {
   app.set('trust proxy', 1);
 }
 
+// Extract JWT sub (user ID) from Authorization header without full verification.
+// Used only for rate-limit bucketing — actual auth happens inside route middleware.
+function jwtSubFromReq(req: express.Request): string {
+  const auth = req.headers.authorization;
+  if (auth?.startsWith('Bearer ')) {
+    try {
+      const payload = JSON.parse(
+        Buffer.from(auth.slice(7).split('.')[1], 'base64url').toString('utf8'),
+      );
+      if (payload.sub) return `user:${payload.sub}`;
+    } catch {
+      // fall through to IP
+    }
+  }
+  return `ip:${req.ip || 'unknown'}`;
+}
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: jwtSubFromReq,
   message: {
     success: false,
     error: 'Too many requests. Please try again later.',
@@ -85,10 +103,7 @@ const writeLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => ['GET', 'HEAD', 'OPTIONS'].includes(req.method),
-  keyGenerator: (req) => {
-    // Rate limit by user ID if authenticated, otherwise by IP
-    return (req.user as any)?.id || req.ip || 'unknown';
-  },
+  keyGenerator: jwtSubFromReq,
   message: {
     success: false,
     error: 'Too many write operations. Please slow down and try again.',
