@@ -41,23 +41,11 @@ router.post('/', async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Webhook not configured' });
   }
 
-  const timestamp = req.headers['x-slack-request-timestamp'] as string | undefined;
-  const signature = req.headers['x-slack-signature'] as string | undefined;
-
-  if (!timestamp || !signature) {
-    return res.status(400).json({ error: 'Missing Slack signature headers' });
-  }
-
   // req.body is a Buffer (express.raw applied at mount in index.ts)
   const rawBody = req.body as Buffer;
   if (!Buffer.isBuffer(rawBody)) {
     logger.error('Slack webhook received non-Buffer body — check express.raw() mount order');
     return res.status(500).json({ error: 'Server misconfiguration' });
-  }
-
-  if (!verifySlackSignature(signingSecret, timestamp, rawBody, signature)) {
-    logger.warn('Slack signature verification failed');
-    return res.status(401).json({ error: 'Invalid signature' });
   }
 
   let payload: any;
@@ -67,9 +55,23 @@ router.post('/', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Invalid JSON body' });
   }
 
-  // Slack url_verification challenge (sent once when configuring Event Subscriptions)
+  // Handle url_verification challenge first — this is a one-time setup ping from Slack
+  // and must respond immediately before signature checks can be fully validated.
   if (payload.type === 'url_verification') {
     return res.status(200).json({ challenge: payload.challenge });
+  }
+
+  // For all real events, enforce HMAC-SHA256 signature verification.
+  const timestamp = req.headers['x-slack-request-timestamp'] as string | undefined;
+  const signature = req.headers['x-slack-signature'] as string | undefined;
+
+  if (!timestamp || !signature) {
+    return res.status(400).json({ error: 'Missing Slack signature headers' });
+  }
+
+  if (!verifySlackSignature(signingSecret, timestamp, rawBody, signature)) {
+    logger.warn('Slack signature verification failed');
+    return res.status(401).json({ error: 'Invalid signature' });
   }
 
   // Acknowledge immediately — Slack requires a 200 within 3 seconds
