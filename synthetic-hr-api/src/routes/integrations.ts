@@ -645,8 +645,9 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
       readiness.items.push({
         id: 'redirect_url',
         label: 'Redirect URL added in provider console',
-        status: expectedRedirectUrl ? 'todo' : 'blocked',
-        detail: expectedRedirectUrl || 'Could not compute redirect URL',
+        // If already connected the redirect URL is clearly registered — mark ok.
+        status: lifecycleStatus === 'connected' ? 'ok' : (expectedRedirectUrl ? 'todo' : 'blocked'),
+        detail: lifecycleStatus === 'connected' ? null : (expectedRedirectUrl || 'Could not compute redirect URL'),
       });
       readiness.items.push({
         id: 'validated',
