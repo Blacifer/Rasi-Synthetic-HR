@@ -485,7 +485,7 @@ export const PHASE3_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://accounts.zoho.com/oauth/v2/auth',
       tokenUrl: 'https://accounts.zoho.com/oauth/v2/token',
-      scopes: ['ZohoPayroll.employees.READ', 'ZohoPayroll.employees.CREATE', 'ZohoPayroll.employees.UPDATE', 'ZohoPayroll.payrolls.READ'],
+      scopes: ['ZohoPayroll.payrolls.READ', 'ZohoPayroll.employees.READ'],
       redirectPath: `${API_CALLBACK_BASE}/zoho_payroll`,
     },
     endpoints: {
