@@ -1091,10 +1091,22 @@ router.get('/oauth/callback/:service', async (req, res) => {
   const apiBase = getApiBaseUrl(req);
   const redirectUri = `${apiBase}${spec.oauthConfig.redirectPath}`;
 
+  // Zoho sends a `location` query param (e.g. "in", "eu", "au") indicating which DC the
+  // user's account lives in. The token exchange MUST go to accounts.zoho.{location} — if we
+  // always use accounts.zoho.com Zoho returns invalid_code for non-US accounts.
+  const zohoLocation = typeof req.query.location === 'string' ? req.query.location.trim().toLowerCase() : null;
+
   try {
     const rest = restAsService;
     let token: any = null;
-    const tokenUrl = resolveUrlTemplate(spec.oauthConfig.tokenUrl, connection);
+    let tokenUrl = resolveUrlTemplate(spec.oauthConfig.tokenUrl, connection);
+
+    // Override Zoho token URL to match the DC that issued the authorization code.
+    if (zohoLocation && (service === 'zoho_people' || service === 'zoho_recruit' || service === 'zoho_learn')) {
+      const zohoDomain = zohoLocation === 'com' ? 'zoho.com' : `zoho.${zohoLocation}`;
+      tokenUrl = `https://accounts.${zohoDomain}/oauth/v2/token`;
+      logger.info('Zoho DC-aware token exchange', { service, location: zohoLocation, tokenUrl });
+    }
     const secretOrNull = (name: string) => {
       const v = process.env[name];
       return v && v.trim().length > 0 ? v : null;
