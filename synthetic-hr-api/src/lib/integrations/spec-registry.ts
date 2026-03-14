@@ -153,7 +153,7 @@ export const PHASE1_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://www.linkedin.com/oauth/v2/authorization',
       tokenUrl: 'https://www.linkedin.com/oauth/v2/accessToken',
-      scopes: ['openid', 'profile', 'email', 'w_member_social'],
+      scopes: ['openid', 'profile', 'email'],
       redirectPath: `${API_CALLBACK_BASE}/linkedin`,
     },
     endpoints: {
