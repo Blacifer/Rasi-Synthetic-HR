@@ -473,6 +473,41 @@ export const PHASE3_INTEGRATIONS: IntegrationSpec[] = [
     },
   },
   {
+    id: 'zoho_payroll',
+    name: 'Zoho Payroll',
+    category: 'PAYROLL',
+    description: 'Zoho Payroll. Salary processing, payslips, tax filings, and payroll run analytics.',
+    authType: 'oauth2',
+    tags: ['INDIA PRIORITY', 'PAYROLL', 'AI-READY'],
+    status: 'READY',
+    color: '#7C3AED',
+    priority: 1,
+    oauthConfig: {
+      authorizationUrl: 'https://accounts.zoho.com/oauth/v2/auth',
+      tokenUrl: 'https://accounts.zoho.com/oauth/v2/token',
+      scopes: ['ZohoPayroll.employees.ALL', 'ZohoPayroll.payrolls.READ'],
+      redirectPath: `${API_CALLBACK_BASE}/zoho_payroll`,
+    },
+    endpoints: {
+      employees: { method: 'GET', path: '/employees' },
+      employee: { method: 'GET', path: '/employees/{id}' },
+      payrolls: { method: 'GET', path: '/payrolls' },
+      payslips: { method: 'GET', path: '/payslips' },
+      taxDetails: { method: 'GET', path: '/tax-details' },
+    },
+    capabilities: {
+      reads: ['payroll.employees', 'payroll.payrolls', 'payroll.payslips', 'payroll.taxes'],
+      writes: [
+        { id: 'payroll.employee.update', label: 'Update employee payroll details', risk: 'high' },
+      ],
+    },
+    aiFeatures: {
+      enabled: true,
+      capabilities: ['payroll_analytics', 'compensation_benchmarking', 'tax_compliance', 'cost_forecasting'],
+      dataTypes: ['employees', 'payrolls', 'payslips', 'taxes'],
+    },
+  },
+  {
     id: 'paytm',
     name: 'Paytm Business',
     category: 'PAYMENTS',
