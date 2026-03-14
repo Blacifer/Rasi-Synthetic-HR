@@ -635,23 +635,21 @@ export default function IntegrationsPage({
 
     // Abandonment poll: fires every second to detect if the user closed the popup manually.
     let pollId: ReturnType<typeof setInterval>;
-    // Guard against the poll firing between the popup's postMessage dispatch and the parent
-    // processing it — both cleanup paths check this before showing the cancellation toast.
+    // Guard against double-firing when both postMessage and BroadcastChannel deliver the result.
     let oauthCompleted = false;
+    let bc: BroadcastChannel | null = null;
 
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (!event.data || event.data.type !== 'OAUTH_COMPLETE') return;
-
-      // Clean up before doing anything else to prevent double-firing.
+    const handleOAuthResult = (data: { type: string; status: string; service: string; message?: string }) => {
+      if (oauthCompleted) return;
       oauthCompleted = true;
       window.removeEventListener('message', handleMessage);
+      window.removeEventListener('storage', handleStorage);
+      bc?.close();
       clearInterval(pollId);
+      localStorage.removeItem('synthetic_hr_oauth_result');
       resetConnecting();
 
-      const { status, service, message: errMsg } = event.data as {
-        type: string; status: string; service: string; message?: string;
-      };
+      const { status, service, message: errMsg } = data;
 
       if (status === 'connected') {
         const connectedProvider = providerMap.get(service);
@@ -659,7 +657,6 @@ export default function IntegrationsPage({
         void load();
         void loadActionCatalog();
 
-        // Mirror the post-OAuth agent publish logic from the mount useEffect.
         if (effectiveAgentId && service) {
           void api.agents.updatePublishState(effectiveAgentId, {
             publish_status: 'live',
@@ -681,6 +678,32 @@ export default function IntegrationsPage({
       }
     };
 
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (!event.data || event.data.type !== 'OAUTH_COMPLETE') return;
+      handleOAuthResult(event.data);
+    };
+
+    // BroadcastChannel: secondary cross-tab signal (popup flow).
+    try {
+      bc = new BroadcastChannel('synthetic_hr_oauth');
+      bc.onmessage = (event) => {
+        if (!event.data || event.data.type !== 'OAUTH_COMPLETE') return;
+        handleOAuthResult(event.data);
+      };
+    } catch { /* BroadcastChannel not supported */ }
+
+    // localStorage storage event: most reliable cross-tab signal — fires on all
+    // other tabs when OAuthCallbackPage writes the result, regardless of browser.
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== 'synthetic_hr_oauth_result' || !event.newValue) return;
+      try {
+        const data = JSON.parse(event.newValue);
+        if (data?.type === 'OAUTH_COMPLETE') handleOAuthResult(data);
+      } catch { /* malformed value */ }
+    };
+    window.addEventListener('storage', handleStorage);
+
     window.addEventListener('message', handleMessage);
 
     pollId = setInterval(() => {
@@ -690,6 +713,8 @@ export default function IntegrationsPage({
         // in the popup has time to be processed by handleMessage first.
         setTimeout(() => {
           window.removeEventListener('message', handleMessage);
+          window.removeEventListener('storage', handleStorage);
+          bc?.close();
           resetConnecting();
           if (!oauthCompleted) {
             toast.info('Connection cancelled.');

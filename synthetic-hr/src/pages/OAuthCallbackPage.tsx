@@ -15,16 +15,27 @@ export default function OAuthCallbackPage() {
     const service = params.get('service') ?? '';
     const message = params.get('message') ?? '';
 
+    const payload = { type: 'OAUTH_COMPLETE', status, service, message };
     const qs = new URLSearchParams({ status, ...(service ? { service } : {}), ...(message ? { message } : {}) });
     const fallbackUrl = `/dashboard/integrations?${qs.toString()}`;
 
+    // Write to localStorage — the storage event fires on ALL other tabs reliably
+    // and is the most compatible cross-tab signal across every browser.
+    try {
+      localStorage.setItem('synthetic_hr_oauth_result', JSON.stringify({ ...payload, ts: Date.now() }));
+    } catch { /* storage unavailable */ }
+
+    // BroadcastChannel as a secondary channel (works for true popup windows).
+    try {
+      const bc = new BroadcastChannel('synthetic_hr_oauth');
+      bc.postMessage(payload);
+      // Don't close immediately — give the message time to deliver before page navigates.
+      setTimeout(() => bc.close(), 500);
+    } catch { /* BroadcastChannel not supported */ }
+
     if (window.opener && !window.opener.closed) {
-      // Send result back to the parent window, then close this popup.
-      // targetOrigin is always our own origin — never '*'.
-      window.opener.postMessage(
-        { type: 'OAUTH_COMPLETE', status, service, message },
-        window.location.origin,
-      );
+      // Popup flow: send result back to the parent window, then close.
+      window.opener.postMessage(payload, window.location.origin);
       window.close();
       // Some browsers open popups as tabs and ignore window.close().
       // Fall back to a redirect after a short delay so the user is never stuck.
@@ -32,10 +43,11 @@ export default function OAuthCallbackPage() {
         window.location.replace(fallbackUrl);
       }, 1500);
     } else {
-      // Opened in a regular tab (e.g. popup was blocked and we fell through to a redirect,
-      // or the user pasted the URL directly). Pass the query params to the integrations page
-      // so the existing parseOAuthToastFromQuery() handler can show the result.
-      window.location.replace(fallbackUrl);
+      // New-tab flow: short delay so localStorage/BroadcastChannel signals have
+      // time to reach the original tab before this tab navigates away.
+      setTimeout(() => {
+        window.location.replace(fallbackUrl);
+      }, 300);
     }
   }, []);
 
