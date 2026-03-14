@@ -643,8 +643,10 @@ export default function IntegrationsPage({
       if (oauthCompleted) return;
       oauthCompleted = true;
       window.removeEventListener('message', handleMessage);
+      window.removeEventListener('storage', handleStorage);
       bc?.close();
       clearInterval(pollId);
+      localStorage.removeItem('synthetic_hr_oauth_result');
       resetConnecting();
 
       const { status, service, message: errMsg } = data;
@@ -682,8 +684,7 @@ export default function IntegrationsPage({
       handleOAuthResult(event.data);
     };
 
-    // BroadcastChannel handles the case where the browser opened the OAuth
-    // flow as a new tab (window.opener is null, postMessage never fires).
+    // BroadcastChannel: secondary cross-tab signal (popup flow).
     try {
       bc = new BroadcastChannel('synthetic_hr_oauth');
       bc.onmessage = (event) => {
@@ -691,6 +692,17 @@ export default function IntegrationsPage({
         handleOAuthResult(event.data);
       };
     } catch { /* BroadcastChannel not supported */ }
+
+    // localStorage storage event: most reliable cross-tab signal — fires on all
+    // other tabs when OAuthCallbackPage writes the result, regardless of browser.
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== 'synthetic_hr_oauth_result' || !event.newValue) return;
+      try {
+        const data = JSON.parse(event.newValue);
+        if (data?.type === 'OAUTH_COMPLETE') handleOAuthResult(data);
+      } catch { /* malformed value */ }
+    };
+    window.addEventListener('storage', handleStorage);
 
     window.addEventListener('message', handleMessage);
 
@@ -701,6 +713,7 @@ export default function IntegrationsPage({
         // in the popup has time to be processed by handleMessage first.
         setTimeout(() => {
           window.removeEventListener('message', handleMessage);
+          window.removeEventListener('storage', handleStorage);
           bc?.close();
           resetConnecting();
           if (!oauthCompleted) {

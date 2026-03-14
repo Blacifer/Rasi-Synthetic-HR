@@ -19,13 +19,19 @@ export default function OAuthCallbackPage() {
     const qs = new URLSearchParams({ status, ...(service ? { service } : {}), ...(message ? { message } : {}) });
     const fallbackUrl = `/dashboard/integrations?${qs.toString()}`;
 
-    // Broadcast to all tabs on this origin — handles the case where the browser
-    // opened the OAuth flow as a new tab instead of a popup (window.opener is null).
+    // Write to localStorage — the storage event fires on ALL other tabs reliably
+    // and is the most compatible cross-tab signal across every browser.
+    try {
+      localStorage.setItem('synthetic_hr_oauth_result', JSON.stringify({ ...payload, ts: Date.now() }));
+    } catch { /* storage unavailable */ }
+
+    // BroadcastChannel as a secondary channel (works for true popup windows).
     try {
       const bc = new BroadcastChannel('synthetic_hr_oauth');
       bc.postMessage(payload);
-      bc.close();
-    } catch { /* BroadcastChannel not supported in this environment */ }
+      // Don't close immediately — give the message time to deliver before page navigates.
+      setTimeout(() => bc.close(), 500);
+    } catch { /* BroadcastChannel not supported */ }
 
     if (window.opener && !window.opener.closed) {
       // Popup flow: send result back to the parent window, then close.
@@ -37,9 +43,11 @@ export default function OAuthCallbackPage() {
         window.location.replace(fallbackUrl);
       }, 1500);
     } else {
-      // New-tab flow: redirect this tab back to the integrations page.
-      // The BroadcastChannel message above already notified the original tab.
-      window.location.replace(fallbackUrl);
+      // New-tab flow: short delay so localStorage/BroadcastChannel signals have
+      // time to reach the original tab before this tab navigates away.
+      setTimeout(() => {
+        window.location.replace(fallbackUrl);
+      }, 300);
     }
   }, []);
 
