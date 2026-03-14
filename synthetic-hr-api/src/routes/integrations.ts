@@ -1192,6 +1192,11 @@ router.get('/oauth/callback/:service', async (req, res) => {
       await upsertCredential(rest, integration.id, k, stored, false, null);
     }));
 
+    // For Slack: store team_id so the inbound webhook can route events to the correct org.
+    if (service === 'slack' && token?.team?.id) {
+      await upsertCredential(rest, integration.id, 'team_id', String(token.team.id), false, null);
+    }
+
     await writeConnectionLog(rest, integration.id, 'connect', 'success', 'OAuth integration connected', { service, authType: 'oauth2' });
 
     const returnTo = safeReturnPath(parsedState.returnTo) || '/dashboard/integrations';
@@ -1500,6 +1505,121 @@ router.post('/test/:service', requirePermission('connectors.read'), async (req, 
   });
 
   return res.json({ success: true, data: result });
+});
+
+// ─── Slack Inbox ──────────────────────────────────────────────────────────────
+
+// GET /api/integrations/slack/messages
+// List inbound Slack messages for the authenticated org.
+router.get('/slack/messages', requirePermission('connectors.read'), async (req, res) => {
+  const orgId = getOrgId(req);
+  if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+  const rest = restAsUser(req);
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const offset = Number(req.query.offset) || 0;
+  const statusFilter = typeof req.query.status === 'string' ? req.query.status : null;
+
+  const query = new URLSearchParams();
+  query.set('organization_id', eq(orgId));
+  query.set('order', 'created_at.desc');
+  query.set('limit', String(limit));
+  query.set('offset', String(offset));
+  query.set('select', 'id,slack_channel_id,slack_channel_name,slack_user_id,slack_user_name,slack_ts,thread_ts,text,event_type,status,metadata,created_at,updated_at');
+  if (statusFilter) query.set('status', eq(statusFilter));
+
+  const messages = await safeQuery<Record<string, any>>(rest, 'slack_messages', query);
+  return res.json({ success: true, data: messages });
+});
+
+// POST /api/integrations/slack/messages/:id/reply
+// Send a reply into the Slack thread and mark the message as replied.
+router.post('/slack/messages/:id/reply', requirePermission('connectors.manage'), async (req, res) => {
+  const orgId = getOrgId(req);
+  if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+  const messageId = req.params.id;
+  const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+  if (!text) return res.status(400).json({ success: false, error: 'text is required' });
+
+  const rest = restAsUser(req);
+
+  // Load the target message (RLS enforces org ownership)
+  const messages = await safeQuery<Record<string, any>>(
+    rest,
+    'slack_messages',
+    new URLSearchParams({ id: eq(messageId), organization_id: eq(orgId), select: '*', limit: '1' }),
+  );
+  if (!messages.length) return res.status(404).json({ success: false, error: 'Message not found' });
+  const message = messages[0];
+
+  // Load Slack integration for this org
+  const integrations = await safeQuery<StoredIntegrationRow>(
+    restAsService,
+    'integrations',
+    new URLSearchParams({ organization_id: eq(orgId), service_type: eq('slack'), status: eq('connected'), select: 'id', limit: '1' }),
+  );
+  if (!integrations.length) return res.status(400).json({ success: false, error: 'Slack integration not connected' });
+
+  // Load access_token credential
+  const creds = await safeQuery<StoredCredentialRow>(
+    restAsService,
+    'integration_credentials',
+    new URLSearchParams({ integration_id: eq(integrations[0].id), key: eq('access_token'), select: 'value', limit: '1' }),
+  );
+  if (!creds.length) return res.status(400).json({ success: false, error: 'Slack access token not found' });
+
+  const accessToken = decryptSecret(creds[0].value);
+
+  // Post to Slack as a threaded reply
+  const slackRes = await fetch('https://slack.com/api/chat.postMessage', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json; charset=utf-8',
+    },
+    body: JSON.stringify({
+      channel: message.slack_channel_id,
+      text,
+      thread_ts: message.slack_ts,
+    }),
+  });
+  const slackJson: any = await slackRes.json().catch(() => null);
+  if (!slackJson?.ok) {
+    return res.status(502).json({ success: false, error: slackJson?.error || 'Slack API error' });
+  }
+
+  // Mark message as replied
+  await restAsService(
+    'slack_messages',
+    new URLSearchParams({ id: eq(messageId), organization_id: eq(orgId) }),
+    { method: 'PATCH', body: { status: 'replied', updated_at: new Date().toISOString() } },
+  );
+
+  return res.json({ success: true, data: { slack_ts: slackJson.ts } });
+});
+
+// POST /api/integrations/slack/messages/:id/status
+// Update the status of a Slack message (reviewed / dismissed / new).
+router.post('/slack/messages/:id/status', requirePermission('connectors.read'), async (req, res) => {
+  const orgId = getOrgId(req);
+  if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+  const messageId = req.params.id;
+  const status = typeof req.body?.status === 'string' ? req.body.status : '';
+  const validStatuses = ['new', 'reviewed', 'replied', 'dismissed'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ success: false, error: `status must be one of: ${validStatuses.join(', ')}` });
+  }
+
+  const rest = restAsUser(req);
+  await rest(
+    'slack_messages',
+    new URLSearchParams({ id: eq(messageId), organization_id: eq(orgId) }),
+    { method: 'PATCH', body: { status, updated_at: new Date().toISOString() } },
+  );
+
+  return res.json({ success: true });
 });
 
 export default router;

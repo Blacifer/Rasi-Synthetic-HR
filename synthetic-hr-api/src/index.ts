@@ -28,6 +28,7 @@ import jobsRoutes from './routes/jobs';
 import workItemsRoutes from './routes/work-items';
 import playbooksRoutes from './routes/playbooks';
 import eventsRoutes from './routes/events';
+import slackWebhookRoutes from './routes/slack';
 import marketplaceRoutes from './routes/marketplace';
 import actionPoliciesRoutes from './routes/action-policies';
 import { initializeObservability, shutdownObservability, tracingMiddleware } from './lib/observability';
@@ -183,6 +184,10 @@ app.use(cors({
   maxAge: 86400,
 }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+// Slack webhook needs the raw body Buffer for HMAC signature verification.
+// Must be registered BEFORE express.json() parses the body into an object.
+app.use('/events/slack', express.raw({ type: 'application/json', limit: '1mb' }), slackWebhookRoutes);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 

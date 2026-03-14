@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api } from '../../lib/api-client';
+import type { SlackMessage } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 import { INTEGRATION_PACKS, PACK_DOMAIN_AGENTS, guessPackForIntegration, packDisplayBadge, type IntegrationPackId } from '../../lib/integration-packs';
 import type { AIAgent } from '../../types';
@@ -334,6 +335,15 @@ export default function IntegrationsPage({
 
   const [actionCatalogLoading, setActionCatalogLoading] = useState(false);
   const [actionCatalogError, setActionCatalogError] = useState<string | null>(null);
+
+  // Slack Inbox
+  const [slackInboxOpen, setSlackInboxOpen] = useState(false);
+  const [slackMessages, setSlackMessages] = useState<SlackMessage[]>([]);
+  const [slackMessagesLoading, setSlackMessagesLoading] = useState(false);
+  const [slackFilter, setSlackFilter] = useState<'all' | 'new' | 'reviewed' | 'replied' | 'dismissed'>('all');
+  const [slackReplyingTo, setSlackReplyingTo] = useState<string | null>(null);
+  const [slackReplyText, setSlackReplyText] = useState('');
+  const [slackReplying, setSlackReplying] = useState(false);
   const [actionCatalog, setActionCatalog] = useState<Array<{
     service: string;
     providerName: string;
@@ -450,6 +460,41 @@ export default function IntegrationsPage({
     }
     setActionCatalog((res.data as any[]) || []);
     setActionCatalogLoading(false);
+  }
+
+  async function loadSlackMessages(filter: typeof slackFilter) {
+    setSlackMessagesLoading(true);
+    const res = await api.slack.getMessages(filter === 'all' ? {} : { status: filter });
+    if (res.success) setSlackMessages((res.data as SlackMessage[]) || []);
+    setSlackMessagesLoading(false);
+  }
+
+  async function sendSlackReply(messageId: string) {
+    if (!slackReplyText.trim()) return;
+    setSlackReplying(true);
+    const res = await api.slack.reply(messageId, slackReplyText.trim());
+    if (res.success) {
+      toast.success('Reply sent to Slack.');
+      setSlackMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, status: 'replied' } : m)),
+      );
+      setSlackReplyingTo(null);
+      setSlackReplyText('');
+    } else {
+      toast.error(res.error || 'Failed to send reply');
+    }
+    setSlackReplying(false);
+  }
+
+  async function updateSlackStatus(messageId: string, status: SlackMessage['status']) {
+    const res = await api.slack.updateStatus(messageId, status);
+    if (res.success) {
+      setSlackMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, status } : m)),
+      );
+    } else {
+      toast.error(res.error || 'Failed to update status');
+    }
   }
 
   async function loadLogs(serviceId: string) {
@@ -774,6 +819,15 @@ export default function IntegrationsPage({
       setActivePack(preferredPack);
     }
   }, [persistedContext?.recommendedPackId, recommendedPackId, selectedAgent?.primaryPack]);
+
+  // Auto-refresh Slack inbox every 30s while open
+  useEffect(() => {
+    if (!slackInboxOpen) return;
+    void loadSlackMessages(slackFilter);
+    const id = setInterval(() => void loadSlackMessages(slackFilter), 30_000);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slackInboxOpen, slackFilter]);
 
   const recruitmentProviders = useMemo(() => providersByPack.get('recruitment') || [], [providersByPack]);
 
@@ -2345,6 +2399,14 @@ export default function IntegrationsPage({
                       </button>
                       {isConnected ? (
                         <>
+                          {provider.id === 'slack' ? (
+                            <button
+                              onClick={() => setSlackInboxOpen(true)}
+                              className="px-3 py-2 rounded-xl bg-purple-500/15 border border-purple-400/30 text-purple-100 hover:bg-purple-500/20 transition-colors text-sm font-semibold"
+                            >
+                              Inbox
+                            </button>
+                          ) : null}
                           {provider.authType === 'oauth2' ? (
                             <button
                               onClick={() => void refreshOAuthToken(provider.id)}
@@ -2445,6 +2507,147 @@ export default function IntegrationsPage({
             })}
           </div>
         </Modal>
+      ) : null}
+
+      {/* ── Slack Inbox drawer ─────────────────────────────────────── */}
+      {slackInboxOpen ? (
+        <Drawer
+          title="Slack Inbox"
+          onClose={() => {
+            setSlackInboxOpen(false);
+            setSlackReplyingTo(null);
+            setSlackReplyText('');
+          }}
+        >
+          <div className="space-y-4">
+            {/* Filter tabs */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {(['all', 'new', 'reviewed', 'replied', 'dismissed'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setSlackFilter(f)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors capitalize ${
+                    slackFilter === f
+                      ? 'bg-purple-500/20 border-purple-400/40 text-purple-100'
+                      : 'border-white/10 bg-white/5 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+              <button
+                onClick={() => void loadSlackMessages(slackFilter)}
+                className="ml-auto px-3 py-1.5 rounded-lg text-xs border border-white/10 bg-white/5 text-slate-400 hover:text-slate-200 transition-colors"
+                disabled={slackMessagesLoading}
+              >
+                {slackMessagesLoading ? 'Loading…' : 'Refresh'}
+              </button>
+            </div>
+
+            {/* Message list */}
+            {slackMessages.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center text-slate-500 text-sm">
+                {slackMessagesLoading ? 'Loading messages…' : 'No messages yet. Messages from Slack will appear here once events are enabled.'}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {slackMessages.map((msg) => {
+                  const statusColors: Record<SlackMessage['status'], string> = {
+                    new: 'border-blue-400/25 bg-blue-400/10 text-blue-200',
+                    reviewed: 'border-white/10 bg-white/5 text-slate-400',
+                    replied: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200',
+                    dismissed: 'border-white/10 bg-white/5 text-slate-500',
+                  };
+                  const isReplying = slackReplyingTo === msg.id;
+                  const channel = msg.slack_channel_name ? `#${msg.slack_channel_name}` : msg.slack_channel_id;
+                  const sender = msg.slack_user_name || msg.slack_user_id;
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`rounded-2xl border bg-white/[0.03] p-4 space-y-3 ${msg.status === 'dismissed' ? 'opacity-50' : ''}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-0.5 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-semibold text-slate-200">{sender}</span>
+                            <span className="text-xs text-slate-500">{channel}</span>
+                            <span className="text-xs text-slate-600">{new Date(msg.created_at).toLocaleString()}</span>
+                          </div>
+                          <p className="text-sm text-slate-300 break-words whitespace-pre-wrap">{msg.text}</p>
+                        </div>
+                        <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full border capitalize ${statusColors[msg.status]}`}>
+                          {msg.status}
+                        </span>
+                      </div>
+
+                      {/* Reply textarea */}
+                      {isReplying ? (
+                        <div className="space-y-2">
+                          <textarea
+                            value={slackReplyText}
+                            onChange={(e) => setSlackReplyText(e.target.value)}
+                            placeholder="Type your reply…"
+                            rows={3}
+                            className="w-full rounded-xl border border-white/10 bg-white/5 text-slate-200 text-sm px-3 py-2 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-purple-400/50 resize-none"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => void sendSlackReply(msg.id)}
+                              disabled={slackReplying || !slackReplyText.trim()}
+                              className="px-3 py-1.5 rounded-lg bg-purple-500/20 border border-purple-400/30 text-purple-100 hover:bg-purple-500/25 transition-colors text-xs font-semibold disabled:opacity-50"
+                            >
+                              {slackReplying ? 'Sending…' : 'Send'}
+                            </button>
+                            <button
+                              onClick={() => { setSlackReplyingTo(null); setSlackReplyText(''); }}
+                              className="px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 text-slate-400 hover:text-slate-200 transition-colors text-xs"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {msg.status !== 'dismissed' && msg.status !== 'replied' ? (
+                            <button
+                              onClick={() => { setSlackReplyingTo(msg.id); setSlackReplyText(''); }}
+                              className="px-3 py-1.5 rounded-lg bg-purple-500/15 border border-purple-400/25 text-purple-100 hover:bg-purple-500/20 transition-colors text-xs font-semibold"
+                            >
+                              Reply
+                            </button>
+                          ) : null}
+                          {msg.status === 'new' ? (
+                            <button
+                              onClick={() => void updateSlackStatus(msg.id, 'reviewed')}
+                              className="px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:text-white transition-colors text-xs"
+                            >
+                              Mark reviewed
+                            </button>
+                          ) : null}
+                          {msg.status !== 'dismissed' ? (
+                            <button
+                              onClick={() => void updateSlackStatus(msg.id, 'dismissed')}
+                              className="px-3 py-1.5 rounded-lg border border-rose-400/20 bg-rose-400/10 text-rose-300 hover:bg-rose-400/15 transition-colors text-xs"
+                            >
+                              Dismiss
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => void updateSlackStatus(msg.id, 'new')}
+                              className="px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 text-slate-400 hover:text-slate-200 transition-colors text-xs"
+                            >
+                              Restore
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </Drawer>
       ) : null}
     </div>
   );

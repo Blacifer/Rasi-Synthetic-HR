@@ -1339,6 +1339,54 @@ export const integrationsApi = {
   },
 };
 
+export type SlackMessage = {
+  id: string;
+  slack_channel_id: string;
+  slack_channel_name: string | null;
+  slack_user_id: string;
+  slack_user_name: string | null;
+  slack_ts: string;
+  thread_ts: string | null;
+  text: string;
+  event_type: string;
+  status: 'new' | 'reviewed' | 'replied' | 'dismissed';
+  metadata: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+};
+
+export const slackApi = {
+  async getMessages(params?: {
+    status?: 'new' | 'reviewed' | 'replied' | 'dismissed';
+    limit?: number;
+    offset?: number;
+  }): Promise<ApiResponse<SlackMessage[]>> {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set('status', params.status);
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.offset) qs.set('offset', String(params.offset));
+    const q = qs.toString();
+    return authenticatedFetch(`/integrations/slack/messages${q ? '?' + q : ''}`, { method: 'GET' });
+  },
+
+  async reply(messageId: string, text: string): Promise<ApiResponse<{ slack_ts: string }>> {
+    return authenticatedFetch(`/integrations/slack/messages/${encodeURIComponent(messageId)}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    });
+  },
+
+  async updateStatus(
+    messageId: string,
+    status: 'new' | 'reviewed' | 'replied' | 'dismissed',
+  ): Promise<ApiResponse<void>> {
+    return authenticatedFetch(`/integrations/slack/messages/${encodeURIComponent(messageId)}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    });
+  },
+};
+
 /**
  * Metrics API
  */
@@ -2961,6 +3009,7 @@ export const api = {
   playbooks: playbooksApi,
   actionPolicies: actionPoliciesApi,
   marketplace: marketplaceApi,
+  slack: slackApi,
 };
 
 export default api;
