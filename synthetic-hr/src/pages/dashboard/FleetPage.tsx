@@ -433,7 +433,7 @@ export default function FleetPage({
 
   const getPublishChecklist = (agent: AIAgent) => [
     { label: 'System prompt set', ok: Boolean((agent as any).config?.systemPrompt || (agent as any).systemPrompt) },
-    { label: 'Model selected', ok: Boolean(agent.modelName) },
+    { label: 'Model selected', ok: Boolean(agent.model_name) },
     { label: 'Integration connected', ok: (agent.connectedTargets?.length || 0) > 0 },
     { label: 'Actions enabled', ok: (agent.integrationIds?.length || 0) > 0 || actionCatalog.some((a) => a.enabled) },
   ];
