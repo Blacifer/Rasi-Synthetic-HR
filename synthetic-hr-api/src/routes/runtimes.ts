@@ -897,8 +897,6 @@ async function executeExternalAction(
   creds: Record<string, string>,
   payload: Record<string, any>,
 ): Promise<{ ok: boolean; output: any; error?: string }> {
-  const fetch = (await import('node-fetch')).default as unknown as typeof globalThis.fetch;
-
   // ── SUPPORT: Zendesk ──
   if (service === 'zendesk') {
     const subdomain = String(creds.subdomain || '').replace(/\.zendesk\.com$/, '');
