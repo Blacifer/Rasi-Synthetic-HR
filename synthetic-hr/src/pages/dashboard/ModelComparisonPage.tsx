@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Check, X, Zap, Cpu, ArrowRightLeft, Target, Globe2, Eye, Banknote, ShieldCheck, Search, Filter, Loader2, Users, FileText, Trash2, Sparkles, Layers } from 'lucide-react';
+import { Check, X, Zap, Cpu, ArrowRightLeft, Target, Globe2, Eye, Banknote, ShieldCheck, Search, Filter, Loader2, Users, FileText, Sparkles } from 'lucide-react';
 import { supabase } from '../../lib/supabase-client';
 import { getFrontendConfig } from '../../lib/config';
 
@@ -30,67 +30,317 @@ interface EnrichedModel extends LiveModel {
   recommendedAgents: string[];
 }
 
-const getRecommendedAgents = (modelId: string, provider: string) => {
-  const idLower = modelId.toLowerCase();
-  if (idLower.includes('gpt-4o') || idLower.includes('claude-3-5')) {
-    return ['Support Agent', 'IT Support Agent', 'Healthcare Agent'];
-  }
-  if (idLower.includes('gpt-4')) {
-    return ['Sales Agent', 'Finance Agent', 'Refund Agent'];
-  }
-  if (idLower.includes('opus')) {
-    return ['Legal Agent', 'Compliance Agent'];
-  }
-  if (idLower.includes('sonnet')) {
-    return ['HR Agent', 'Healthcare Agent', 'Support Agent'];
-  }
-  if (idLower.includes('haiku') || idLower.includes('flash') || idLower.includes('mini')) {
-    return ['Onboarding Agent', 'Support Agent'];
-  }
-  if (idLower.includes('llama') || provider.toLowerCase() === 'meta-llama') {
-    return ['IT Support Agent', 'Compliance Agent'];
-  }
-  // Default pseudo-random based on hash
-  const allAgents = ['Support Agent', 'Sales Agent', 'HR Agent', 'Legal Agent', 'Finance Agent', 'IT Support Agent', 'Healthcare Agent', 'Refund Agent', 'Onboarding Agent', 'Compliance Agent'];
-  const hash = modelId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return [allAgents[hash % allAgents.length], allAgents[(hash + 3) % allAgents.length]];
+// ---------------------------------------------------------------------------
+// Static capability knowledge base — keyed by model ID (normalized)
+// Sourced from published provider docs as of March 2026
+// ---------------------------------------------------------------------------
+interface ModelKnowledge {
+  speed: number;          // tokens/sec relative score 0-100
+  accuracy: number;       // MMLU-style benchmark score 0-100
+  supportsVision: boolean;
+  supportsFunctions: boolean;
+  supportedLanguages: number;
+  trainingData: string;   // knowledge cutoff year
+  idealFor: string;
+  recommendedAgents: string[];
+  contextWindow?: number; // override if API doesn't return it
+}
+
+const MODEL_KNOWLEDGE: Record<string, ModelKnowledge> = {
+  // ── OpenAI ──────────────────────────────────────────────────────────────
+  'openai/gpt-4o': {
+    speed: 85, accuracy: 92, supportsVision: true, supportsFunctions: true,
+    supportedLanguages: 98, trainingData: '2024',
+    idealFor: 'Complex reasoning, multimodal tasks, long-form analysis',
+    recommendedAgents: ['Support Agent', 'IT Support Agent', 'Finance Agent'],
+    contextWindow: 128000,
+  },
+  'openai/gpt-4o-mini': {
+    speed: 96, accuracy: 82, supportsVision: true, supportsFunctions: true,
+    supportedLanguages: 95, trainingData: '2024',
+    idealFor: 'Fast, cost-efficient tasks, high-volume pipelines',
+    recommendedAgents: ['Onboarding Agent', 'Support Agent', 'HR Agent'],
+    contextWindow: 128000,
+  },
+  'openai/gpt-4-turbo': {
+    speed: 80, accuracy: 89, supportsVision: true, supportsFunctions: true,
+    supportedLanguages: 95, trainingData: '2024',
+    idealFor: 'Balanced performance, large context tasks',
+    recommendedAgents: ['Sales Agent', 'Finance Agent', 'Refund Agent'],
+    contextWindow: 128000,
+  },
+  'openai/gpt-4': {
+    speed: 65, accuracy: 87, supportsVision: false, supportsFunctions: true,
+    supportedLanguages: 90, trainingData: '2023',
+    idealFor: 'High-quality reasoning, enterprise workflows',
+    recommendedAgents: ['Compliance Agent', 'Legal Agent'],
+    contextWindow: 8192,
+  },
+  'openai/gpt-3.5-turbo': {
+    speed: 97, accuracy: 70, supportsVision: false, supportsFunctions: true,
+    supportedLanguages: 85, trainingData: '2022',
+    idealFor: 'Fast responses, simple Q&A, high-volume low-cost',
+    recommendedAgents: ['Onboarding Agent', 'Support Agent'],
+    contextWindow: 16385,
+  },
+  'openai/o1': {
+    speed: 45, accuracy: 96, supportsVision: false, supportsFunctions: false,
+    supportedLanguages: 90, trainingData: '2024',
+    idealFor: 'Deep reasoning, complex math, strategic planning',
+    recommendedAgents: ['Legal Agent', 'Compliance Agent', 'Finance Agent'],
+    contextWindow: 200000,
+  },
+  'openai/o1-mini': {
+    speed: 70, accuracy: 88, supportsVision: false, supportsFunctions: false,
+    supportedLanguages: 85, trainingData: '2024',
+    idealFor: 'Affordable reasoning, STEM tasks, structured output',
+    recommendedAgents: ['IT Support Agent', 'Finance Agent'],
+    contextWindow: 128000,
+  },
+  'openai/o3-mini': {
+    speed: 75, accuracy: 91, supportsVision: false, supportsFunctions: true,
+    supportedLanguages: 90, trainingData: '2025',
+    idealFor: 'Efficient reasoning, code, structured analysis',
+    recommendedAgents: ['IT Support Agent', 'Compliance Agent'],
+    contextWindow: 200000,
+  },
+  // ── Anthropic ───────────────────────────────────────────────────────────
+  'anthropic/claude-3-5-sonnet': {
+    speed: 88, accuracy: 91, supportsVision: true, supportsFunctions: true,
+    supportedLanguages: 95, trainingData: '2024',
+    idealFor: 'Writing, analysis, nuanced instruction-following',
+    recommendedAgents: ['HR Agent', 'Support Agent', 'Sales Agent'],
+    contextWindow: 200000,
+  },
+  'anthropic/claude-3-5-haiku': {
+    speed: 96, accuracy: 80, supportsVision: true, supportsFunctions: true,
+    supportedLanguages: 90, trainingData: '2024',
+    idealFor: 'Fast, affordable tasks, real-time chat, classification',
+    recommendedAgents: ['Onboarding Agent', 'Support Agent'],
+    contextWindow: 200000,
+  },
+  'anthropic/claude-3-opus': {
+    speed: 60, accuracy: 93, supportsVision: true, supportsFunctions: true,
+    supportedLanguages: 95, trainingData: '2023',
+    idealFor: 'Deep analysis, legal documents, long-form reasoning',
+    recommendedAgents: ['Legal Agent', 'Compliance Agent'],
+    contextWindow: 200000,
+  },
+  'anthropic/claude-3-sonnet': {
+    speed: 82, accuracy: 85, supportsVision: true, supportsFunctions: true,
+    supportedLanguages: 90, trainingData: '2023',
+    idealFor: 'Balanced performance, enterprise drafting',
+    recommendedAgents: ['HR Agent', 'Healthcare Agent'],
+    contextWindow: 200000,
+  },
+  'anthropic/claude-3-haiku': {
+    speed: 98, accuracy: 75, supportsVision: true, supportsFunctions: true,
+    supportedLanguages: 88, trainingData: '2023',
+    idealFor: 'Low-latency pipelines, customer triage',
+    recommendedAgents: ['Onboarding Agent', 'Support Agent'],
+    contextWindow: 200000,
+  },
+  'anthropic/claude-opus-4': {
+    speed: 55, accuracy: 95, supportsVision: true, supportsFunctions: true,
+    supportedLanguages: 95, trainingData: '2025',
+    idealFor: 'Most complex tasks, strategic reasoning, deep research',
+    recommendedAgents: ['Legal Agent', 'Compliance Agent', 'Finance Agent'],
+    contextWindow: 200000,
+  },
+  'anthropic/claude-sonnet-4': {
+    speed: 90, accuracy: 93, supportsVision: true, supportsFunctions: true,
+    supportedLanguages: 95, trainingData: '2025',
+    idealFor: 'High-quality versatile tasks, coding, analysis',
+    recommendedAgents: ['HR Agent', 'Sales Agent', 'IT Support Agent'],
+    contextWindow: 200000,
+  },
+  // ── Google ──────────────────────────────────────────────────────────────
+  'google/gemini-2.0-flash-001': {
+    speed: 97, accuracy: 83, supportsVision: true, supportsFunctions: true,
+    supportedLanguages: 95, trainingData: '2025',
+    idealFor: 'Fast multimodal pipelines, real-time responses',
+    recommendedAgents: ['Support Agent', 'Onboarding Agent'],
+    contextWindow: 1000000,
+  },
+  'google/gemini-2.0-flash': {
+    speed: 97, accuracy: 83, supportsVision: true, supportsFunctions: true,
+    supportedLanguages: 95, trainingData: '2025',
+    idealFor: 'Fast multimodal pipelines, real-time responses',
+    recommendedAgents: ['Support Agent', 'Onboarding Agent'],
+    contextWindow: 1000000,
+  },
+  'google/gemini-1.5-pro': {
+    speed: 75, accuracy: 88, supportsVision: true, supportsFunctions: true,
+    supportedLanguages: 95, trainingData: '2024',
+    idealFor: 'Very long contexts, document analysis, multimodal RAG',
+    recommendedAgents: ['Legal Agent', 'HR Agent', 'Finance Agent'],
+    contextWindow: 2000000,
+  },
+  'google/gemini-1.5-flash': {
+    speed: 94, accuracy: 78, supportsVision: true, supportsFunctions: true,
+    supportedLanguages: 90, trainingData: '2024',
+    idealFor: 'Rapid classification, large-scale document triage',
+    recommendedAgents: ['Support Agent', 'Onboarding Agent'],
+    contextWindow: 1000000,
+  },
+  // ── Meta Llama ──────────────────────────────────────────────────────────
+  'meta-llama/llama-3.1-70b-instruct': {
+    speed: 78, accuracy: 80, supportsVision: false, supportsFunctions: true,
+    supportedLanguages: 75, trainingData: '2023',
+    idealFor: 'Open-source deployment, compliance-restricted environments',
+    recommendedAgents: ['IT Support Agent', 'Compliance Agent'],
+    contextWindow: 128000,
+  },
+  'meta-llama/llama-3.1-8b-instruct': {
+    speed: 95, accuracy: 68, supportsVision: false, supportsFunctions: true,
+    supportedLanguages: 65, trainingData: '2023',
+    idealFor: 'Edge deployment, lightweight classification',
+    recommendedAgents: ['Onboarding Agent', 'Support Agent'],
+    contextWindow: 128000,
+  },
+  'meta-llama/llama-3.3-70b-instruct': {
+    speed: 82, accuracy: 84, supportsVision: false, supportsFunctions: true,
+    supportedLanguages: 78, trainingData: '2024',
+    idealFor: 'Self-hosted quality reasoning, cost-efficient pipelines',
+    recommendedAgents: ['IT Support Agent', 'HR Agent'],
+    contextWindow: 128000,
+  },
+  // ── Mistral ─────────────────────────────────────────────────────────────
+  'mistralai/mistral-large': {
+    speed: 74, accuracy: 81, supportsVision: false, supportsFunctions: true,
+    supportedLanguages: 80, trainingData: '2024',
+    idealFor: 'European data-residency, enterprise drafting',
+    recommendedAgents: ['Compliance Agent', 'HR Agent'],
+    contextWindow: 128000,
+  },
+  'mistralai/mistral-medium': {
+    speed: 82, accuracy: 76, supportsVision: false, supportsFunctions: true,
+    supportedLanguages: 75, trainingData: '2024',
+    idealFor: 'Cost-balanced enterprise workloads',
+    recommendedAgents: ['Support Agent', 'Sales Agent'],
+    contextWindow: 32000,
+  },
+  'mistralai/mixtral-8x7b-instruct': {
+    speed: 86, accuracy: 74, supportsVision: false, supportsFunctions: true,
+    supportedLanguages: 70, trainingData: '2023',
+    idealFor: 'Open MoE model, fast inference at scale',
+    recommendedAgents: ['IT Support Agent', 'Onboarding Agent'],
+    contextWindow: 32768,
+  },
+  // ── Cohere ──────────────────────────────────────────────────────────────
+  'cohere/command-r-plus': {
+    speed: 76, accuracy: 79, supportsVision: false, supportsFunctions: true,
+    supportedLanguages: 85, trainingData: '2024',
+    idealFor: 'RAG pipelines, enterprise search, document grounding',
+    recommendedAgents: ['Support Agent', 'Compliance Agent'],
+    contextWindow: 128000,
+  },
+  'cohere/command-r': {
+    speed: 88, accuracy: 73, supportsVision: false, supportsFunctions: true,
+    supportedLanguages: 80, trainingData: '2024',
+    idealFor: 'Retrieval-augmented generation, cost-efficient search',
+    recommendedAgents: ['Support Agent', 'Onboarding Agent'],
+    contextWindow: 128000,
+  },
+  // ── DeepSeek ────────────────────────────────────────────────────────────
+  'deepseek/deepseek-r1': {
+    speed: 70, accuracy: 90, supportsVision: false, supportsFunctions: true,
+    supportedLanguages: 70, trainingData: '2024',
+    idealFor: 'Math, coding, logical reasoning at low cost',
+    recommendedAgents: ['Finance Agent', 'IT Support Agent'],
+    contextWindow: 64000,
+  },
+  'deepseek/deepseek-chat': {
+    speed: 84, accuracy: 82, supportsVision: false, supportsFunctions: true,
+    supportedLanguages: 72, trainingData: '2024',
+    idealFor: 'General chat, code generation, structured output',
+    recommendedAgents: ['IT Support Agent', 'Sales Agent'],
+    contextWindow: 64000,
+  },
 };
+
+// Fallback knowledge for unknown models — derived from provider + name patterns
+function inferKnowledge(model: LiveModel): ModelKnowledge {
+  const id = model.id.toLowerCase();
+  const provider = (model.provider || '').toLowerCase();
+
+  const isProprietaryProvider = ['openai', 'anthropic', 'google'].includes(provider);
+  const isSmall = /mini|haiku|flash|small|tiny|3b|7b|8b/.test(id);
+  const isLarge = /opus|ultra|large|70b|72b/.test(id);
+  const isReasoner = /o1|o3|r1|reasoning/.test(id);
+  const hasVision = /vision|vl|multimodal|gemini|gpt-4o|claude-3/.test(id);
+
+  return {
+    speed: isReasoner ? 50 : isSmall ? 93 : isLarge ? 65 : 78,
+    accuracy: isReasoner ? 90 : isLarge ? 82 : isSmall ? 70 : 76,
+    supportsVision: hasVision || (isProprietaryProvider && !isSmall),
+    supportsFunctions: isProprietaryProvider || /llama-3|mistral|command/.test(id),
+    supportedLanguages: isProprietaryProvider ? 90 : 65,
+    trainingData: '2024',
+    idealFor: isReasoner
+      ? 'Complex multi-step reasoning and logic'
+      : isSmall
+      ? 'Fast, high-volume lightweight tasks'
+      : isLarge
+      ? 'High-quality generation and analysis'
+      : 'General-purpose language tasks',
+    recommendedAgents: isReasoner
+      ? ['Legal Agent', 'Finance Agent']
+      : isSmall
+      ? ['Onboarding Agent', 'Support Agent']
+      : ['Support Agent', 'HR Agent'],
+  };
+}
+
+const PROVIDER_COLORS: Record<string, string> = {
+  openai: 'from-emerald-500 to-teal-600',
+  anthropic: 'from-orange-500 to-amber-600',
+  google: 'from-blue-500 to-indigo-600',
+  'meta-llama': 'from-cyan-500 to-blue-500',
+  mistralai: 'from-violet-500 to-purple-600',
+  cohere: 'from-rose-500 to-pink-600',
+  deepseek: 'from-sky-500 to-cyan-600',
+  perplexity: 'from-fuchsia-500 to-purple-500',
+};
+
+const FALLBACK_COLORS = [
+  'from-blue-500 to-indigo-600',
+  'from-emerald-500 to-teal-600',
+  'from-orange-500 to-red-500',
+  'from-cyan-500 to-blue-500',
+  'from-amber-500 to-rose-600',
+  'from-fuchsia-500 to-pink-600',
+  'from-purple-500 to-indigo-500',
+];
 
 const enrichLiveModel = (model: LiveModel): EnrichedModel => {
   const p = Number(model.pricing?.prompt || 0);
   const c = Number(model.pricing?.completion || 0);
+  const providerLower = (model.provider || 'unknown').toLowerCase();
 
-  // Use a simple hash of the ID to deterministically assign visual attributes
-  const hash = model.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-
-  const colors = [
-    'from-blue-500 to-indigo-600',
-    'from-emerald-500 to-teal-600',
-    'from-orange-500 to-red-500',
-    'from-cyan-500 to-blue-500',
-    'from-amber-500 to-rose-600',
-    'from-fuchsia-500 to-pink-600',
-    'from-purple-500 to-indigo-500'
-  ];
+  const knowledge = MODEL_KNOWLEDGE[model.id] || inferKnowledge(model);
+  const color =
+    PROVIDER_COLORS[providerLower] ||
+    FALLBACK_COLORS[model.id.split('').reduce((a, ch) => a + ch.charCodeAt(0), 0) % FALLBACK_COLORS.length];
 
   return {
     ...model,
     name: model.name || model.id.split('/').pop() || model.id,
-    type: ['openai', 'anthropic', 'google'].includes(model.provider.toLowerCase()) ? 'Proprietary' : 'Open Source',
-    speed: 60 + (hash % 40),
-    accuracy: 70 + (hash % 30),
+    type: ['openai', 'anthropic', 'google'].includes(providerLower) ? 'Proprietary' : 'Open Source',
+    speed: knowledge.speed,
+    accuracy: knowledge.accuracy,
     costInput: p * 1_000_000,
     costOutput: c * 1_000_000,
     costBlended: ((p * 500_000) + (c * 500_000)) * 93,
-    contextWindow: model.context_length || 8192 * (1 + (hash % 20)),
-    supportsFunctions: hash % 3 !== 0,
-    supportsVision: hash % 2 === 0,
-    supportedLanguages: 10 + (hash % 90),
-    trainingData: `202${3 + (hash % 2)}`,
-    idealFor: 'General purpose workloads & reasoning',
+    contextWindow: knowledge.contextWindow || model.context_length || 8192,
+    supportsFunctions: knowledge.supportsFunctions,
+    supportsVision: knowledge.supportsVision,
+    supportedLanguages: knowledge.supportedLanguages,
+    trainingData: knowledge.trainingData,
+    idealFor: knowledge.idealFor,
     tag: model.provider.charAt(0).toUpperCase() + model.provider.slice(1),
-    color: colors[hash % colors.length],
-    recommendedAgents: getRecommendedAgents(model.id, model.provider)
+    color,
+    recommendedAgents: knowledge.recommendedAgents,
   };
 };
 
@@ -205,7 +455,7 @@ export default function ModelComparisonPage() {
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300">
         <p className="font-semibold text-white">About these scores</p>
         <p className="mt-1 text-slate-400">
-          Speed/accuracy are heuristic indicators based on published specs. Run real benchmarks on your prompts to validate production performance.
+          Speed and accuracy scores are curated from published provider benchmarks (MMLU, GPQA) and official docs as of March 2026. Pricing is live from the model registry. Run your own benchmarks to validate production performance for your specific workloads.
         </p>
       </div>
 

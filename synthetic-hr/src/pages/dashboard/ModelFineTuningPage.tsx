@@ -77,16 +77,20 @@ interface FineTuneJob {
 
 const STORAGE_KEY = 'rasi.finetuneJobs';
 const DATASET_STORAGE_KEY = 'rasi.finetunePreparedDataset';
-const INR_PER_USD = 83;
+const INR_PER_USD = 93;
 
 const BASE_MODELS = [
-  { id: 'openai/gpt-4o-mini', name: 'OpenAI GPT-4o Mini', provider: 'OpenAI', tier: 'Best Value', inputUsdPerMillion: 0.3, outputUsdPerMillion: 1.2, liveProviderSupported: true },
-  { id: 'openai/gpt-4o', name: 'OpenAI GPT-4o', provider: 'OpenAI', tier: 'Highest Quality', inputUsdPerMillion: 3.75, outputUsdPerMillion: 15, liveProviderSupported: true },
-  { id: 'openai/gpt-4.1-mini', name: 'OpenAI GPT-4.1 Mini', provider: 'OpenAI', tier: 'Fast Iteration', inputUsdPerMillion: 0.4, outputUsdPerMillion: 1.6, liveProviderSupported: false },
-  { id: 'openai/gpt-4.1', name: 'OpenAI GPT-4.1', provider: 'OpenAI', tier: 'Reasoning Heavy', inputUsdPerMillion: 2, outputUsdPerMillion: 8, liveProviderSupported: false },
+  // ── OpenAI (live fine-tuning supported) ──────────────────────────────────
+  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', tier: 'Best Value', inputUsdPerMillion: 0.3, outputUsdPerMillion: 1.2, liveProviderSupported: true },
+  { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'OpenAI', tier: 'Highest Quality', inputUsdPerMillion: 3.75, outputUsdPerMillion: 15, liveProviderSupported: true },
+  { id: 'openai/gpt-4.1-mini', name: 'GPT-4.1 Mini', provider: 'OpenAI', tier: 'Fast Iteration', inputUsdPerMillion: 0.4, outputUsdPerMillion: 1.6, liveProviderSupported: false },
+  { id: 'openai/gpt-4.1', name: 'GPT-4.1', provider: 'OpenAI', tier: 'Reasoning Heavy', inputUsdPerMillion: 2, outputUsdPerMillion: 8, liveProviderSupported: false },
+  // ── Anthropic (dataset prep + cost estimate; live submission coming soon) ─
   { id: 'anthropic/claude-3-5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'Anthropic', tier: 'Strong Writing', inputUsdPerMillion: 3, outputUsdPerMillion: 15, liveProviderSupported: false },
   { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', provider: 'Anthropic', tier: 'Low Latency', inputUsdPerMillion: 0.25, outputUsdPerMillion: 1.25, liveProviderSupported: false },
+  // ── Google (dataset prep + cost estimate; live submission coming soon) ────
   { id: 'google/gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'Google', tier: 'Cost Efficient', inputUsdPerMillion: 0.35, outputUsdPerMillion: 0.7, liveProviderSupported: false },
+  // ── Open Source (dataset prep + export only) ──────────────────────────────
   { id: 'meta-llama/llama-3.1-70b-instruct', name: 'Llama 3.1 70B', provider: 'Meta', tier: 'Open Model', inputUsdPerMillion: 0.88, outputUsdPerMillion: 0.88, liveProviderSupported: false },
   { id: 'mistralai/mistral-large', name: 'Mistral Large', provider: 'Mistral', tier: 'Enterprise Drafting', inputUsdPerMillion: 4, outputUsdPerMillion: 12, liveProviderSupported: false },
 ];
@@ -653,7 +657,10 @@ export default function ModelFineTuningPage() {
           <div className="max-w-3xl">
             <h1 className="text-4xl font-extrabold text-white">Model Fine-tuning Studio</h1>
             <p className="text-slate-300 mt-3 text-lg leading-relaxed">
-              Validate your dataset, inspect samples, split train and validation cleanly, and submit a real OpenAI fine-tune when the dataset is strong enough.
+              Validate your dataset, inspect samples, split train and validation cleanly, and submit directly to OpenAI when the dataset is ready. Anthropic and Google fine-tuning — prepare your dataset now, submit when provider APIs go live.
+            </p>
+            <p className="text-slate-500 mt-2 text-sm">
+              Jobs are saved in your browser session. Export your JSONL files to preserve training data across devices.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 min-w-full xl:min-w-[560px]">
@@ -732,7 +739,9 @@ export default function ModelFineTuningPage() {
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500"
               >
                 {BASE_MODELS.map(model => (
-                  <option key={model.id} value={model.id}>{model.name} • {model.provider} • {model.tier}</option>
+                  <option key={model.id} value={model.id}>
+                    {model.name} • {model.provider} • {model.tier}{model.liveProviderSupported ? ' ✓ Live' : ' — Coming Soon'}
+                  </option>
                 ))}
               </select>
               ) : (
@@ -760,15 +769,17 @@ export default function ModelFineTuningPage() {
                     <span className={`text-xs font-semibold px-3 py-1 rounded-full ${selectedModel.source === 'curated' ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/20' : 'bg-fuchsia-500/15 text-fuchsia-200 border border-fuchsia-500/20'}`}>
                       {selectedModel.source === 'curated' ? 'Recommended' : 'Custom'}
                     </span>
-                    <span className={`text-xs font-semibold px-3 py-1 rounded-full ${selectedModel.liveProviderSupported ? 'bg-green-500/15 text-green-300 border border-green-500/20' : 'bg-slate-700 text-slate-300 border border-slate-600'}`}>
-                      {selectedModel.liveProviderSupported ? 'Live provider path' : 'Local staging only'}
+                    <span className={`text-xs font-semibold px-3 py-1 rounded-full ${selectedModel.liveProviderSupported ? 'bg-green-500/15 text-green-300 border border-green-500/20' : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'}`}>
+                      {selectedModel.liveProviderSupported ? 'Live submission ready' : 'Dataset prep only — coming soon'}
                     </span>
                   </div>
                 </div>
                 <p className="text-slate-500 text-xs mt-3">
-                  {selectedModel.source === 'curated'
-                    ? 'This is a practical shortlist, not the full universe of models. Fine-tuning works better when the user starts from a smaller set of defensible choices.'
-                    : 'Custom models are allowed for advanced users. They are staged safely, and only models with a verified live path will submit to a provider.'}
+                  {selectedModel.liveProviderSupported
+                    ? 'Your dataset will be validated and submitted directly to OpenAI when you create the job.'
+                    : selectedModel.provider === 'OpenAI'
+                      ? 'This OpenAI model does not yet have a fine-tuning API endpoint. Stage the job now — live submission will be enabled once available.'
+                      : `${selectedModel.provider} fine-tuning API is not yet publicly available. Prepare and validate your dataset now so you can submit the moment it launches.`}
                 </p>
               </div>
             </div>
