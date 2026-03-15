@@ -969,7 +969,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
           </div>
 
           <div className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.12),transparent_28%),linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.98))] p-4 md:p-6 shadow-[0_24px_80px_rgba(2,6,23,0.45)]">
-            <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+            <div>
               <div className="rounded-[28px] border border-white/10 bg-slate-950/65 p-4 sm:p-6 backdrop-blur-xl">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -1079,79 +1079,6 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                     <p className="text-xs uppercase tracking-[0.18em] text-emerald-200">Likely Savings Window</p>
                     <p className="mt-3 text-lg font-bold text-white">₹{calculator.savingsWindow.low.toLocaleString('en-IN')} to ₹{calculator.savingsWindow.high.toLocaleString('en-IN')}</p>
                   </div>
-                </div>
-              </div>
-
-              <div className="rounded-[28px] border border-white/10 bg-slate-950/55 p-4 sm:p-6 backdrop-blur-xl">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-semibold uppercase tracking-[0.22em] text-cyan-300">Plan Matrix</p>
-                    <h3 className="mt-2 text-3xl font-bold text-white">Commercial model overview</h3>
-                  </div>
-                  <div className="hidden rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 md:block">
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Best Match</p>
-                    <p className="mt-1 text-lg font-semibold text-white">{calculator.recommendation.name}</p>
-                  </div>
-                </div>
-
-                {/* Plan comparison table — hidden on mobile, shown md+ */}
-                <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 hidden md:block">
-                  <div className="grid grid-cols-[1.15fr_0.75fr_0.95fr] border-b border-white/10 bg-white/[0.04] px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                    <span>Plan</span>
-                    <span>Price</span>
-                    <span>Best for</span>
-                  </div>
-                  {PLAN_CARDS.map((plan) => {
-                    const recommended = plan.name === calculator.recommendation.name;
-                    return (
-                      <div key={plan.name} className={`grid grid-cols-[1.15fr_0.75fr_0.95fr] gap-4 border-b border-white/10 px-4 py-4 last:border-b-0 ${recommended ? 'bg-cyan-500/[0.08]' : 'bg-transparent'}`}>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="text-lg font-bold text-white">{plan.name}</p>
-                            {recommended && <span className="rounded-full bg-cyan-400 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-950">Recommended</span>}
-                          </div>
-                          <p className="mt-1 text-sm text-cyan-300">{plan.subtitle}</p>
-                        </div>
-                        <div>
-                          <p className="text-2xl font-bold text-white">{plan.price}</p>
-                          <p className="text-sm text-slate-400">{plan.cadence}</p>
-                        </div>
-                        <p className="text-sm leading-relaxed text-slate-300">{plan.bestFor}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-6 grid gap-4 md:grid-cols-3">
-                  {PLAN_CARDS.map((plan) => {
-                    const recommended = plan.name === calculator.recommendation.name;
-                    return (
-                      <div key={plan.name} className={`rounded-3xl border p-5 transition-all ${plan.accent} ${recommended ? 'shadow-[0_0_0_1px_rgba(34,211,238,0.18)]' : ''}`}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <h4 className="text-xl font-bold text-white">{plan.name}</h4>
-                            <p className="mt-1 text-sm text-slate-300">{plan.subtitle}</p>
-                          </div>
-                          <span className="rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-[0.18em] text-slate-300">{recommended ? 'Best fit' : 'Option'}</span>
-                        </div>
-                        <p className="mt-5 text-3xl font-bold text-white">{plan.price}<span className="ml-1 text-base font-medium text-slate-400">{plan.cadence}</span></p>
-                        <ul className="mt-5 space-y-3">
-                          {plan.features.map((feature) => (
-                            <li key={feature} className="flex items-start gap-3 text-sm text-slate-200">
-                              <CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-400" />
-                              <span>{feature}</span>
-                            </li>
-                          ))}
-                        </ul>
-                        <button
-                          onClick={onSignUp}
-                          className={`mt-6 w-full rounded-2xl px-4 py-3 font-semibold transition-all ${recommended ? 'bg-cyan-400 text-slate-950 hover:bg-cyan-300' : 'bg-slate-800 text-white hover:bg-slate-700'}`}
-                        >
-                          {plan.cta}
-                        </button>
-                      </div>
-                    );
-                  })}
                 </div>
               </div>
             </div>
