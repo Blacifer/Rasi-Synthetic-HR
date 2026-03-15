@@ -1054,7 +1054,7 @@ export default function IntegrationsPage({
       return;
     }
     if (risk === 'money' && providerStatus !== 'connected') {
-      toast.error('Money actions require a validated connection. Click “Test & connect” first.');
+      toast.error('Money actions require a validated connection. Click "Test & connect" first.');
       return;
     }
 
@@ -1082,7 +1082,7 @@ export default function IntegrationsPage({
           <p className="text-sm text-slate-400 mt-1 max-w-2xl">
             {entryMode === 'publish' && effectiveAgentContext
               ? `Choose where ${effectiveAgentName || 'this agent'} should work. Connect the provider here, then manage the live agent back in Fleet.`
-              : 'Connect third-party apps with clear capabilities, safe defaults, and an immediate “see it” moment.'}
+              : 'Connect third-party apps with clear capabilities, safe defaults, and an immediate "see it" moment.'}
           </p>
         </div>
         <button
@@ -1543,23 +1543,23 @@ export default function IntegrationsPage({
         </div>
       </div>
 
-      <div className=”mt-10”>
+      <div className="mt-10">
         <button
           onClick={() => setBrowserExpanded((v) => !v)}
-          className=”flex items-center justify-between w-full group”
+          className="flex items-center justify-between w-full group"
         >
-          <div className=”text-left”>
-            <h2 className=”text-base font-semibold text-white group-hover:text-slate-200 transition-colors”>
+          <div className="text-left">
+            <h2 className="text-base font-semibold text-white group-hover:text-slate-200 transition-colors">
               Recruitment browser
-              <span className=”ml-2 text-xs font-normal text-slate-500”>preview</span>
+              <span className="ml-2 text-xs font-normal text-slate-500">preview</span>
             </h2>
           </div>
-          <span className=”text-xs text-slate-500 group-hover:text-slate-400 transition-colors”>
+          <span className="text-xs text-slate-500 group-hover:text-slate-400 transition-colors">
             {browserExpanded ? 'Collapse ↑' : 'Expand ↓'}
           </span>
         </button>
         {browserExpanded && (
-        <div className=”flex items-center justify-end mt-3”>
+        <div className="flex items-center justify-end mt-3">
           <button
             onClick={() => {
               if (defaultSampleProviderId) {
@@ -1568,7 +1568,7 @@ export default function IntegrationsPage({
                 openWizard(3);
               }
             }}
-            className=”px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm”
+            className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 transition-colors text-sm"
           >
             {defaultSampleProviderId ? 'Refresh preview' : 'Connect & preview'}
           </button>
@@ -2269,7 +2269,7 @@ export default function IntegrationsPage({
             <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
               <div className="font-semibold text-white">Governance defaults</div>
               <div className="text-sm text-slate-400 mt-1">
-                V1 defaults to being strict: reads are role-gated, and writes require approvals. You can tune these later in the sidebar’s “Action Policies”.
+                V1 defaults to being strict: reads are role-gated, and writes require approvals. You can tune these later in the sidebar's "Action Policies".
               </div>
               <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
