@@ -3,7 +3,7 @@ import {
   Brain, Zap, ArrowRight, Play, FileText, DollarSign, BarChart3,
   Shield, ZapOff, TrendingUp, Users, CheckCircle, Sparkles, Lock,
   Gauge, Workflow, Target, Rocket, ChevronDown, Building2, Award,
-  TrendingDown
+  TrendingDown, Menu, X
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -77,6 +77,18 @@ const PLAN_CARDS: PlanCard[] = [
   },
 ];
 
+// Static color map to replace dynamic Tailwind class construction (JIT fix)
+const pillarColorMap: Record<string, { bg: string; border: string; text: string }> = {
+  cyan: { bg: 'bg-cyan-500/10', border: 'border-cyan-500/20', text: 'text-cyan-300' },
+  emerald: { bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', text: 'text-emerald-300' },
+  red: { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-300' },
+  amber: { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-300' },
+  blue: { bg: 'bg-blue-500/10', border: 'border-blue-500/20', text: 'text-blue-300' },
+  violet: { bg: 'bg-violet-500/10', border: 'border-violet-500/20', text: 'text-violet-300' },
+  green: { bg: 'bg-green-500/10', border: 'border-green-500/20', text: 'text-green-300' },
+  purple: { bg: 'bg-purple-500/10', border: 'border-purple-500/20', text: 'text-purple-300' },
+};
+
 // Animated counter component
 function AnimatedCounter({ target, label, suffix = '' }: { target: number; label: string; suffix?: string }) {
   const [count, setCount] = useState(0);
@@ -120,7 +132,7 @@ function AnimatedCounter({ target, label, suffix = '' }: { target: number; label
       setCount(target);
       return;
     }
-    
+
     const duration = 2000;
     const steps = 60;
     const increment = target / steps;
@@ -328,8 +340,8 @@ function ProductPreview({ onDemo, onSignUp }: { onDemo?: () => void; onSignUp: (
 
       {/* Mock sidebar + content */}
       <div className="flex" style={{ minHeight: '380px' }}>
-        {/* Mini sidebar */}
-        <div className="w-40 bg-slate-900/60 border-r border-white/[0.07] p-3 flex flex-col gap-1 flex-shrink-0">
+        {/* Mini sidebar — hidden on very small screens */}
+        <div className="hidden sm:flex w-40 bg-slate-900/60 border-r border-white/[0.07] p-3 flex-col gap-1 flex-shrink-0">
           {(PREVIEW_TABS as unknown as PreviewTab[]).map((tab) => (
             <button
               key={tab}
@@ -352,6 +364,22 @@ function ProductPreview({ onDemo, onSignUp }: { onDemo?: () => void; onSignUp: (
 
         {/* Content area */}
         <div className="flex-1 overflow-hidden">
+          {/* Mobile tab bar */}
+          <div className="flex sm:hidden border-b border-white/10 bg-slate-900/60">
+            {(PREVIEW_TABS as unknown as PreviewTab[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 py-2 text-xs font-medium transition-all ${
+                  activeTab === tab
+                    ? 'text-white border-b-2 border-cyan-400'
+                    : 'text-slate-400'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
           {activeTab === 'Overview' && <PreviewOverview />}
           {activeTab === 'Fleet' && <PreviewFleet />}
           {activeTab === 'Incidents' && <PreviewIncidents />}
@@ -379,6 +407,7 @@ function ProductPreview({ onDemo, onSignUp }: { onDemo?: () => void; onSignUp: (
 
 export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPageProps) {
   const [scrolled, setScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hoveredPillar, setHoveredPillar] = useState<number | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<PricingProfile['id']>('growth');
   const [monthlyConversations, setMonthlyConversations] = useState(8500);
@@ -527,12 +556,19 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
     setGovernanceLayer(profile.governance);
   };
 
+  const NAV_LINKS = [
+    { href: '#how-it-works', label: 'How it works' },
+    { href: '#stats', label: 'Results' },
+    { href: '#pillars', label: 'Features' },
+    { href: '#pricing', label: 'Pricing' },
+  ];
+
   return (
     <div className="min-h-screen app-bg overflow-hidden text-slate-50">
       {/* Navigation */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled 
-          ? 'bg-slate-950/70 backdrop-blur-xl border-b border-white/10' 
+        scrolled
+          ? 'bg-slate-950/70 backdrop-blur-xl border-b border-white/10'
           : 'bg-transparent'
       }`}>
         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -546,11 +582,14 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 <span className="text-xs text-blue-300 block -mt-1">Synthetic HR</span>
               </div>
             </div>
+
+            {/* Desktop nav links */}
             <div className="hidden md:flex items-center gap-8">
-              <a href="#how-it-works" className="text-slate-300 hover:text-white transition-colors text-sm">How it works</a>
-              <a href="#stats" className="text-slate-300 hover:text-white transition-colors text-sm">Results</a>
-              <a href="#pillars" className="text-slate-300 hover:text-white transition-colors text-sm">Features</a>
-              <a href="#pricing" className="text-slate-300 hover:text-white transition-colors text-sm">Pricing</a>
+              {NAV_LINKS.map((link) => (
+                <a key={link.href} href={link.href} className="text-slate-300 hover:text-white transition-colors text-sm">
+                  {link.label}
+                </a>
+              ))}
               <button
                 onClick={onLogin}
                 className="px-4 py-2 text-slate-300 hover:text-white transition-colors text-sm"
@@ -564,17 +603,54 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 Start Free Trial
               </button>
             </div>
+
+            {/* Hamburger button — mobile only */}
+            <button
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              className="md:hidden p-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-all"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
           </div>
+
+          {/* Mobile dropdown menu */}
+          {mobileMenuOpen && (
+            <div className="md:hidden mt-3 pb-4 border-t border-white/10 pt-4 flex flex-col gap-1">
+              {NAV_LINKS.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/[0.07] transition-all text-sm font-medium"
+                >
+                  {link.label}
+                </a>
+              ))}
+              <div className="mt-3 flex flex-col gap-2 pt-3 border-t border-white/10">
+                <button
+                  onClick={() => { setMobileMenuOpen(false); onLogin(); }}
+                  className="w-full text-left px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/[0.07] transition-all text-sm font-medium"
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => { setMobileMenuOpen(false); onSignUp(); }}
+                  className="btn-primary text-sm w-full justify-center"
+                >
+                  Start Free Trial
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </nav>
 
       {/* Hero Section */}
       <section className="min-h-screen flex items-center justify-center relative overflow-hidden pt-20">
-        {/* Animated background elements */}
+        {/* Animated background elements — single blob, no animate-pulse for performance */}
         <div className="absolute inset-0">
-          <div className="absolute top-20 left-10 w-80 h-80 bg-blue-500/14 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-40 right-10 w-96 h-96 bg-indigo-500/12 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-          <div className="absolute top-1/2 left-1/3 w-64 h-64 bg-sky-500/8 rounded-full blur-3xl" />
+          <div className="absolute top-20 left-10 w-80 h-80 bg-blue-500/14 rounded-full blur-3xl" />
         </div>
 
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-950/55 to-slate-950" />
@@ -585,19 +661,19 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
             <span className="text-sm text-slate-200">Enterprise AI Governance Platform</span>
           </div>
 
-          <h1 className="text-6xl md:text-7xl font-black text-white mb-6 leading-tight">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black text-white mb-6 leading-tight">
             The HR Department
             <br />
             <span className="gradient-text">for your AI Workforce</span>
           </h1>
 
-          <p className="text-xl text-slate-300 mb-12 max-w-3xl mx-auto leading-relaxed">
+          <p className="text-sm sm:text-base md:text-lg lg:text-xl text-slate-300 mb-12 max-w-3xl mx-auto leading-relaxed">
             Most companies treat AI agents like tools. We treat them like employees.
             <br className="hidden md:block" />
             <span className="text-slate-100 font-semibold">Manage, monitor, govern, and optimize</span> your digital workforce with enterprise-grade controls.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 sm:mb-12 md:mb-16">
             <button
               onClick={onSignUp}
               className="btn-primary group w-full sm:w-auto"
@@ -624,8 +700,8 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
               { value: '-47%', label: 'Avg Cost Cut' },
               { value: '24/7', label: 'Monitoring' }
             ].map((stat, i) => (
-              <div 
-                key={i} 
+              <div
+                key={i}
                 className="p-4 rounded-lg bg-white/5 backdrop-blur-md border border-white/10 hover:border-cyan-400/30 transition-all"
               >
                 <div className="text-2xl font-bold text-cyan-400">{stat.value}</div>
@@ -644,11 +720,11 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       {/* Stats Section */}
       <section id="stats" className="py-24 px-6 relative">
         <div className="max-w-6xl mx-auto">
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
             {stats.map((stat, i) => (
-              <AnimatedCounter 
-                key={i} 
-                target={stat.value} 
+              <AnimatedCounter
+                key={i}
+                target={stat.value}
                 label={stat.label}
                 suffix={stat.suffix || ''}
               />
@@ -662,9 +738,9 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-900/10 to-transparent" />
 
         <div className="max-w-6xl mx-auto relative z-10">
-          <div className="text-center mb-12">
+          <div className="text-center mb-12 md:mb-16 lg:mb-20">
             <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Live Preview</span>
-            <h2 className="text-5xl font-bold text-white mt-4">See the Control Plane in Action</h2>
+            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">See the Control Plane in Action</h2>
             <p className="text-slate-400 mt-4 text-lg max-w-2xl mx-auto">
               Browse a live demo of the dashboard — real interface, sample data.
             </p>
@@ -696,17 +772,17 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       {/* How It Works Section */}
       <section id="how-it-works" className="py-24 px-6 relative">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-cyan-500/5" />
-        
+
         <div className="max-w-6xl mx-auto relative z-10">
-          <div className="text-center mb-20">
+          <div className="text-center mb-12 md:mb-16 lg:mb-20">
             <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">The Solution</span>
-            <h2 className="text-5xl font-bold text-white mt-4">AI Workforce Governance in 4 Steps</h2>
-            <p className="text-xl text-slate-400 mt-6 max-w-3xl mx-auto">
+            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">AI Workforce Governance in 4 Steps</h2>
+            <p className="text-lg sm:text-xl text-slate-400 mt-6 max-w-3xl mx-auto">
               From recruitment to retirement, we help you manage AI like you manage people.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
             {[
               {
                 step: 1,
@@ -733,18 +809,18 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 desc: 'Kill switch protocol for instant agent shutdown when needed'
               }
             ].map((item, i) => (
-              <div 
-                key={i} 
-                className="group relative p-8 rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-xl border border-white/10 hover:border-cyan-400/50 transition-all overflow-hidden"
+              <div
+                key={i}
+                className="group relative p-4 sm:p-6 lg:p-8 rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-xl border border-white/10 hover:border-cyan-400/50 transition-all overflow-hidden"
               >
                 {/* Glow effect */}
                 <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/0 to-blue-500/0 group-hover:from-cyan-500/10 group-hover:to-blue-500/10 transition-all" />
-                
+
                 <div className="relative">
                   <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center mb-6 group-hover:shadow-lg group-hover:shadow-cyan-500/30 transition-all">
                     <item.icon className="w-6 h-6 text-white" />
                   </div>
-                  
+
                   <div className="text-sm font-bold text-cyan-400 mb-2">Step {item.step}</div>
                   <h3 className="text-xl font-bold text-white mb-3">{item.title}</h3>
                   <p className="text-slate-400">{item.desc}</p>
@@ -758,53 +834,56 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       {/* The 4 Pillars Section */}
       <section id="pillars" className="py-24 px-6">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-20">
+          <div className="text-center mb-12 md:mb-16 lg:mb-20">
             <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Complete Management</span>
-            <h2 className="text-5xl font-bold text-white mt-4">4 Pillars of AI Governance</h2>
+            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">4 Pillars of AI Governance</h2>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
-            {pillars.map((pillar, i) => (
-              <div
-                key={pillar.id}
-                onMouseEnter={() => setHoveredPillar(pillar.id)}
-                onMouseLeave={() => setHoveredPillar(null)}
-                className="group relative p-8 rounded-2xl transition-all duration-300 cursor-pointer overflow-hidden"
-              >
-                {/* Background gradient */}
-                <div className={`absolute inset-0 bg-gradient-to-br from-${pillar.bgColor}-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity`} />
-                
-                {/* Border */}
-                <div className={`absolute inset-0 rounded-2xl border border-white/10 group-hover:border-${pillar.bgColor}-500/50 transition-all`} />
-                
-                {/* Backdrop blur */}
-                <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] to-white/[0.01] backdrop-blur-xl rounded-2xl" />
+          <div className="grid md:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
+            {pillars.map((pillar, i) => {
+              const colors = pillarColorMap[pillar.bgColor] ?? { bg: 'bg-white/5', border: 'border-white/10', text: 'text-slate-300' };
+              return (
+                <div
+                  key={pillar.id}
+                  onMouseEnter={() => setHoveredPillar(pillar.id)}
+                  onMouseLeave={() => setHoveredPillar(null)}
+                  className="group relative p-4 sm:p-6 lg:p-8 rounded-2xl transition-all duration-300 cursor-pointer overflow-hidden"
+                >
+                  {/* Background gradient — static class via color map */}
+                  <div className={`absolute inset-0 ${colors.bg} opacity-0 group-hover:opacity-100 transition-opacity`} />
 
-                <div className="relative z-10">
-                  <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${pillar.color} flex items-center justify-center mb-6 shadow-lg group-hover:shadow-xl transition-all group-hover:scale-110`}>
-                    <pillar.icon className="w-7 h-7 text-white" />
-                  </div>
+                  {/* Border — static class via color map */}
+                  <div className={`absolute inset-0 rounded-2xl border border-white/10 group-hover:${colors.border} transition-all`} />
 
-                  <h3 className="text-2xl font-bold text-white mb-1">{pillar.title}</h3>
-                  <p className="text-sm text-cyan-400 font-semibold mb-4">{pillar.subtitle}</p>
-                  
-                  <p className="text-slate-400 mb-6"><span className="font-semibold text-slate-300">Problem:</span> {pillar.problem}</p>
+                  {/* Backdrop blur */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] to-white/[0.01] backdrop-blur-xl rounded-2xl" />
 
-                  <ul className="space-y-3 mb-6">
-                    {pillar.features.map((feature, j) => (
-                      <li key={j} className="flex items-start gap-3">
-                        <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-                        <span className="text-slate-300">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="relative z-10">
+                    <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${pillar.color} flex items-center justify-center mb-6 shadow-lg group-hover:shadow-xl transition-all group-hover:scale-110`}>
+                      <pillar.icon className="w-7 h-7 text-white" />
+                    </div>
 
-                  <div className={`inline-block px-4 py-2 rounded-lg bg-gradient-to-r ${pillar.color} text-white font-semibold text-sm`}>
-                    {pillar.impact}
+                    <h3 className="text-2xl font-bold text-white mb-1">{pillar.title}</h3>
+                    <p className="text-sm text-cyan-400 font-semibold mb-4">{pillar.subtitle}</p>
+
+                    <p className="text-slate-400 mb-6"><span className="font-semibold text-slate-300">Problem:</span> {pillar.problem}</p>
+
+                    <ul className="space-y-3 mb-6">
+                      {pillar.features.map((feature, j) => (
+                        <li key={j} className="flex items-start gap-3">
+                          <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                          <span className="text-slate-300">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div className={`inline-block px-4 py-2 rounded-lg bg-gradient-to-r ${pillar.color} text-white font-semibold text-sm`}>
+                      {pillar.impact}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
@@ -812,18 +891,18 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       {/* Testimonials Section */}
       <section className="py-24 px-6 relative">
         <div className="absolute inset-0 bg-gradient-to-b from-slate-800/30 to-transparent" />
-        
+
         <div className="max-w-6xl mx-auto relative z-10">
-          <div className="text-center mb-16">
+          <div className="text-center mb-12 md:mb-16">
             <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Trusted by Teams</span>
-            <h2 className="text-5xl font-bold text-white mt-4">Real Results, Real Impact</h2>
+            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">Real Results, Real Impact</h2>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
             {testimonials.map((testimonial, i) => (
-              <div 
-                key={i} 
-                className="p-8 rounded-2xl bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl border border-white/10 hover:border-cyan-400/30 transition-all hover:bg-white/[0.12]"
+              <div
+                key={i}
+                className="p-4 sm:p-6 lg:p-8 rounded-2xl bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl border border-white/10 hover:border-cyan-400/30 transition-all hover:bg-white/[0.12]"
               >
                 <div className="flex items-center gap-4 mb-6">
                   <div className="text-4xl">{testimonial.avatar}</div>
@@ -842,12 +921,12 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       {/* Why RASI Section */}
       <section className="py-24 px-6">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
+          <div className="text-center mb-12 md:mb-16">
             <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Why Choose RASI</span>
-            <h2 className="text-5xl font-bold text-white mt-4">Everything You Need to Scale AI Safely</h2>
+            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">Everything You Need to Scale AI Safely</h2>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
             {[
               { icon: Lock, title: 'Enterprise Security', desc: 'Security-focused operating posture, audit visibility, and controlled access patterns' },
               { icon: Gauge, title: 'Real-Time Monitoring', desc: 'Operational visibility across fleet health, incidents, and runtime cost movement' },
@@ -856,9 +935,9 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
               { icon: TrendingUp, title: 'Cost Reduction', desc: 'Governance-led optimization highlights waste, drift, and review priorities early' },
               { icon: Award, title: 'Compliance Ready', desc: 'Audit trails, reports, governance frameworks' },
             ].map((item, i) => (
-              <div 
-                key={i} 
-                className="p-6 rounded-xl bg-white/[0.05] border border-white/10 hover:bg-white/[0.08] hover:border-cyan-400/30 transition-all"
+              <div
+                key={i}
+                className="p-4 sm:p-6 rounded-xl bg-white/[0.05] border border-white/10 hover:bg-white/[0.08] hover:border-cyan-400/30 transition-all"
               >
                 <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center mb-4">
                   <item.icon className="w-6 h-6 text-white" />
@@ -877,7 +956,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
           <div className="mb-12 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div className="max-w-3xl">
               <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Pricing Calculator</span>
-              <h2 className="text-5xl font-bold text-white mt-4">Estimate governance cost like an operating model</h2>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mt-4">Estimate governance cost like an operating model</h2>
               <p className="text-slate-400 mt-4 text-lg">
                 Inspired by model pricing directories, but built around RASI: active agents, governance intensity, and the operational load your AI workforce creates.
               </p>
@@ -891,7 +970,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
 
           <div className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.12),transparent_28%),linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.98))] p-4 md:p-6 shadow-[0_24px_80px_rgba(2,6,23,0.45)]">
             <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-              <div className="rounded-[28px] border border-white/10 bg-slate-950/65 p-6 backdrop-blur-xl">
+              <div className="rounded-[28px] border border-white/10 bg-slate-950/65 p-4 sm:p-6 backdrop-blur-xl">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="text-sm font-semibold uppercase tracking-[0.22em] text-cyan-300">Live Calculator</p>
@@ -1003,7 +1082,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
+              <div className="rounded-[28px] border border-white/10 bg-slate-950/55 p-4 sm:p-6 backdrop-blur-xl">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm font-semibold uppercase tracking-[0.22em] text-cyan-300">Plan Matrix</p>
@@ -1015,7 +1094,8 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                   </div>
                 </div>
 
-                <div className="mt-6 overflow-hidden rounded-3xl border border-white/10">
+                {/* Plan comparison table — hidden on mobile, shown md+ */}
+                <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 hidden md:block">
                   <div className="grid grid-cols-[1.15fr_0.75fr_0.95fr] border-b border-white/10 bg-white/[0.04] px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                     <span>Plan</span>
                     <span>Price</span>
@@ -1024,7 +1104,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                   {PLAN_CARDS.map((plan) => {
                     const recommended = plan.name === calculator.recommendation.name;
                     return (
-                      <div key={plan.name} className={`grid grid-cols-1 gap-4 border-b border-white/10 px-4 py-4 last:border-b-0 md:grid-cols-[1.15fr_0.75fr_0.95fr] ${recommended ? 'bg-cyan-500/[0.08]' : 'bg-transparent'}`}>
+                      <div key={plan.name} className={`grid grid-cols-[1.15fr_0.75fr_0.95fr] gap-4 border-b border-white/10 px-4 py-4 last:border-b-0 ${recommended ? 'bg-cyan-500/[0.08]' : 'bg-transparent'}`}>
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="text-lg font-bold text-white">{plan.name}</p>
@@ -1082,15 +1162,15 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       {/* Security Section */}
       <section id="security" className="py-24 px-6">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
+          <div className="text-center mb-12 md:mb-16">
             <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Security</span>
-            <h2 className="text-5xl font-bold text-white mt-4">Enterprise-ready by default</h2>
-            <p className="text-xl text-slate-400 mt-6 max-w-3xl mx-auto">
+            <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">Enterprise-ready by default</h2>
+            <p className="text-lg sm:text-xl text-slate-400 mt-6 max-w-3xl mx-auto">
               Least-privilege access, auditability, and safe deployment patterns built for real operations.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-3 gap-4 sm:gap-6">
             {[
               {
                 icon: Lock,
@@ -1110,7 +1190,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
             ].map((item, idx) => (
               <div
                 key={idx}
-                className="p-6 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-cyan-400/30 transition-colors"
+                className="p-4 sm:p-6 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-cyan-400/30 transition-colors"
               >
                 <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center mb-4">
                   <item.icon className="w-6 h-6 text-cyan-300" />
@@ -1127,18 +1207,18 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       <section className="py-24 px-6 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-cyan-500/10 to-blue-500/10" />
         <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl -z-10" />
-        
+
         <div className="max-w-4xl mx-auto relative z-10 text-center">
-          <h2 className="text-5xl font-bold text-white mb-6">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-6">
             Ready to Govern Your AI Workforce?
           </h2>
-          <p className="text-xl text-slate-300 mb-10 max-w-2xl mx-auto">
+          <p className="text-lg sm:text-xl text-slate-300 mb-10 max-w-2xl mx-auto">
             Join 50+ enterprises already using RASI to reduce costs, increase control, and scale AI safely.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
               onClick={onSignUp}
-              className="group px-10 py-4 bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-bold rounded-xl hover:shadow-2xl hover:shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center gap-2"
+              className="group px-6 sm:px-8 md:px-10 py-3 sm:py-4 bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-bold rounded-xl hover:shadow-2xl hover:shadow-blue-500/30 transition-all transform hover:scale-105 flex items-center gap-2"
             >
               Start Free Trial
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -1146,7 +1226,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
             {onDemo ? (
               <button
                 onClick={onDemo}
-                className="px-10 py-4 bg-white/10 backdrop-blur-md border border-white/20 text-white font-semibold rounded-xl hover:bg-white/20 transition-all"
+                className="px-6 sm:px-8 md:px-10 py-3 sm:py-4 bg-white/10 backdrop-blur-md border border-white/20 text-white font-semibold rounded-xl hover:bg-white/20 transition-all"
               >
                 Schedule Demo
               </button>
@@ -1158,7 +1238,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       {/* Footer */}
       <footer className="py-12 px-6 border-t border-slate-800 bg-slate-900/50">
         <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-4 gap-8 mb-12">
+          <div className="grid md:grid-cols-4 gap-6 md:gap-8 mb-8 md:mb-12">
             <div>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
