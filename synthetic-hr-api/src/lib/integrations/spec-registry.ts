@@ -826,8 +826,8 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     color: '#15357A',
     priority: 4,
     oauthConfig: {
-      authorizationUrl: 'https://auth.deel.com/oauth2/authorize',
-      tokenUrl: 'https://auth.deel.com/oauth2/token',
+      authorizationUrl: 'https://app.deel.com/oauth2/authorize',
+      tokenUrl: 'https://app.deel.com/oauth2/token',
       scopes: ['read:contracts', 'write:contracts', 'read:employees', 'write:employees', 'read:payroll'],
       redirectPath: `${API_CALLBACK_BASE}/deel`,
     },
@@ -962,25 +962,25 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
   },
   {
     id: 'okta',
-    name: 'Okta',
+    name: 'Okta / Auth0',
     category: 'IAM',
-    description: 'Identity governance and directory sync.',
+    description: 'Identity governance and directory sync via Okta or Auth0.',
     authType: 'oauth2',
     tags: ['IDENTITY', 'ENTERPRISE'],
     status: 'READY',
     color: '#007DC1',
     priority: 4,
     connectionFields: [
-      { name: 'domain', label: 'Okta Domain', type: 'text', placeholder: 'dev-123456.okta.com', required: true, description: 'Your Okta domain (no https://)' },
+      { name: 'domain', label: 'Auth0 / Okta Domain', type: 'text', placeholder: 'your-tenant.us.auth0.com', required: true, description: 'Your Auth0 or Okta domain (no https://)' },
     ],
     oauthConfig: {
-      authorizationUrl: 'https://{domain}/oauth2/v1/authorize',
-      tokenUrl: 'https://{domain}/oauth2/v1/token',
-      scopes: ['okta.users.read', 'okta.users.manage', 'okta.groups.read', 'okta.groups.manage', 'openid'],
+      authorizationUrl: 'https://{domain}/authorize',
+      tokenUrl: 'https://{domain}/oauth/token',
+      scopes: ['openid', 'profile', 'email'],
       redirectPath: `${API_CALLBACK_BASE}/okta`,
     },
     endpoints: {
-      userinfo: { method: 'GET', path: 'https://{domain}/oauth2/v1/userinfo' },
+      userinfo: { method: 'GET', path: 'https://{domain}/userinfo' },
     },
     capabilities: {
       reads: ['identity.users', 'identity.groups'],

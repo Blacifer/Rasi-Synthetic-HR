@@ -150,7 +150,7 @@ export const DeelAdapter: IntegrationAdapter = {
   async testConnection(credentials: Record<string, string>): Promise<ConnectionTestResult> {
     try {
       const accessToken = decryptSecret(credentials.access_token || '');
-      const res = await fetchWithTimeout('https://api.deel.com/rest/v2/profile', {
+      const res = await fetchWithTimeout('https://app.deel.com/rest/v2/profile', {
         method: 'GET',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -250,7 +250,7 @@ export const OktaAdapter: IntegrationAdapter = {
     try {
       const domain = normalizeDomain(decryptSecret(credentials.domain || ''));
       const accessToken = decryptSecret(credentials.access_token || '');
-      const res = await fetchWithTimeout(`https://${domain}/oauth2/v1/userinfo`, {
+      const res = await fetchWithTimeout(`https://${domain}/userinfo`, {
         method: 'GET',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -258,7 +258,7 @@ export const OktaAdapter: IntegrationAdapter = {
         if (res.status === 401) return { success: false, message: 'Token expired. Please reconnect.' };
         return { success: false, message: `API Error: ${res.status}` };
       }
-      return { success: true, message: 'Connected to Okta successfully' };
+      return { success: true, message: 'Connected to Okta / Auth0 successfully' };
     } catch (err: any) {
       return { success: false, message: `Connection failed: ${err?.message || String(err)}` };
     }
