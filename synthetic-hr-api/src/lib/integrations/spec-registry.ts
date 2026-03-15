@@ -1002,8 +1002,8 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     color: '#0BA8E0',
     priority: 4,
     oauthConfig: {
-      authorizationUrl: 'https://api.flock.com/oauth/authorize',
-      tokenUrl: 'https://api.flock.com/oauth/token',
+      authorizationUrl: 'https://dev.flock.com/oauth/authorize',
+      tokenUrl: 'https://dev.flock.com/oauth/token',
       scopes: ['chat:read', 'chat:write', 'users:read'],
       redirectPath: `${API_CALLBACK_BASE}/flock`,
     },
