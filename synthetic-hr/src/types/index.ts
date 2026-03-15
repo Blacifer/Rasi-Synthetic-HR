@@ -198,6 +198,11 @@ export interface Incident {
   resolved_at?: string;
   resolved_by?: string;
   notes?: string;
+  // DB-persisted triage metadata (migration_014)
+  owner?: string;
+  priority?: string;
+  source?: string;
+  next_action?: string;
 }
 
 // ==================== COST TYPES ====================

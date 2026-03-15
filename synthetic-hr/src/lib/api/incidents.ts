@@ -60,6 +60,26 @@ export const incidentApi = {
   },
 
   /**
+   * Update incident metadata fields (owner, priority, source, notes, next_action, status)
+   */
+  async updateMeta(
+    id: string,
+    updates: Partial<{
+      owner: string;
+      priority: string;
+      source: string;
+      notes: string;
+      next_action: string;
+      status: string;
+    }>
+  ): Promise<ApiResponse<Incident>> {
+    return authenticatedFetch<Incident>(`/incidents/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  /**
    * Delete an incident
    */
   async delete(id: string): Promise<ApiResponse<{ id: string }>> {

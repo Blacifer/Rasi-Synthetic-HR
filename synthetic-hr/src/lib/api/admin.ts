@@ -760,6 +760,24 @@ export const gatewayApi = {
 /**
  * Batches API
  */
+export interface BatchJob {
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string;
+  model: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  requests: number;
+  succeeded: number;
+  failed: number;
+  progress: number;
+  total_cost_usd: number;
+  items: Array<{ prompt: string; model?: string }>;
+  results: Array<{ prompt: string; response?: string; error?: string; costUSD: number; latency: number }>;
+  created_at: string;
+  completed_at: string | null;
+}
+
 export const batchesApi = {
   async processLine(prompt: string, model: string): Promise<ApiResponse<{
     latency: number;
@@ -772,21 +790,48 @@ export const batchesApi = {
     });
 
     if (!response.success) {
-      return response as ApiResponse<{
-        latency: number;
-        response: string;
-        costUSD: number;
-      }>;
+      return response as ApiResponse<{ latency: number; response: string; costUSD: number }>;
     }
 
     const normalizedData = (response.data && 'data' in response.data)
       ? response.data.data
       : response.data;
 
-    return {
-      ...response,
-      data: normalizedData,
-    };
+    return { ...response, data: normalizedData };
+  },
+
+  async list(): Promise<ApiResponse<BatchJob[]>> {
+    return authenticatedFetch<BatchJob[]>('/batches', { method: 'GET' });
+  },
+
+  async create(data: {
+    name: string;
+    description?: string;
+    model: string;
+    items: Array<{ prompt: string; model?: string }>;
+  }): Promise<ApiResponse<BatchJob>> {
+    return authenticatedFetch<BatchJob>('/batches', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async update(id: string, updates: Partial<{
+    succeeded: number;
+    failed: number;
+    progress: number;
+    total_cost_usd: number;
+    results: BatchJob['results'];
+    status: BatchJob['status'];
+  }>): Promise<ApiResponse<BatchJob>> {
+    return authenticatedFetch<BatchJob>(`/batches/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  async remove(id: string): Promise<ApiResponse<{ id: string }>> {
+    return authenticatedFetch<{ id: string }>(`/batches/${id}`, { method: 'DELETE' });
   },
 };
 

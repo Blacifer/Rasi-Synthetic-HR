@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, Search, ShieldAlert, Trash2, X } from 'luc
 import type { AIAgent, Incident, IncidentSeverity, IncidentType } from '../../types';
 import { toast } from '../../lib/toast';
 import { loadFromStorage, saveToStorage } from '../../utils/storage';
+import { api } from '../../lib/api-client';
 
 type IncidentsPageProps = {
   incidents: Incident[];
@@ -22,7 +23,7 @@ type IncidentUiMeta = {
   nextAction: string;
 };
 
-const INCIDENT_META_STORAGE_KEY = 'synthetic_hr_incident_ui_meta';
+// Navigation context is ephemeral — localStorage is fine here
 const INCIDENT_CONTEXT_STORAGE_KEY = 'synthetic_hr_incident_context';
 const INCIDENT_SIMULATION_TOOLS_KEY = 'synthetic_hr_incident_simulation_tools';
 const INCIDENT_SIMULATION_VISIBILITY_KEY = 'synthetic_hr_incident_simulation_visibility';
@@ -141,36 +142,28 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
   const [includeSimulated, setIncludeSimulated] = useState(() => (SIMULATIONS_ENABLED ? loadFromStorage<boolean>(INCIDENT_SIMULATION_VISIBILITY_KEY, false) : false));
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [incidentMeta, setIncidentMeta] = useState<Record<string, IncidentUiMeta>>(() =>
-    loadFromStorage<Record<string, IncidentUiMeta>>(INCIDENT_META_STORAGE_KEY, {})
-  );
+  // incidentMeta is derived from DB-backed incident fields (owner/priority/source/notes/next_action
+  // added by migration_014). No localStorage needed.
+  const deriveMetaFromIncident = (incident: Incident): IncidentUiMeta => ({
+    owner: incident.owner || 'Unassigned',
+    priority: (incident.priority as IncidentPriority) || defaultMetaForIncident(incident).priority,
+    source: (incident.source as IncidentSource) || 'live_traffic',
+    notes: incident.notes || '',
+    nextAction: incident.next_action || defaultMetaForIncident(incident).nextAction,
+  });
+
+  const [incidentMeta, setIncidentMeta] = useState<Record<string, IncidentUiMeta>>({});
 
   useEffect(() => {
-    setIncidentMeta((current) => {
-      const next = { ...current };
-      let changed = false;
-
+    setIncidentMeta(() => {
+      const next: Record<string, IncidentUiMeta> = {};
       for (const incident of incidents) {
-        if (!next[incident.id]) {
-          next[incident.id] = defaultMetaForIncident(incident);
-          changed = true;
-        }
+        next[incident.id] = deriveMetaFromIncident(incident);
       }
-
-      for (const incidentId of Object.keys(next)) {
-        if (!incidents.some((incident) => incident.id === incidentId)) {
-          delete next[incidentId];
-          changed = true;
-        }
-      }
-
-      return changed ? next : current;
+      return next;
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incidents]);
-
-  useEffect(() => {
-    saveToStorage(INCIDENT_META_STORAGE_KEY, incidentMeta);
-  }, [incidentMeta]);
 
   useEffect(() => {
     if (!SIMULATIONS_ENABLED) return;
@@ -248,6 +241,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
   );
 
   const updateMeta = (id: string, updates: Partial<IncidentUiMeta>) => {
+    // Optimistic local update
     setIncidentMeta((current) => ({
       ...current,
       [id]: {
@@ -255,6 +249,20 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
         ...updates,
       },
     }));
+
+    // Persist to DB — map camelCase UI fields to snake_case DB columns
+    const dbUpdates: Record<string, string> = {};
+    if (updates.owner !== undefined) dbUpdates.owner = updates.owner;
+    if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
+    if (updates.source !== undefined) dbUpdates.source = updates.source;
+    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    if (updates.nextAction !== undefined) dbUpdates.next_action = updates.nextAction;
+
+    if (Object.keys(dbUpdates).length > 0) {
+      api.incidents.updateMeta(id, dbUpdates).catch(() => {
+        toast.error('Failed to save incident changes');
+      });
+    }
   };
 
   const updateIncidentStatus = (id: string, status: Incident['status']) => {

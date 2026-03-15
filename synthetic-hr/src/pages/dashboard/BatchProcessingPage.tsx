@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Upload, Play, Download, CheckCircle, AlertCircle, Clock, FileJson, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import type { BatchJob } from '../../lib/api/admin';
 import { toast } from '../../lib/toast';
 import { supabase } from '../../lib/supabase-client';
 import { getFrontendConfig } from '../../lib/config';
@@ -10,23 +11,21 @@ interface BatchItem {
   model?: string;
 }
 
-interface Batch {
-  id: string;
-  name: string;
-  description: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  createdAt: string;
-  requests: number;
-  succeeded: number;
-  failed: number;
-  cost: number;
-  progress: number;
-  items: BatchItem[];
-  results: Array<{ prompt: string; response?: string; error?: string; costUSD: number; latency: number }>;
+// Thin display adapter — maps BatchJob fields to what the template expects
+interface Batch extends BatchJob {
+  cost: number;      // alias for total_cost_usd
+  createdAt: string; // alias for created_at (formatted)
 }
 
-const BATCH_STORAGE_KEY = 'rasi.batchJobs';
-const USD_TO_INR = 83;
+const USD_TO_INR = 93;
+
+function adaptJob(job: BatchJob): Batch {
+  return {
+    ...job,
+    cost: job.total_cost_usd,
+    createdAt: new Date(job.created_at).toLocaleString('en-IN'),
+  };
+}
 
 function formatInrFromUsd(usd: number) {
   return new Intl.NumberFormat('en-IN', {
@@ -45,29 +44,22 @@ export default function BatchProcessingPage() {
   });
   const [file, setFile] = useState<File | null>(null);
   const [parsedItems, setParsedItems] = useState<BatchItem[]>([]);
-  const [batches, setBatches] = useState<Batch[]>(() => {
-    try {
-      const stored = localStorage.getItem(BATCH_STORAGE_KEY);
-      if (!stored) return [];
-
-      const parsed = JSON.parse(stored);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (err) {
-      console.error('Failed to restore batch history:', err);
-      return [];
-    }
-  });
+  const [batches, setBatches] = useState<Batch[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [availableModels, setAvailableModels] = useState<Array<{ id: string, name: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(BATCH_STORAGE_KEY, JSON.stringify(batches));
-    } catch (err) {
-      console.error('Failed to persist batch history:', err);
+  // Load batch jobs from DB on mount
+  const loadBatches = useCallback(async () => {
+    const res = await api.batches.list();
+    if (res.success && Array.isArray(res.data)) {
+      setBatches(res.data.map(adaptJob));
     }
-  }, [batches]);
+  }, []);
+
+  useEffect(() => {
+    loadBatches();
+  }, [loadBatches]);
 
   useEffect(() => {
     const fetchModels = async () => {
@@ -192,55 +184,55 @@ export default function BatchProcessingPage() {
   };
 
   const processBatchAsync = async (batchId: string, items: BatchItem[], defaultModel: string) => {
-    // Process items sequentially (or could be chunked with Promise.all)
+    let succeeded = 0;
+    let failed = 0;
+    let totalCostUSD = 0;
+    const results: Batch['results'] = [];
+
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const modelToUse = item.model || defaultModel;
+      const isLast = i === items.length - 1;
+      const progress = Math.round(((i + 1) / items.length) * 100);
 
       try {
         const res = await api.batches.processLine(item.prompt, modelToUse);
+        const costUSD = res.data?.costUSD || 0;
+        totalCostUSD += costUSD;
 
-        setBatches(prev => prev.map(b => {
-          if (b.id !== batchId) return b;
-
-          const isSuccess = res.success;
-          const costUSD = res.data?.costUSD || 0;
-
-          const newResults = [...b.results, {
-            prompt: item.prompt,
-            response: res.data?.response,
-            error: res.error,
-            costUSD,
-            latency: res.data?.latency || 0
-          }];
-
-          const succeeded = isSuccess ? b.succeeded + 1 : b.succeeded;
-          const failed = isSuccess ? b.failed : b.failed + 1;
-          const progress = Math.round(((i + 1) / items.length) * 100);
-
-          return {
-            ...b,
-            succeeded,
-            failed,
-            cost: b.cost + costUSD,
-            progress,
-            results: newResults,
-            status: (i === items.length - 1) ? 'completed' : 'processing'
-          };
-        }));
+        if (res.success) {
+          succeeded++;
+          results.push({ prompt: item.prompt, response: res.data?.response, costUSD, latency: res.data?.latency || 0 });
+        } else {
+          failed++;
+          results.push({ prompt: item.prompt, error: res.error, costUSD: 0, latency: 0 });
+        }
       } catch (err: any) {
-        // Handle unexpected fetch errors
-        setBatches(prev => prev.map(b => {
-          if (b.id !== batchId) return b;
-          return {
-            ...b,
-            failed: b.failed + 1,
-            progress: Math.round(((i + 1) / items.length) * 100),
-            results: [...b.results, { prompt: item.prompt, error: err.message, costUSD: 0, latency: 0 }],
-            status: (i === items.length - 1) ? 'completed' : 'processing'
-          };
-        }));
+        failed++;
+        results.push({ prompt: item.prompt, error: err.message, costUSD: 0, latency: 0 });
       }
+
+      // Persist incremental progress to DB
+      const updates = {
+        succeeded,
+        failed,
+        progress,
+        total_cost_usd: totalCostUSD,
+        results,
+        ...(isLast ? { status: 'completed' as const } : {}),
+      };
+      await api.batches.update(batchId, updates).catch(() => {});
+
+      // Update local state
+      setBatches(prev => prev.map(b => {
+        if (b.id !== batchId) return b;
+        return {
+          ...b,
+          ...updates,
+          cost: totalCostUSD,
+          status: isLast ? 'completed' : 'processing',
+        };
+      }));
     }
   };
 
@@ -248,37 +240,40 @@ export default function BatchProcessingPage() {
     if (!newBatch.name) return toast.error('Please enter a batch name');
     if (parsedItems.length === 0) return toast.error('Please upload a valid JSON file');
 
-    const batchId = `batch_${Math.random().toString(36).substring(2, 9)}`;
-    const newBatchRecord: Batch = {
-      id: batchId,
-      name: newBatch.name,
-      description: newBatch.description,
-      status: 'processing',
-      createdAt: new Date().toLocaleString(),
-      requests: parsedItems.length,
-      succeeded: 0,
-      failed: 0,
-      cost: 0,
-      progress: 0,
-      items: parsedItems,
-      results: []
-    };
-
-    setBatches(prev => [newBatchRecord, ...prev]);
     setIsSubmitting(true);
 
-    // Reset form
-    setNewBatch({ ...newBatch, name: '', description: '' });
-    setFile(null);
-    setParsedItems([]);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    try {
+      // Create the job record in DB first
+      const createRes = await api.batches.create({
+        name: newBatch.name.trim(),
+        description: newBatch.description,
+        model: newBatch.model,
+        items: parsedItems,
+      });
 
-    toast.success('Batch processing started in background');
+      if (!createRes.success || !createRes.data) {
+        toast.error(createRes.error || 'Failed to create batch job');
+        return;
+      }
 
-    setIsSubmitting(false);
+      const job = createRes.data;
+      setBatches(prev => [adaptJob(job), ...prev]);
 
-    // Start async processing
-    processBatchAsync(batchId, newBatchRecord.items, newBatch.model);
+      // Reset form
+      setNewBatch({ ...newBatch, name: '', description: '' });
+      setFile(null);
+      setParsedItems([]);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+
+      toast.success('Batch processing started');
+      setIsSubmitting(false);
+
+      // Run processing — updates DB incrementally
+      processBatchAsync(job.id, job.items, newBatch.model);
+    } catch {
+      toast.error('Failed to start batch job');
+      setIsSubmitting(false);
+    }
   };
 
   const handleDownload = (batch: Batch) => {
@@ -294,9 +289,14 @@ export default function BatchProcessingPage() {
     URL.revokeObjectURL(url);
   };
 
-  const handleDeleteBatch = (batchId: string) => {
-    setBatches(prev => prev.filter(batch => batch.id !== batchId));
-    toast.success('Batch removed from queue history');
+  const handleDeleteBatch = async (batchId: string) => {
+    const res = await api.batches.remove(batchId);
+    if (res.success) {
+      setBatches(prev => prev.filter(b => b.id !== batchId));
+      toast.success('Batch removed');
+    } else {
+      toast.error(res.error || 'Failed to remove batch');
+    }
   };
 
   return (

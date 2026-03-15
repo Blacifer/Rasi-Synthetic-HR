@@ -1732,6 +1732,50 @@ router.delete('/incidents/:id', requirePermission('incidents.delete'), async (re
 });
 
 /**
+ * PATCH /api/incidents/:id
+ * Update incident metadata fields: owner, priority, source, notes, next_action, status
+ */
+router.patch('/incidents/:id', requirePermission('incidents.resolve'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const ALLOWED_FIELDS = ['owner', 'priority', 'source', 'notes', 'next_action', 'status'] as const;
+
+    const updates: Record<string, string> = {};
+    for (const field of ALLOWED_FIELDS) {
+      if (field in req.body && req.body[field] !== undefined) {
+        updates[field] = String(req.body[field]);
+      }
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return errorResponse(res, new Error('No valid fields to update'), 400);
+    }
+
+    if (updates.status === 'resolved' && !updates.resolved_at) {
+      (updates as any).resolved_at = new Date().toISOString();
+    }
+
+    const q = new URLSearchParams();
+    q.set('id', eq(id));
+    q.set('organization_id', eq(orgId));
+
+    const data = await supabaseRestAsUser(getUserJwt(req), 'incidents', q, {
+      method: 'PATCH',
+      body: updates,
+    });
+
+    if (!data?.length) return errorResponse(res, new Error('Incident not found'), 404);
+
+    return res.json({ success: true, data: data[0] });
+  } catch (error: any) {
+    return errorResponse(res, error);
+  }
+});
+
+/**
  * @openapi
  * /api/detect:
  *   post:
@@ -2807,6 +2851,137 @@ router.post('/batches/process-line', requirePermission('dashboard.read'), async 
     });
   } catch (error: any) {
     errorResponse(res, error);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Batch Jobs — DB-persisted job records (processing still via /batches/process-line)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** GET /api/batches — list batch jobs for the org */
+router.get('/batches', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const q = new URLSearchParams();
+    q.set('organization_id', eq(orgId));
+    q.set('order', 'created_at.desc');
+    q.set('limit', '100');
+
+    const data = await supabaseRestAsUser(getUserJwt(req), 'batch_jobs', q);
+    return res.json({ success: true, data: data || [] });
+  } catch (error: any) {
+    return errorResponse(res, error);
+  }
+});
+
+/** POST /api/batches — create a new batch job record */
+router.post('/batches', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const { name, description, model, items } = req.body as {
+      name?: string;
+      description?: string;
+      model?: string;
+      items?: Array<{ prompt: string; model?: string }>;
+    };
+
+    if (!name?.trim()) return errorResponse(res, new Error('name is required'), 400);
+    if (!Array.isArray(items) || items.length === 0) return errorResponse(res, new Error('items must be a non-empty array'), 400);
+
+    const q = new URLSearchParams();
+    const data = await supabaseRestAsUser(getUserJwt(req), 'batch_jobs', q, {
+      method: 'POST',
+      body: {
+        organization_id: orgId,
+        name: String(name).trim(),
+        description: String(description || '').trim(),
+        model: String(model || 'openai/gpt-4o'),
+        status: 'processing',
+        requests: items.length,
+        succeeded: 0,
+        failed: 0,
+        progress: 0,
+        total_cost_usd: 0,
+        items,
+        results: [],
+      },
+    });
+
+    const created = Array.isArray(data) ? data[0] : data;
+    return res.status(201).json({ success: true, data: created });
+  } catch (error: any) {
+    return errorResponse(res, error);
+  }
+});
+
+/** PATCH /api/batches/:id — update progress, results, status */
+router.patch('/batches/:id', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const { succeeded, failed, progress, total_cost_usd, results, status } = req.body as {
+      succeeded?: number;
+      failed?: number;
+      progress?: number;
+      total_cost_usd?: number;
+      results?: unknown[];
+      status?: string;
+    };
+
+    const updates: Record<string, unknown> = {};
+    if (succeeded !== undefined) updates.succeeded = succeeded;
+    if (failed !== undefined) updates.failed = failed;
+    if (progress !== undefined) updates.progress = progress;
+    if (total_cost_usd !== undefined) updates.total_cost_usd = total_cost_usd;
+    if (results !== undefined) updates.results = results;
+    if (status !== undefined) {
+      updates.status = status;
+      if (status === 'completed' || status === 'failed') {
+        updates.completed_at = new Date().toISOString();
+      }
+    }
+
+    if (Object.keys(updates).length === 0) return errorResponse(res, new Error('No fields to update'), 400);
+
+    const q = new URLSearchParams();
+    q.set('id', eq(id));
+    q.set('organization_id', eq(orgId));
+
+    const data = await supabaseRestAsUser(getUserJwt(req), 'batch_jobs', q, {
+      method: 'PATCH',
+      body: updates,
+    });
+
+    if (!data?.length) return errorResponse(res, new Error('Batch job not found'), 404);
+    return res.json({ success: true, data: data[0] });
+  } catch (error: any) {
+    return errorResponse(res, error);
+  }
+});
+
+/** DELETE /api/batches/:id — delete a batch job */
+router.delete('/batches/:id', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const q = new URLSearchParams();
+    q.set('id', eq(id));
+    q.set('organization_id', eq(orgId));
+
+    const deleted = await supabaseRestAsUser(getUserJwt(req), 'batch_jobs', q, { method: 'DELETE' }) as any[];
+    if (!deleted?.length) return errorResponse(res, new Error('Batch job not found'), 404);
+
+    return res.json({ success: true, data: { id } });
+  } catch (error: any) {
+    return errorResponse(res, error);
   }
 });
 
