@@ -1733,7 +1733,7 @@ export default function IntegrationsPage({
               )}
             </div>
           </div>
-        )}
+        ) : null}
       </div>
 
       {detailsOpen && selectedIntegration ? (
