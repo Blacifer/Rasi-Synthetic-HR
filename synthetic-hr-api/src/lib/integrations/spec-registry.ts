@@ -855,7 +855,7 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://api.gusto.com/oauth/authorize',
       tokenUrl: 'https://api.gusto.com/oauth/token',
-      scopes: ['employees:read', 'employees:write', 'payroll:read', 'payroll:write', 'benefits:read'],
+      scopes: ['public', 'webhook_subscriptions:read', 'webhook_subscriptions:write'],
       redirectPath: `${API_CALLBACK_BASE}/gusto`,
     },
     endpoints: {
