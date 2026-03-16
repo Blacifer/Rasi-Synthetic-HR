@@ -1,4 +1,3 @@
-import { describe, it, expect, beforeEach } from '@jest/globals';
 import { cn, loadFromStorage, saveToStorage, detectIncidents, calculateCost, STORAGE_KEYS } from '../lib/utils';
 
 // Mock the security module to isolate utils
@@ -24,24 +23,33 @@ describe('cn (class name merger)', () => {
 });
 
 describe('localStorage helpers', () => {
+  let getItemSpy: jest.SpyInstance;
+  let setItemSpy: jest.SpyInstance;
+
   beforeEach(() => {
-    (localStorage.getItem as jest.Mock).mockReset();
-    (localStorage.setItem as jest.Mock).mockReset();
+    localStorage.clear();
+    getItemSpy = jest.spyOn(Storage.prototype, 'getItem');
+    setItemSpy = jest.spyOn(Storage.prototype, 'setItem');
+  });
+
+  afterEach(() => {
+    getItemSpy.mockRestore();
+    setItemSpy.mockRestore();
   });
 
   describe('loadFromStorage', () => {
     it('returns parsed value when key exists', () => {
-      (localStorage.getItem as jest.Mock).mockReturnValue('{"count":42}');
+      getItemSpy.mockReturnValue('{"count":42}');
       expect(loadFromStorage('key', {})).toEqual({ count: 42 });
     });
 
     it('returns defaultValue when key is absent', () => {
-      (localStorage.getItem as jest.Mock).mockReturnValue(null);
+      getItemSpy.mockReturnValue(null);
       expect(loadFromStorage('missing', [])).toEqual([]);
     });
 
     it('returns defaultValue on invalid JSON', () => {
-      (localStorage.getItem as jest.Mock).mockReturnValue('not-json{{{');
+      getItemSpy.mockReturnValue('not-json{{{');
       expect(loadFromStorage('bad', 'default')).toBe('default');
     });
   });
@@ -49,11 +57,11 @@ describe('localStorage helpers', () => {
   describe('saveToStorage', () => {
     it('serializes and stores the value', () => {
       saveToStorage('key', { a: 1 });
-      expect(localStorage.setItem).toHaveBeenCalledWith('key', '{"a":1}');
+      expect(setItemSpy).toHaveBeenCalledWith('key', '{"a":1}');
     });
 
     it('throws a friendly error on QuotaExceededError', () => {
-      (localStorage.setItem as jest.Mock).mockImplementation(() => {
+      setItemSpy.mockImplementation(() => {
         const err = new DOMException('quota exceeded', 'QuotaExceededError');
         throw err;
       });
@@ -120,8 +128,8 @@ describe('calculateCost', () => {
   it('calculates gpt-4o cost', () => {
     const cost = calculateCost(1_000_000, 'gpt-4o');
     expect(cost).toBeGreaterThan(0);
-    // 400k input @ $0.005/1M + 600k output @ $0.015/1M = $2 + $9 = $11 per 1M
-    expect(cost).toBeCloseTo(0.000011, 5); // per token
+    // 400k input @ $0.005/1M + 600k output @ $0.015/1M = $0.002 + $0.009 = $0.011
+    expect(cost).toBeCloseTo(0.011, 5);
   });
 
   it('falls back to default pricing for unknown model', () => {

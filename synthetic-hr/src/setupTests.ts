@@ -1,3 +1,9 @@
+import { TextEncoder, TextDecoder } from 'util';
+
+// Polyfill TextEncoder/TextDecoder for jsdom (needed by react-router-dom v7)
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder as typeof global.TextDecoder;
+
 import '@testing-library/jest-dom';
 
 // Mock window.matchMedia
@@ -14,16 +20,6 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: jest.fn(),
   })),
 });
-
-// Mock localStorage
-const localStorageMock = {
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
-  clear: jest.fn(),
-};
-
-global.localStorage = localStorageMock as any;
 
 // Suppress console errors in tests (optional)
 const originalError = console.error;
