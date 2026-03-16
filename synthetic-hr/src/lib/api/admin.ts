@@ -1,10 +1,11 @@
 import { getAuthHeaders, normalizeErrorPayload, API_BASE_URL, authenticatedFetch } from './_helpers';
 import type { ApiResponse } from './_helpers';
 
-function safeParseJson(text: string): Record<string, unknown> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function safeParseJson(text: string): any {
   if (!text) return {};
   try {
-    return JSON.parse(text) as Record<string, unknown>;
+    return JSON.parse(text);
   } catch {
     return { message: text };
   }
