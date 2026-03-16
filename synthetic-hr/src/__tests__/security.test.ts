@@ -1,5 +1,5 @@
-import { describe, it, expect } from '@jest/globals';
 import { sanitizeString, isValidEmail } from '../lib/security';
+
 
 describe('sanitizeString', () => {
   it('removes angle brackets to prevent XSS', () => {
