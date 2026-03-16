@@ -16,6 +16,12 @@ const ALLOW_SERVICE_REST_FILES = new Set([
   path.join(ROUTES_DIR, 'runtimes.ts'),
   // Public invite endpoints still require server-side writes (expiry/reject/claim).
   path.join(ROUTES_DIR, 'invites.ts'),
+  // Work-items event relay: server-side fan-out, no user JWT available mid-stream.
+  path.join(ROUTES_DIR, 'events.ts'),
+  // Marketplace writes integrations/credentials on behalf of the org during OAuth.
+  path.join(ROUTES_DIR, 'marketplace.ts'),
+  // Slack OAuth callback arrives without a user session (server-to-server flow).
+  path.join(ROUTES_DIR, 'slack.ts'),
 ]);
 
 function walk(dir: string): string[] {

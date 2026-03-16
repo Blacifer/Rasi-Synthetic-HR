@@ -1,4 +1,5 @@
 /// <reference types="jest" />
+import http from 'http';
 import request from 'supertest';
 import express from 'express';
 import apiRouter from '../routes/api';
@@ -48,6 +49,10 @@ function createTestApp() {
 
 describe('API Integration Tests', () => {
   const app = createTestApp();
+  let server: http.Server;
+
+  beforeAll((done) => { server = app.listen(0, done); });
+  afterAll((done) => { server.close(done); });
 
   beforeEach(() => {
     mockedSupabaseRest.mockReset();
@@ -84,12 +89,12 @@ describe('API Integration Tests', () => {
 
   describe('Authentication', () => {
     it('should reject requests without auth token', async () => {
-      const response = await request(app).post('/api/agents').send({});
+      const response = await request(server).post('/api/agents').send({});
       expect(response.status).toBe(401);
     });
 
     it('should reject requests with invalid auth token', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/agents')
         .set('Authorization', 'Bearer invalid')
         .send({});
@@ -100,7 +105,7 @@ describe('API Integration Tests', () => {
 
   describe('Agents API', () => {
     it('should list agents for authenticated user', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .get('/api/agents')
         .set('Authorization', 'Bearer viewer');
 
@@ -109,7 +114,7 @@ describe('API Integration Tests', () => {
     });
 
     it('should create agent with valid data', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/agents')
         .set('Authorization', 'Bearer manager')
         .send({
@@ -125,7 +130,7 @@ describe('API Integration Tests', () => {
     });
 
     it('should reject agent creation without required permissions', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/agents')
         .set('Authorization', 'Bearer viewer')
         .send({
@@ -139,7 +144,7 @@ describe('API Integration Tests', () => {
     });
 
     it('should activate kill switch with admin role', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/agents/33333333-3333-4333-8333-333333333333/kill')
         .set('Authorization', 'Bearer admin')
         .send({ level: 2, reason: 'security test' });
@@ -149,7 +154,7 @@ describe('API Integration Tests', () => {
     });
 
     it('should reject kill switch without admin role', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/agents/33333333-3333-4333-8333-333333333333/kill')
         .set('Authorization', 'Bearer manager')
         .send({ level: 1, reason: 'security test' });
@@ -191,7 +196,7 @@ describe('API Integration Tests', () => {
         },
       ]);
 
-      const response = await request(app)
+      const response = await request(server)
         .put('/api/agents/33333333-3333-4333-8333-333333333333/publish')
         .set('Authorization', 'Bearer manager')
         .send({
@@ -235,7 +240,7 @@ describe('API Integration Tests', () => {
         },
       ]);
 
-      const response = await request(app)
+      const response = await request(server)
         .get('/api/agents')
         .set('Authorization', 'Bearer viewer');
 
@@ -250,7 +255,7 @@ describe('API Integration Tests', () => {
 
   describe('Incidents API', () => {
     it('should list incidents for organization', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .get('/api/incidents')
         .set('Authorization', 'Bearer viewer');
 
@@ -259,7 +264,7 @@ describe('API Integration Tests', () => {
     });
 
     it('should resolve incident with permission', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .put('/api/incidents/44444444-4444-4444-8444-444444444444/resolve')
         .set('Authorization', 'Bearer manager')
         .send({ resolution_notes: 'resolved for test' });
@@ -269,7 +274,7 @@ describe('API Integration Tests', () => {
     });
 
     it('should reject resolve without permission', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .put('/api/incidents/44444444-4444-4444-8444-444444444444/resolve')
         .set('Authorization', 'Bearer viewer')
         .send({ resolution_notes: 'resolved for test' });

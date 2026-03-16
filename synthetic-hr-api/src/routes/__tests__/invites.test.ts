@@ -1,3 +1,4 @@
+import http from 'http';
 import express, { Request, Response } from 'express';
 import request from 'supertest';
 import crypto from 'crypto';
@@ -25,10 +26,11 @@ import invitesRouter from '../invites';
 
 describe('Team Invites Routes', () => {
   let app: express.Application;
+  let server: http.Server;
   let mockSupabaseUser: jest.MockedFunction<typeof supabaseRestAsUser>;
   let mockSupabaseService: jest.MockedFunction<typeof supabaseRestAsService>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Set required environment variables
     process.env.FRONTEND_URL = 'http://localhost:5173';
 
@@ -56,6 +58,14 @@ describe('Team Invites Routes', () => {
     mockSupabaseService = supabaseRestAsService as jest.MockedFunction<typeof supabaseRestAsService>;
     mockSupabaseUser.mockResolvedValue([]);
     mockSupabaseService.mockResolvedValue([]);
+
+    await new Promise<void>((resolve) => { server = app.listen(0, resolve); });
+  });
+
+  afterEach(async () => {
+    mockSupabaseUser.mockReset();
+    mockSupabaseService.mockReset();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
   describe('POST /invites - Create Invitation', () => {
@@ -76,7 +86,7 @@ describe('Team Invites Routes', () => {
       mockSupabaseUser.mockResolvedValueOnce([]); // No existing invite
       mockSupabaseUser.mockResolvedValueOnce([mockInvite]); // Create invite
 
-      const res = await request(app)
+      const res = await request(server)
         .post('/invites')
         .send({
           email: 'newuser@example.com',
@@ -91,7 +101,7 @@ describe('Team Invites Routes', () => {
     });
 
     it('should validate email format', async () => {
-      const res = await request(app)
+      const res = await request(server)
         .post('/invites')
         .send({
           email: 'invalid-email',
@@ -112,7 +122,7 @@ describe('Team Invites Routes', () => {
 
       mockSupabaseUser.mockResolvedValueOnce([existingUser]); // User exists
 
-      const res = await request(app)
+      const res = await request(server)
         .post('/invites')
         .send({
           email: 'existing@example.com',
@@ -134,7 +144,7 @@ describe('Team Invites Routes', () => {
       mockSupabaseUser.mockResolvedValueOnce([]); // No user
       mockSupabaseUser.mockResolvedValueOnce([existingInvite]); // Invite exists
 
-      const res = await request(app)
+      const res = await request(server)
         .post('/invites')
         .send({
           email: 'pending@example.com',
@@ -170,7 +180,7 @@ describe('Team Invites Routes', () => {
 
       mockSupabaseUser.mockResolvedValueOnce(mockInvites);
 
-      const res = await request(app)
+      const res = await request(server)
         .get('/invites')
         .expect(200);
 
@@ -192,7 +202,7 @@ describe('Team Invites Routes', () => {
 
       mockSupabaseUser.mockResolvedValueOnce(mockPendingInvites);
 
-      const res = await request(app)
+      const res = await request(server)
         .get('/invites?status=pending')
         .expect(200);
 
@@ -213,7 +223,7 @@ describe('Team Invites Routes', () => {
 
       mockSupabaseUser.mockResolvedValueOnce([mockInvite]);
 
-      const res = await request(app)
+      const res = await request(server)
         .get('/invites/55555555-5555-4555-8555-555555555555')
         .expect(200);
 
@@ -225,7 +235,7 @@ describe('Team Invites Routes', () => {
     it('should return 404 if invite not found', async () => {
       mockSupabaseUser.mockResolvedValueOnce([]);
 
-      const res = await request(app)
+      const res = await request(server)
         .get('/invites/nonexistent-id')
         .expect(404);
 
@@ -247,7 +257,7 @@ describe('Team Invites Routes', () => {
 
       mockSupabaseService.mockResolvedValueOnce([mockInvite]); // Find invite
 
-      const res = await request(app)
+      const res = await request(server)
         .post('/invites/accept')
         .send({ token: 'abcdef1234567890abcdef1234567890abcdef1234567890' })
         .expect(200);
@@ -269,7 +279,7 @@ describe('Team Invites Routes', () => {
       mockSupabaseService.mockResolvedValueOnce([expiredInvite]); // Find invite
       mockSupabaseService.mockResolvedValueOnce([{}]); // Mark as expired
 
-      const res = await request(app)
+      const res = await request(server)
         .post('/invites/accept')
         .send({ token: 'expired1234567890expired1234567890' })
         .expect(400);
@@ -281,7 +291,7 @@ describe('Team Invites Routes', () => {
     it('should return 404 for invalid token', async () => {
       mockSupabaseService.mockResolvedValueOnce([]); // No invite found
 
-      const res = await request(app)
+      const res = await request(server)
         .post('/invites/accept')
         .send({ token: 'invalid1234567890invalid1234567890' })
         .expect(404);
@@ -303,7 +313,7 @@ describe('Team Invites Routes', () => {
       mockSupabaseService.mockResolvedValueOnce([mockInvite]); // Find invite
       mockSupabaseService.mockResolvedValueOnce([{}]); // Mark as rejected
 
-      const res = await request(app)
+      const res = await request(server)
         .post('/invites/55555555-5555-4555-8555-555555555555/reject')
         .send({ token: 'reject-token-1234567890abcdefghijklmn' })
         .expect(200);
@@ -315,7 +325,7 @@ describe('Team Invites Routes', () => {
     it('should return 404 for invalid token', async () => {
       mockSupabaseService.mockResolvedValueOnce([]);
 
-      const res = await request(app)
+      const res = await request(server)
         .post('/invites/55555555-5555-4555-8555-555555555555/reject')
         .send({ token: 'wrong-token-1234567890abcdefghijklmn' })
         .expect(404);
@@ -334,7 +344,7 @@ describe('Team Invites Routes', () => {
 
       mockSupabaseUser.mockResolvedValueOnce([mockInvite]);
 
-      const res = await request(app)
+      const res = await request(server)
         .delete('/invites/55555555-5555-4555-8555-555555555555')
         .expect(200);
 
@@ -345,7 +355,7 @@ describe('Team Invites Routes', () => {
     it('should return 404 if invite not found', async () => {
       mockSupabaseUser.mockResolvedValueOnce([]);
 
-      const res = await request(app)
+      const res = await request(server)
         .delete('/invites/nonexistent-id')
         .expect(404);
 

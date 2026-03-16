@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { supabase, supabaseAdmin } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import { requirePermission } from '../middleware/rbac';
+import { decryptSecret } from '../lib/integrations/encryption';
 
 const router = Router();
 
@@ -17,7 +18,7 @@ type ConnectorValidationResult = {
 
 type ConnectorActionResult = {
   ok: boolean;
-  actionType: 'alert' | 'ticket' | 'escalation' | 'webhook';
+  actionType: 'alert' | 'ticket' | 'escalation' | 'webhook' | 'sync';
   targetLabel?: string;
   details?: Record<string, any>;
   error?: string;
@@ -205,6 +206,14 @@ function getActionSamplePayload(provider: string) {
         name: 'RASI Test Contact',
         type: 'vendor',
       };
+    case 'google_workspace':
+    case 'google-workspace':
+      return { probe: 'calendar.events.list', maxResults: 5 };
+    case 'microsoft_365':
+    case 'microsoft-365':
+      return { probe: 'graph.me' };
+    case 'linkedin':
+      return { probe: 'userinfo' };
     default:
       return { created_at: now };
   }
@@ -796,6 +805,108 @@ async function runProviderActionTest(
       return {
         ok: true, actionType: 'ticket', targetLabel: establishmentId,
         details: { status: data?.status ?? null, probe: 'epfo.validate' },
+      };
+    }
+    // ── PRODUCTIVITY / COLLABORATION ───────────────────────────────────────
+    case 'google_workspace':
+    case 'google-workspace': {
+      const token = credentials.accessToken || credentials.access_token;
+      if (!token) {
+        return { ok: false, actionType: 'sync', error: 'Google Workspace access token is missing. Reconnect the integration.' };
+      }
+      // Safe read-only test: list upcoming calendar events
+      const calResponse = await fetchWithTimeout(
+        'https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=5&orderBy=startTime&singleEvents=true&timeMin=' + encodeURIComponent(new Date().toISOString()),
+        { method: 'GET', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } },
+      );
+      if (calResponse.status === 401) {
+        return { ok: false, actionType: 'sync', error: 'Google token expired. Reconnect the integration to refresh.' };
+      }
+      const calData: any = await calResponse.json().catch(() => ({}));
+      if (!calResponse.ok) {
+        // Fallback: try userinfo endpoint (smaller scope requirement)
+        const userResponse = await fetchWithTimeout('https://www.googleapis.com/oauth2/v2/userinfo', {
+          method: 'GET', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        });
+        const userData: any = await userResponse.json().catch(() => ({}));
+        if (!userResponse.ok) {
+          return {
+            ok: false, actionType: 'sync',
+            error: calData?.error?.message || userData?.error?.message || `Google API probe failed (${calResponse.status})`,
+          };
+        }
+        return {
+          ok: true, actionType: 'sync',
+          targetLabel: userData?.email || 'Google Workspace',
+          details: { email: userData?.email ?? null, probe: 'oauth2.userinfo' },
+        };
+      }
+      const eventCount = calData?.items?.length ?? 0;
+      return {
+        ok: true, actionType: 'sync',
+        targetLabel: calData?.summary || 'Google Calendar',
+        details: { upcomingEvents: eventCount, calendarId: 'primary', probe: 'calendar.v3.events.list' },
+      };
+    }
+    case 'microsoft_365':
+    case 'microsoft-365': {
+      const token = credentials.accessToken || credentials.access_token;
+      if (!token) {
+        return { ok: false, actionType: 'sync', error: 'Microsoft 365 access token is missing. Reconnect the integration.' };
+      }
+      // Safe read-only test: get user profile from Microsoft Graph
+      const msResponse = await fetchWithTimeout('https://graph.microsoft.com/v1.0/me', {
+        method: 'GET', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      if (msResponse.status === 401) {
+        return { ok: false, actionType: 'sync', error: 'Microsoft token expired. Reconnect the integration to refresh.' };
+      }
+      const msData: any = await msResponse.json().catch(() => ({}));
+      if (!msResponse.ok) {
+        return {
+          ok: false, actionType: 'sync',
+          error: msData?.error?.message || `Microsoft Graph probe failed (${msResponse.status})`,
+        };
+      }
+      return {
+        ok: true, actionType: 'sync',
+        targetLabel: msData?.mail || msData?.userPrincipalName || 'Microsoft 365',
+        details: {
+          displayName: msData?.displayName ?? null,
+          mail: msData?.mail ?? null,
+          jobTitle: msData?.jobTitle ?? null,
+          probe: 'graph.v1.me',
+        },
+      };
+    }
+    case 'linkedin': {
+      const token = credentials.accessToken || credentials.access_token;
+      if (!token) {
+        return { ok: false, actionType: 'sync', error: 'LinkedIn access token is missing. Reconnect the integration.' };
+      }
+      // Safe read-only test: get user profile
+      const liResponse = await fetchWithTimeout('https://api.linkedin.com/v2/userinfo', {
+        method: 'GET', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      if (liResponse.status === 401) {
+        return { ok: false, actionType: 'sync', error: 'LinkedIn token expired. Reconnect the integration to refresh.' };
+      }
+      const liData: any = await liResponse.json().catch(() => ({}));
+      if (!liResponse.ok) {
+        return {
+          ok: false, actionType: 'sync',
+          error: liData?.message || `LinkedIn API probe failed (${liResponse.status})`,
+        };
+      }
+      return {
+        ok: true, actionType: 'sync',
+        targetLabel: liData?.email || liData?.name || 'LinkedIn',
+        details: {
+          name: liData?.name ?? null,
+          email: liData?.email ?? null,
+          sub: liData?.sub ?? null,
+          probe: 'v2.userinfo',
+        },
       };
     }
     default:
@@ -2561,6 +2672,10 @@ router.post('/integrations/oauth/init', requirePermission('connectors.manage'), 
       const clientId = process.env.MICROSOFT_CLIENT_ID || 'demo-microsoft-client-id';
       const scopes = 'User.Read offline_access';
       authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&response_mode=query&scope=${encodeURIComponent(scopes)}&state=${stateParam}`;
+    } else if (provider === 'linkedin') {
+      const clientId = process.env.LINKEDIN_CLIENT_ID || 'demo-linkedin-client-id';
+      const scopes = 'openid profile email';
+      authUrl = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&state=${stateParam}`;
     } else if (provider === 'deel' || provider === 'gusto' || provider === 'zoho-books') {
       return res.json({ success: true, data: { url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard/integrations?status=error&message=ProviderNotAutomatedInDemo` } });
     } else {
@@ -2630,9 +2745,54 @@ router.get('/integrations/oauth/callback', async (req, res) => {
       finalRefreshToken = tokenData.refresh_token || null;
       tokenMetadata = { ...tokenMetadata, expires_in: tokenData.expires_in, scope: tokenData.scope, token_type: tokenData.token_type };
 
-      // Optionally decode the id_token if you passed openid scopes, or fetch userinfo to get external_account_id.
-      // We will leave external_account_id as a dummy or extract from scopes for now.
       externalAccountId = 'google_workspace_verified';
+    } else if (stateRow.provider_name === 'microsoft-teams' || stateRow.provider_name === 'microsoft-entra') {
+      const tokenResponse = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code: String(code),
+          client_id: process.env.MICROSOFT_CLIENT_ID || '',
+          client_secret: process.env.MICROSOFT_CLIENT_SECRET || '',
+          redirect_uri: stateRow.redirect_uri,
+          grant_type: 'authorization_code',
+          scope: 'User.Read offline_access',
+        }),
+      });
+
+      const tokenData: any = await tokenResponse.json();
+      if (!tokenResponse.ok) {
+        logger.error('Microsoft token exchange failed', { error: tokenData, requestId: req.requestId });
+        return res.redirect(`${frontendUrl}/dashboard/integrations?status=error&message=TokenExchangeFailed`);
+      }
+
+      finalAccessToken = tokenData.access_token;
+      finalRefreshToken = tokenData.refresh_token || null;
+      tokenMetadata = { ...tokenMetadata, expires_in: tokenData.expires_in, scope: tokenData.scope, token_type: tokenData.token_type };
+      externalAccountId = 'microsoft_365_verified';
+    } else if (stateRow.provider_name === 'linkedin') {
+      const tokenResponse = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code: String(code),
+          client_id: process.env.LINKEDIN_CLIENT_ID || '',
+          client_secret: process.env.LINKEDIN_CLIENT_SECRET || '',
+          redirect_uri: stateRow.redirect_uri,
+          grant_type: 'authorization_code',
+        }),
+      });
+
+      const tokenData: any = await tokenResponse.json();
+      if (!tokenResponse.ok) {
+        logger.error('LinkedIn token exchange failed', { error: tokenData, requestId: req.requestId });
+        return res.redirect(`${frontendUrl}/dashboard/integrations?status=error&message=TokenExchangeFailed`);
+      }
+
+      finalAccessToken = tokenData.access_token;
+      finalRefreshToken = tokenData.refresh_token || null;
+      tokenMetadata = { ...tokenMetadata, expires_in: tokenData.expires_in, scope: tokenData.scope };
+      externalAccountId = 'linkedin_verified';
     }
 
     // Using the same RPC that the other integrations use:
@@ -2937,6 +3097,93 @@ router.post('/integrations/:id/action-test', requirePermission('connectors.manag
       error: 'Failed to run integration action test',
       requestId: req.requestId,
     });
+  }
+});
+
+// POST /api/connectors/spec-integrations/:service/action-test — Run action test for spec-driven integrations
+// (reads credentials from integration_credentials table, not platform_integrations.config)
+router.post('/spec-integrations/:service/action-test', requirePermission('connectors.manage'), async (req, res) => {
+  try {
+    const orgId = req.user?.organization_id;
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found', requestId: req.requestId });
+
+    const service = req.params.service;
+
+    // Look up the integration in the spec-driven integrations table
+    const { data: integration, error: fetchError } = await supabaseAdmin
+      .from('integrations')
+      .select('id, service_type, status')
+      .eq('organization_id', orgId)
+      .eq('service_type', service)
+      .single();
+
+    if (fetchError || !integration) {
+      return res.status(404).json({ success: false, error: 'Integration not found. Connect it first.', requestId: req.requestId });
+    }
+
+    // Fetch all credentials for this integration
+    const { data: credRows } = await supabaseAdmin
+      .from('integration_credentials')
+      .select('key, value, is_sensitive')
+      .eq('integration_id', integration.id);
+
+    if (!credRows || credRows.length === 0) {
+      return res.status(400).json({ success: false, error: 'No credentials stored for this integration.', requestId: req.requestId });
+    }
+
+    // Build credentials map, decrypting sensitive values
+    const credentials: Record<string, string> = {};
+    for (const row of credRows) {
+      try {
+        credentials[row.key] = row.is_sensitive ? decryptSecret(row.value) : row.value;
+      } catch {
+        credentials[row.key] = row.value;
+      }
+    }
+
+    // Map common credential keys to the format runProviderActionTest expects
+    if (credentials.access_token && !credentials.accessToken) {
+      credentials.accessToken = credentials.access_token;
+    }
+
+    const actionResult = await runProviderActionTest(service, credentials, {});
+    const testedAt = new Date().toISOString();
+
+    // Update integration status based on result
+    await supabaseAdmin
+      .from('integrations')
+      .update({
+        status: actionResult.ok ? 'connected' : 'error',
+        last_sync_at: actionResult.ok ? testedAt : undefined,
+        last_error_at: actionResult.ok ? undefined : testedAt,
+        last_error_msg: actionResult.ok ? null : (actionResult.error || 'Action test failed'),
+        updated_at: testedAt,
+      })
+      .eq('id', integration.id);
+
+    if (!actionResult.ok) {
+      return res.status(400).json({
+        success: false,
+        error: actionResult.error || 'Action test failed',
+        data: { service, actionType: actionResult.actionType, details: actionResult.details },
+        requestId: req.requestId,
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        service,
+        actionType: actionResult.actionType,
+        targetLabel: actionResult.targetLabel,
+        details: actionResult.details,
+        testedAt,
+      },
+      requestId: req.requestId,
+    });
+  } catch (err: any) {
+    logger.error('Error running spec-integration action test', { error: err?.message || err, requestId: req.requestId });
+    return res.status(500).json({ success: false, error: 'Failed to run action test', requestId: req.requestId });
   }
 });
 

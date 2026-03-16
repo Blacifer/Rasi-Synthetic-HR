@@ -1,3 +1,4 @@
+import http from 'http';
 import express, { Request, Response } from 'express';
 import request from 'supertest';
 import { supabaseRestAsUser } from '../../lib/supabase-rest';
@@ -21,9 +22,10 @@ import apiKeysRouter from '../api-keys';
 
 describe('API Keys Routes', () => {
   let app: express.Application;
+  let server: http.Server;
   let mock: jest.MockedFunction<typeof supabaseRestAsUser>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     app = express();
     app.use(express.json());
 
@@ -41,10 +43,13 @@ describe('API Keys Routes', () => {
 
     mock = supabaseRestAsUser as jest.MockedFunction<typeof supabaseRestAsUser>;
     mock.mockResolvedValue([]);
+
+    await new Promise<void>((resolve) => { server = app.listen(0, resolve); });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     mock.mockReset();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
   describe('POST /api-keys - Create API Key', () => {
@@ -69,7 +74,7 @@ describe('API Keys Routes', () => {
       mock.mockResolvedValueOnce([]);            // enrich: users
       mock.mockResolvedValueOnce([]);            // enrich: usage
 
-      const res = await request(app)
+      const res = await request(server)
         .post('/api-keys')
         .send({ name: 'Integration Key', permissions: ['read'], rateLimit: 1000 })
         .expect(201);
@@ -81,7 +86,7 @@ describe('API Keys Routes', () => {
     });
 
     it('should validate required fields', async () => {
-      const res = await request(app)
+      const res = await request(server)
         .post('/api-keys')
         .send({ permissions: ['read'] })
         .expect(400);
@@ -91,7 +96,7 @@ describe('API Keys Routes', () => {
     });
 
     it('should enforce rate limit constraints', async () => {
-      const res = await request(app)
+      const res = await request(server)
         .post('/api-keys')
         .send({ name: 'Test Key', rateLimit: 999999999 })
         .expect(400);
@@ -119,7 +124,7 @@ describe('API Keys Routes', () => {
       mock.mockResolvedValueOnce([]);
       mock.mockResolvedValueOnce([]);
 
-      const res = await request(app).get('/api-keys').expect(200);
+      const res = await request(server).get('/api-keys').expect(200);
 
       expect(res.body.success).toBe(true);
       expect(res.body.data).toHaveLength(1);
@@ -136,7 +141,7 @@ describe('API Keys Routes', () => {
       mock.mockResolvedValueOnce([]);
       mock.mockResolvedValueOnce([]);
 
-      const res = await request(app).get('/api-keys').expect(200);
+      const res = await request(server).get('/api-keys').expect(200);
 
       expect(res.body.count).toBe(2);
     });
@@ -156,7 +161,7 @@ describe('API Keys Routes', () => {
       mock.mockResolvedValueOnce([]);
       mock.mockResolvedValueOnce([]);
 
-      const res = await request(app)
+      const res = await request(server)
         .get('/api-keys/55555555-5555-4555-8555-555555555555')
         .expect(200);
 
@@ -167,7 +172,7 @@ describe('API Keys Routes', () => {
     it('should return 404 if key not found', async () => {
       mock.mockResolvedValueOnce([]);
 
-      const res = await request(app).get('/api-keys/nonexistent-id').expect(404);
+      const res = await request(server).get('/api-keys/nonexistent-id').expect(404);
 
       expect(res.body.success).toBe(false);
       expect(res.body.error).toContain('not found');
@@ -190,7 +195,7 @@ describe('API Keys Routes', () => {
       mock.mockResolvedValueOnce([]);
       mock.mockResolvedValueOnce([]);
 
-      const res = await request(app)
+      const res = await request(server)
         .patch('/api-keys/55555555-5555-4555-8555-555555555555')
         .send({ rateLimit: 5000 })
         .expect(200);
@@ -212,7 +217,7 @@ describe('API Keys Routes', () => {
       mock.mockResolvedValueOnce([]);
       mock.mockResolvedValueOnce([]);
 
-      const res = await request(app)
+      const res = await request(server)
         .patch('/api-keys/55555555-5555-4555-8555-555555555555')
         .send({ status: 'revoked' })
         .expect(200);
@@ -224,10 +229,11 @@ describe('API Keys Routes', () => {
   describe('DELETE /api-keys/:id - Revoke API Key', () => {
     it('should revoke an API key', async () => {
       const mockKey = { id: '55555555-5555-4555-8555-555555555555', status: 'revoked' };
-      // Route: PATCH to mark as revoked (writeApiKeyRecord)
-      mock.mockResolvedValueOnce([mockKey]);
+      // Route: getApiKeyRecord (GET), then writeApiKeyRecord (PATCH)
+      mock.mockResolvedValueOnce([mockKey]); // GET: key exists
+      mock.mockResolvedValueOnce([mockKey]); // PATCH: revoke succeeds
 
-      const res = await request(app)
+      const res = await request(server)
         .delete('/api-keys/55555555-5555-4555-8555-555555555555')
         .expect(200);
 
@@ -239,7 +245,7 @@ describe('API Keys Routes', () => {
       // writeApiKeyRecord returns [] -> null -> 404
       mock.mockResolvedValueOnce([]);
 
-      const res = await request(app).delete('/api-keys/nonexistent-id').expect(404);
+      const res = await request(server).delete('/api-keys/nonexistent-id').expect(404);
 
       expect(res.body.success).toBe(false);
     });
@@ -260,7 +266,7 @@ describe('API Keys Routes', () => {
       mock.mockResolvedValueOnce([]);
       mock.mockResolvedValueOnce([]);
 
-      const res = await request(app)
+      const res = await request(server)
         .post('/api-keys/55555555-5555-4555-8555-555555555555/refresh')
         .expect(200);
 

@@ -64,6 +64,12 @@ export const connectorsApi = {
     });
   },
 
+  async runSpecIntegrationActionTest(service: string): Promise<ApiResponse<any>> {
+    return authenticatedFetch(`/connectors/spec-integrations/${service}/action-test`, {
+      method: 'POST',
+    });
+  },
+
   async updateIntegration(id: string, data: any): Promise<ApiResponse<any>> {
     return authenticatedFetch(`/connectors/integrations/${id}`, {
       method: 'PATCH',

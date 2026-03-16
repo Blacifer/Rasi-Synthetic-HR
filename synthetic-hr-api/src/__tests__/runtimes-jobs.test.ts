@@ -1,3 +1,4 @@
+import http from 'http';
 import request from 'supertest';
 import express from 'express';
 import { SignJWT } from 'jose';
@@ -64,6 +65,10 @@ function createTestApp() {
 
 describe('Runtime + Jobs orchestration', () => {
   const app = createTestApp();
+  let server: http.Server;
+
+  beforeAll((done) => { server = app.listen(0, done); });
+  afterAll((done) => { server.close(done); });
 
   const state: any = {
     runtime: null as any,
@@ -231,7 +236,7 @@ describe('Runtime + Jobs orchestration', () => {
   });
 
   it('creates a runtime instance (user)', async () => {
-    const res = await request(app)
+    const res = await request(server)
       .post('/api/runtimes')
       .set('Authorization', 'Bearer manager')
       .send({ name: 'Customer VPC runtime', mode: 'vpc' });
@@ -252,7 +257,7 @@ describe('Runtime + Jobs orchestration', () => {
       runtime_secret_enc: null,
     };
 
-    const res = await request(app)
+    const res = await request(server)
       .post('/api/runtimes/enroll')
       .send({ runtime_id: TEST_RUNTIME_ID, enrollment_token: enrollmentToken, version: 'test' });
 
@@ -275,14 +280,14 @@ describe('Runtime + Jobs orchestration', () => {
       runtime_secret_enc: null,
     };
 
-    const enrollRes = await request(app)
+    const enrollRes = await request(server)
       .post('/api/runtimes/enroll')
       .send({ runtime_id: TEST_RUNTIME_ID, enrollment_token: enrollmentToken, version: 'test' });
     expect(enrollRes.status).toBe(200);
     runtimeSecretForAuth = enrollRes.body.runtime_secret as string;
 
     // Create deployment
-    const depRes = await request(app)
+    const depRes = await request(server)
       .post('/api/runtimes/deployments')
       .set('Authorization', 'Bearer manager')
       .send({ agent_id: TEST_AGENT_ID, runtime_instance_id: TEST_RUNTIME_ID });
@@ -290,7 +295,7 @@ describe('Runtime + Jobs orchestration', () => {
     expect(depRes.body.success).toBe(true);
 
     // Create job (pending approval)
-    const jobRes = await request(app)
+    const jobRes = await request(server)
       .post('/api/jobs')
       .set('Authorization', 'Bearer manager')
       .send({ agent_id: TEST_AGENT_ID, type: 'chat_turn', input: { model: 'openai/gpt-4o-mini', messages: [{ role: 'user', content: 'hi' }] } });
@@ -298,7 +303,7 @@ describe('Runtime + Jobs orchestration', () => {
     expect(jobRes.body.success).toBe(true);
 
     // Approve job -> queued
-    const decisionRes = await request(app)
+    const decisionRes = await request(server)
       .post('/api/jobs/job-1/decision')
       .set('Authorization', 'Bearer manager')
       .send({ decision: 'approved' });
@@ -313,7 +318,7 @@ describe('Runtime + Jobs orchestration', () => {
       .sign(new TextEncoder().encode(runtimeSecretForAuth));
 
     // Poll -> running
-    const pollRes = await request(app)
+    const pollRes = await request(server)
       .get('/api/runtimes/jobs/poll?limit=1')
       .set('Authorization', `Bearer ${jwt}`);
     expect(pollRes.status).toBe(200);
@@ -321,7 +326,7 @@ describe('Runtime + Jobs orchestration', () => {
     expect(pollRes.body.data[0].status).toBe('running');
 
     // Complete -> succeeded
-    const completeRes = await request(app)
+    const completeRes = await request(server)
       .post('/api/runtimes/jobs/job-1/complete')
       .set('Authorization', `Bearer ${jwt}`)
       .send({ status: 'succeeded', output: { ok: true } });

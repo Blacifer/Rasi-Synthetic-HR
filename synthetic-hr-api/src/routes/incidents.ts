@@ -12,7 +12,7 @@ import { errorResponse, getOrgId, getUserJwt, safeLimit } from '../lib/route-hel
 const router = express.Router();
 
 // Get incidents
-router.get('/', requirePermission('incidents.read'), async (req: Request, res: Response) => {
+router.get('/incidents', requirePermission('incidents.read'), async (req: Request, res: Response) => {
   try {
     const { agent_id, severity, status, limit = 50 } = req.query;
     const orgId = getOrgId(req);
@@ -41,7 +41,7 @@ router.get('/', requirePermission('incidents.read'), async (req: Request, res: R
 });
 
 // Create incident
-router.post('/', requirePermission('incidents.create'), async (req: Request, res: Response) => {
+router.post('/incidents', requirePermission('incidents.create'), async (req: Request, res: Response) => {
   try {
     const orgId = getOrgId(req);
     if (!orgId) {
@@ -145,7 +145,7 @@ router.post('/', requirePermission('incidents.create'), async (req: Request, res
 });
 
 // Resolve incident
-router.put('/:id/resolve', requirePermission('incidents.resolve'), async (req: Request, res: Response) => {
+router.put('/incidents/:id/resolve', requirePermission('incidents.resolve'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { resolution_notes } = req.body;
@@ -194,7 +194,7 @@ router.put('/:id/resolve', requirePermission('incidents.resolve'), async (req: R
 });
 
 // Delete incident
-router.delete('/:id', requirePermission('incidents.delete'), async (req: Request, res: Response) => {
+router.delete('/incidents/:id', requirePermission('incidents.delete'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const orgId = getOrgId(req);
@@ -236,7 +236,7 @@ router.delete('/:id', requirePermission('incidents.delete'), async (req: Request
 });
 
 // Update incident metadata fields
-router.patch('/:id', requirePermission('incidents.resolve'), async (req: Request, res: Response) => {
+router.patch('/incidents/:id', requirePermission('incidents.resolve'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const orgId = getOrgId(req);
