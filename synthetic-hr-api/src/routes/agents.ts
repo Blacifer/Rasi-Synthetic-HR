@@ -562,7 +562,7 @@ router.post('/agents/:id/pause', requirePermission('agents.update'), async (req:
     const orgId = getOrgId(req);
     if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
 
-    const agent = await patchAgentRecord(req, orgId, id, { status: 'paused', lifecycle_state: 'idle' });
+    const agent = await patchAgentRecord(req, orgId, id, { status: 'paused' });
     await auditLog.log({ user_id: req.user?.id || 'unknown', action: 'agent.paused', resource_type: 'agent', resource_id: id, organization_id: orgId, metadata: { reason: typeof req.body?.reason === 'string' ? req.body.reason : 'Paused from fleet workspace', performed_by_email: req.user?.email || null } });
     const [data] = await enrichAgentRecords(req, orgId, [agent], new Map());
     res.json({ success: true, data, message: 'Agent paused' });
@@ -581,7 +581,7 @@ router.post('/agents/:id/resume', requirePermission('agents.update'), async (req
     if (existingAgent.status === 'terminated') return errorResponse(res, new Error('Terminated agents cannot be resumed'), 400);
 
     const publish = readAgentPublishMetadata(existingAgent);
-    const agent = await patchAgentRecord(req, orgId, id, { status: 'active', lifecycle_state: publish.publish_status === 'live' ? 'processing' : 'idle' });
+    const agent = await patchAgentRecord(req, orgId, id, { status: 'active' });
     await auditLog.log({ user_id: req.user?.id || 'unknown', action: 'agent.resumed', resource_type: 'agent', resource_id: id, organization_id: orgId, metadata: { reason: typeof req.body?.reason === 'string' ? req.body.reason : 'Resumed from fleet workspace', performed_by_email: req.user?.email || null } });
     const [data] = await enrichAgentRecords(req, orgId, [agent], new Map());
     res.json({ success: true, data, message: 'Agent resumed' });
@@ -602,7 +602,6 @@ router.post('/agents/:id/go-live', requirePermission('agents.update'), async (re
 
     const agent = await patchAgentRecord(req, orgId, id, {
       status: existingAgent.status === 'terminated' ? 'terminated' : (existingAgent.status || 'active'),
-      lifecycle_state: existingAgent.status === 'terminated' ? existingAgent.lifecycle_state : 'processing',
       metadata: writeAgentPublishMetadata(existingAgent, { publish_status: 'live', primary_pack: publish.primary_pack ?? null, integration_ids: publish.integration_ids || [] }),
     });
 
@@ -627,7 +626,6 @@ router.post('/agents/:id/escalate', requirePermission('incidents.escalate'), asy
 
     const agent = await patchAgentRecord(req, orgId, id, {
       status: existingAgent.status === 'terminated' ? 'terminated' : 'paused',
-      lifecycle_state: existingAgent.status === 'terminated' ? existingAgent.lifecycle_state : 'error',
       risk_score: nextRiskScore,
       risk_level: riskLevelFromScore(nextRiskScore),
     });
