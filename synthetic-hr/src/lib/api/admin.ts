@@ -1,6 +1,16 @@
 import { getAuthHeaders, normalizeErrorPayload, API_BASE_URL, authenticatedFetch } from './_helpers';
 import type { ApiResponse } from './_helpers';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function safeParseJson(text: string): any {
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+}
+
 export const adminApi = {
   async getCoverageStatus(): Promise<ApiResponse<{
     generatedAt: string;
@@ -146,16 +156,7 @@ export const adminApi = {
         headers,
       });
 
-      const rawBody = await response.text();
-      let data: any = {};
-
-      if (rawBody) {
-        try {
-          data = JSON.parse(rawBody);
-        } catch {
-          data = { message: rawBody };
-        }
-      }
+      const data = safeParseJson(await response.text());
 
       if (!response.ok) {
         return normalizeErrorPayload(response, data);
@@ -198,16 +199,7 @@ export const adminApi = {
         body: JSON.stringify(data),
       });
 
-      const rawBody = await response.text();
-      let payload: any = {};
-
-      if (rawBody) {
-        try {
-          payload = JSON.parse(rawBody);
-        } catch {
-          payload = { message: rawBody };
-        }
-      }
+      const payload = safeParseJson(await response.text());
 
       if (!response.ok) {
         return normalizeErrorPayload(response, payload);
@@ -243,16 +235,7 @@ export const adminApi = {
         headers,
       });
 
-      const rawBody = await response.text();
-      let payload: any = {};
-
-      if (rawBody) {
-        try {
-          payload = JSON.parse(rawBody);
-        } catch {
-          payload = { message: rawBody };
-        }
-      }
+      const payload = safeParseJson(await response.text());
 
       if (!response.ok) {
         return normalizeErrorPayload(response, payload);
@@ -294,15 +277,7 @@ export const adminApi = {
         body: JSON.stringify(data),
       });
 
-      const rawBody = await response.text();
-      let payload: any = {};
-      if (rawBody) {
-        try {
-          payload = JSON.parse(rawBody);
-        } catch {
-          payload = { message: rawBody };
-        }
-      }
+      const payload = safeParseJson(await response.text());
       if (!response.ok) {
         return normalizeErrorPayload(response, payload);
       }
@@ -332,15 +307,7 @@ export const adminApi = {
         headers,
       });
 
-      const rawBody = await response.text();
-      let payload: any = {};
-      if (rawBody) {
-        try {
-          payload = JSON.parse(rawBody);
-        } catch {
-          payload = { message: rawBody };
-        }
-      }
+      const payload = safeParseJson(await response.text());
       if (!response.ok) {
         return normalizeErrorPayload(response, payload);
       }
@@ -373,15 +340,7 @@ export const adminApi = {
         body: JSON.stringify({ days }),
       });
 
-      const rawBody = await response.text();
-      let payload: any = {};
-      if (rawBody) {
-        try {
-          payload = JSON.parse(rawBody);
-        } catch {
-          payload = { message: rawBody };
-        }
-      }
+      const payload = safeParseJson(await response.text());
       if (!response.ok) {
         return normalizeErrorPayload(response, payload);
       }
@@ -411,15 +370,7 @@ export const adminApi = {
         headers,
       });
 
-      const rawBody = await response.text();
-      let payload: any = {};
-      if (rawBody) {
-        try {
-          payload = JSON.parse(rawBody);
-        } catch {
-          payload = { message: rawBody };
-        }
-      }
+      const payload = safeParseJson(await response.text());
       if (!response.ok) {
         return normalizeErrorPayload(response, payload);
       }
@@ -452,15 +403,7 @@ export const adminApi = {
         body: JSON.stringify({ days }),
       });
 
-      const rawBody = await response.text();
-      let payload: any = {};
-      if (rawBody) {
-        try {
-          payload = JSON.parse(rawBody);
-        } catch {
-          payload = { message: rawBody };
-        }
-      }
+      const payload = safeParseJson(await response.text());
       if (!response.ok) {
         return normalizeErrorPayload(response, payload);
       }
@@ -490,15 +433,7 @@ export const adminApi = {
         headers,
       });
 
-      const rawBody = await response.text();
-      let payload: any = {};
-      if (rawBody) {
-        try {
-          payload = JSON.parse(rawBody);
-        } catch {
-          payload = { message: rawBody };
-        }
-      }
+      const payload = safeParseJson(await response.text());
       if (!response.ok) {
         return normalizeErrorPayload(response, payload);
       }
@@ -531,15 +466,7 @@ export const adminApi = {
         body: JSON.stringify({ days }),
       });
 
-      const rawBody = await response.text();
-      let payload: any = {};
-      if (rawBody) {
-        try {
-          payload = JSON.parse(rawBody);
-        } catch {
-          payload = { message: rawBody };
-        }
-      }
+      const payload = safeParseJson(await response.text());
       if (!response.ok) {
         return normalizeErrorPayload(response, payload);
       }
@@ -576,15 +503,7 @@ export const adminApi = {
         body: JSON.stringify({ days }),
       });
 
-      const rawBody = await response.text();
-      let payload: any = {};
-      if (rawBody) {
-        try {
-          payload = JSON.parse(rawBody);
-        } catch {
-          payload = { message: rawBody };
-        }
-      }
+      const payload = safeParseJson(await response.text());
       if (!response.ok) {
         return normalizeErrorPayload(response, payload);
       }
@@ -634,15 +553,7 @@ export const adminApi = {
         body: JSON.stringify(data),
       });
 
-      const rawBody = await response.text();
-      let payload: any = {};
-      if (rawBody) {
-        try {
-          payload = JSON.parse(rawBody);
-        } catch {
-          payload = { message: rawBody };
-        }
-      }
+      const payload = safeParseJson(await response.text());
       if (!response.ok) {
         return normalizeErrorPayload(response, payload);
       }
@@ -673,16 +584,7 @@ export const gatewayApi = {
         },
       });
 
-      const rawBody = await response.text();
-      let data: any = {};
-
-      if (rawBody) {
-        try {
-          data = JSON.parse(rawBody);
-        } catch {
-          data = { message: rawBody };
-        }
-      }
+      const data = safeParseJson(await response.text());
 
       if (!response.ok) {
         return normalizeErrorPayload(response, data);
@@ -728,16 +630,7 @@ export const gatewayApi = {
         }),
       });
 
-      const rawBody = await response.text();
-      let data: any = {};
-
-      if (rawBody) {
-        try {
-          data = JSON.parse(rawBody);
-        } catch {
-          data = { message: rawBody };
-        }
-      }
+      const data = safeParseJson(await response.text());
 
       if (!response.ok) {
         return normalizeErrorPayload(response, data);
@@ -845,6 +738,7 @@ export const fineTunesApi = {
     epochs: number;
     trainingRecords: Array<{ prompt: string; completion: string }>;
     validationRecords?: Array<{ prompt: string; completion: string }>;
+    stagedJobId?: string;
   }): Promise<ApiResponse<{
     provider: 'openai';
     id: string;
@@ -872,6 +766,50 @@ export const fineTunesApi = {
     return authenticatedFetch(`/fine-tunes/openai/${jobId}`, {
       method: 'GET',
     });
+  },
+
+  async listJobs(): Promise<ApiResponse<Array<{
+    id: string;
+    name: string;
+    base_model: string;
+    epochs: number;
+    file_name: string;
+    examples: number;
+    validation_examples: number;
+    estimated_cost_inr: number;
+    readiness_score: number;
+    issues: string[];
+    status: string;
+    provider_state: 'staged_local' | 'openai_submitted';
+    provider_job_id: string | null;
+    fine_tuned_model: string | null;
+    trained_tokens: number | null;
+    provider_status_text: string | null;
+    created_at: string;
+  }>>> {
+    return authenticatedFetch('/fine-tunes/jobs', { method: 'GET' });
+  },
+
+  async createStagedJob(data: {
+    name: string;
+    baseModel: string;
+    epochs: number;
+    fileName: string;
+    examples: number;
+    validationExamples: number;
+    estimatedCostInr: number;
+    readinessScore: number;
+    issues: string[];
+    status: string;
+  }): Promise<ApiResponse<{ id: string }>> {
+    return authenticatedFetch('/fine-tunes/jobs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteJob(id: string): Promise<ApiResponse<{ id: string }>> {
+    return authenticatedFetch(`/fine-tunes/jobs/${id}`, { method: 'DELETE' });
   },
 };
 
