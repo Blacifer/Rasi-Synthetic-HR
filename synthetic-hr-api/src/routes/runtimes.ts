@@ -176,6 +176,27 @@ router.post('/:id/rotate-enrollment', requirePermission('agents.update'), async 
   }
 });
 
+router.delete('/:id', requirePermission('agents.update'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+    const { id } = req.params;
+    const delQuery = new URLSearchParams();
+    delQuery.set('id', eq(id));
+    delQuery.set('organization_id', eq(orgId));
+
+    const deleted = (await supabaseRestAsUser(getUserJwt(req), 'runtime_instances', delQuery, {
+      method: 'DELETE',
+    })) as RuntimeInstanceRow[];
+
+    if (!deleted?.length) return res.status(404).json({ success: false, error: 'Runtime not found' });
+    return res.json({ success: true, data: { id } });
+  } catch (err: any) {
+    return safeError(res, err);
+  }
+});
+
 // =========================
 // Deployments (user auth)
 // =========================

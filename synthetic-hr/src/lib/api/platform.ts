@@ -335,6 +335,10 @@ export const runtimesApi = {
     }) as any;
   },
 
+  async delete(id: string): Promise<ApiResponse<{ id: string }>> {
+    return authenticatedFetch(`/runtimes/${id}`, { method: 'DELETE' });
+  },
+
   async listDeployments(agentId?: string): Promise<ApiResponse<AgentDeployment[]>> {
     const qs = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : '';
     return authenticatedFetch(`/runtimes/deployments${qs}`, { method: 'GET' });

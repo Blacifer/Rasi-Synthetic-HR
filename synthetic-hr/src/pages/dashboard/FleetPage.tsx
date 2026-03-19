@@ -74,35 +74,27 @@ export default function FleetPage({
   const [selectedRuntimeId, setSelectedRuntimeId] = useState<string>('');
   const [deploymentLoading, setDeploymentLoading] = useState(false);
   const [currentDeployment, setCurrentDeployment] = useState<any | null>(null);
+  const [newRuntimeName, setNewRuntimeName] = useState('');
   const [createdEnrollment, setCreatedEnrollment] = useState<{ runtimeId: string; token: string; expiresAt: string } | null>(null);
   const [testJob, setTestJob] = useState<any | null>(null);
   const [suggestedApps, setSuggestedApps] = useState<any[]>([]);
   const [testJobBusy, setTestJobBusy] = useState(false);
-  const testJobPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef = useRef<number | null>(null);
 
-  const stopJobPolling = () => {
-    if (testJobPollRef.current) {
-      clearInterval(testJobPollRef.current);
-      testJobPollRef.current = null;
-    }
-  };
-
-  const startJobPolling = (jobId: string) => {
-    stopJobPolling();
-    testJobPollRef.current = setInterval(async () => {
-      try {
-        const res = await api.jobs.get(jobId);
-        if (res.success && res.data?.job) {
-          setTestJob((prev: any) => prev ? { ...prev, job: res.data!.job } : prev);
-          if (['succeeded', 'failed', 'canceled'].includes(res.data.job.status)) {
-            stopJobPolling();
-          }
-        }
-      } catch { /* ignore polling errors */ }
+  const pollJob = (jobId: string) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = window.setInterval(async () => {
+      const r = await api.jobs.get(jobId).catch(() => null);
+      if (!r?.success || !r.data?.job) return;
+      setTestJob((p: any) => p ? { ...p, job: r.data!.job } : p);
+      if (['succeeded', 'failed', 'canceled'].includes(r.data.job.status)) {
+        clearInterval(pollRef.current!);
+        pollRef.current = null;
+      }
     }, 2000);
   };
 
-  useEffect(() => () => stopJobPolling(), []);
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   // Integration Assignment Panel
   const [showAddIntegration, setShowAddIntegration] = useState(false);
@@ -667,11 +659,12 @@ export default function FleetPage({
   };
 
   const closeDeploy = () => {
-    stopJobPolling();
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     setDeployAgentId(null);
     setCreatedEnrollment(null);
     setCurrentDeployment(null);
     setSelectedRuntimeId('');
+    setNewRuntimeName('');
     setTestJob(null);
   };
 
@@ -679,7 +672,7 @@ export default function FleetPage({
     setRuntimesLoading(true);
     setCreatedEnrollment(null);
     try {
-      const name = `${agentName} runtime (${new Date().toLocaleDateString('en-IN')})`;
+      const name = newRuntimeName.trim() || `${agentName} runtime (${new Date().toLocaleDateString('en-IN')})`;
       const res = await api.runtimes.create({ name, mode: 'vpc' });
       const token = (res as any).enrollment_token as string | undefined;
       const expiresAt = (res as any).enrollment_expires_at as string | undefined;
@@ -698,10 +691,22 @@ export default function FleetPage({
       }, ...prev]);
       setSelectedRuntimeId(runtimeRow.id);
       setCreatedEnrollment({ runtimeId: runtimeRow.id, token, expiresAt });
+      setNewRuntimeName('');
       toast.success('Runtime created (enrollment token shown once)');
     } finally {
       setRuntimesLoading(false);
     }
+  };
+
+  const deleteRuntime = async (id: string) => {
+    if (!confirm('Delete this runtime? Any deployments using it will stop working.')) return;
+    try {
+      const res = await api.runtimes.delete(id);
+      if (!res.success) { toast.error(res.error || 'Failed to delete'); return; }
+      setRuntimes((prev) => prev.filter((r) => r.id !== id));
+      if (selectedRuntimeId === id) setSelectedRuntimeId(runtimes.find((r) => r.id !== id)?.id || '');
+      toast.success('Runtime deleted');
+    } catch { toast.error('Failed to delete runtime'); }
   };
 
   const deployToRuntime = async () => {
@@ -767,7 +772,7 @@ export default function FleetPage({
         setTestJob((prev: any) => prev ? { ...prev, job: res.data!.job } : prev);
       }
       toast.success('Approved. Runtime will pick it up shortly.');
-      startJobPolling(jobId);
+      pollJob(jobId);
     } finally {
       setTestJobBusy(false);
     }
@@ -1983,13 +1988,15 @@ export default function FleetPage({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Runtime</p>
-                  <div className="mt-3">
+
+                  {/* Existing runtimes dropdown + delete */}
+                  <div className="mt-3 flex gap-2">
                     <select
                       id="runtime_select"
                       name="runtime_select"
                       value={selectedRuntimeId}
                       onChange={(e) => setSelectedRuntimeId(e.target.value)}
-                      className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30"
+                      className="flex-1 px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30"
                       disabled={runtimesLoading}
                     >
                       {runtimes.length === 0 ? (
@@ -1997,15 +2004,33 @@ export default function FleetPage({
                       ) : (
                         runtimes.map((r) => (
                           <option key={r.id} value={r.id}>
-                            {r.name} • {r.mode} • {r.status}{r.last_heartbeat_at ? ` • hb ${new Date(r.last_heartbeat_at).toLocaleString('en-IN')}` : ''}
+                            {r.name} • {r.mode} • {r.status}
                           </option>
                         ))
                       )}
                     </select>
-                    <p className="mt-2 text-xs text-slate-500">Runtimes run in customer VPC/on-prem and pull approved jobs from SyntheticHR.</p>
+                    {selectedRuntimeId && (
+                      <button
+                        type="button"
+                        onClick={() => void deleteRuntime(selectedRuntimeId)}
+                        className="px-3 py-2.5 rounded-xl border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10"
+                        title="Delete selected runtime"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
+                  <p className="mt-2 text-xs text-slate-500">Runtimes run in customer VPC/on-prem and pull approved jobs from SyntheticHR.</p>
 
+                  {/* New runtime name + create */}
                   <div className="mt-4 flex gap-2">
+                    <input
+                      type="text"
+                      value={newRuntimeName}
+                      onChange={(e) => setNewRuntimeName(e.target.value)}
+                      placeholder="Runtime name (optional)"
+                      className="flex-1 px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30 placeholder:text-slate-600"
+                    />
                     <button
                       type="button"
                       onClick={() => {
@@ -2013,15 +2038,19 @@ export default function FleetPage({
                         void createRuntime(agentName);
                       }}
                       disabled={runtimesLoading}
-                      className="flex-1 px-4 py-2.5 rounded-xl bg-white text-slate-950 font-semibold text-sm hover:bg-slate-100 disabled:opacity-60"
+                      className="px-4 py-2.5 rounded-xl bg-white text-slate-950 font-semibold text-sm hover:bg-slate-100 disabled:opacity-60 whitespace-nowrap"
                     >
-                      {runtimesLoading ? 'Creating…' : 'Create runtime + token'}
+                      {runtimesLoading ? 'Creating…' : 'Create + token'}
                     </button>
+                  </div>
+
+                  {/* Deploy button */}
+                  <div className="mt-3">
                     <button
                       type="button"
                       onClick={() => void deployToRuntime()}
                       disabled={deploymentLoading || !selectedRuntimeId}
-                      className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold text-sm hover:from-blue-600 hover:to-cyan-500 disabled:opacity-60"
+                      className="w-full px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold text-sm hover:from-blue-600 hover:to-cyan-500 disabled:opacity-60"
                     >
                       {deploymentLoading ? 'Deploying…' : 'Deploy agent'}
                     </button>
@@ -2094,20 +2123,20 @@ docker compose -f deploy/compose/runtime.yml up`}</code>
                 </div>
 
                 {testJob?.job?.id && (() => {
-                  const status = testJob.job.status as string;
-                  const statusConfig: Record<string, { color: string; label: string; pulse?: boolean }> = {
-                    pending_approval: { color: 'text-amber-400', label: '(approval required)' },
-                    queued: { color: 'text-blue-400', label: '(waiting for runtime)' },
-                    running: { color: 'text-cyan-400', label: '(executing\u2026)', pulse: true },
-                    succeeded: { color: 'text-emerald-400', label: '(done!)' },
-                    failed: { color: 'text-red-400', label: '(failed)' },
-                    canceled: { color: 'text-slate-400', label: '(canceled)' },
+                  const s = testJob.job.status as string;
+                  const m: Record<string, [string, string]> = {
+                    pending_approval: ['text-amber-400', 'approval required'],
+                    queued: ['text-blue-400', 'waiting for runtime'],
+                    running: ['text-cyan-400 animate-pulse', 'executing\u2026'],
+                    succeeded: ['text-emerald-400', 'done!'],
+                    failed: ['text-red-400', 'failed'],
+                    canceled: ['text-slate-400', 'canceled'],
                   };
-                  const cfg = statusConfig[status] || { color: 'text-slate-200', label: '' };
+                  const [c, l] = m[s] || ['text-slate-200', s];
                   return (
                     <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-300">
                       <div>Job: <span className="font-mono text-cyan-200">{testJob.job.id}</span></div>
-                      <div className={`mt-1 ${cfg.pulse ? 'animate-pulse' : ''}`}>Status: <span className={`font-semibold ${cfg.color}`}>{status}</span> {cfg.label}</div>
+                      <div className="mt-1">Status: <span className={`font-semibold ${c}`}>{s}</span> <span className="text-slate-500">({l})</span></div>
                     </div>
                   );
                 })()}
