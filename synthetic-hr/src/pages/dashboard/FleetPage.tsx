@@ -1948,7 +1948,7 @@ export default function FleetPage({
       {/* Deploy Modal */}
       {deployAgentId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-3xl rounded-3xl border border-slate-700 bg-slate-950/95 shadow-2xl overflow-hidden">
+          <div className="w-full max-w-2xl max-h-[90vh] rounded-3xl border border-slate-700 bg-slate-950/95 shadow-2xl overflow-hidden flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-2xl bg-cyan-500/15 border border-cyan-500/20 flex items-center justify-center">
@@ -1966,7 +1966,7 @@ export default function FleetPage({
               </button>
             </div>
 
-            <div className="p-6 space-y-5">
+            <div className="p-6 space-y-4 overflow-y-auto">
               <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Current deployment</p>
@@ -1985,116 +1985,120 @@ export default function FleetPage({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Runtime</p>
+              {/* Step 1: Select or create runtime */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-cyan-500/15 border border-cyan-500/25 text-xs font-bold text-cyan-300">1</span>
+                  <p className="text-sm font-semibold text-white">Select or create a runtime</p>
+                </div>
 
-                  {/* Existing runtimes dropdown + delete */}
-                  <div className="mt-3 flex gap-2">
+                {runtimes.length > 0 && (
+                  <div className="flex gap-2 mb-3">
                     <select
-                      id="runtime_select"
-                      name="runtime_select"
                       value={selectedRuntimeId}
                       onChange={(e) => setSelectedRuntimeId(e.target.value)}
                       className="flex-1 px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30"
                       disabled={runtimesLoading}
                     >
-                      {runtimes.length === 0 ? (
-                        <option value="">No runtimes yet</option>
-                      ) : (
-                        runtimes.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name} • {r.mode} • {r.status}
-                          </option>
-                        ))
-                      )}
+                      {runtimes.map((r) => (
+                        <option key={r.id} value={r.id}>{r.name} &bull; {r.mode} &bull; {r.status}</option>
+                      ))}
                     </select>
-                    {selectedRuntimeId && (
+                    <button
+                      type="button"
+                      onClick={() => void deleteRuntime(selectedRuntimeId)}
+                      className="px-3 py-2.5 rounded-xl border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 transition-colors"
+                      title="Delete this runtime"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newRuntimeName}
+                    onChange={(e) => setNewRuntimeName(e.target.value)}
+                    placeholder={runtimes.length > 0 ? 'New runtime name…' : 'Runtime name (e.g. Production VPC)'}
+                    className="flex-1 px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30 placeholder:text-slate-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const agentName = agents.find((a) => a.id === deployAgentId)?.name || 'Agent';
+                      void createRuntime(agentName);
+                    }}
+                    disabled={runtimesLoading}
+                    className="px-4 py-2.5 rounded-xl bg-white text-slate-950 font-semibold text-sm hover:bg-slate-100 disabled:opacity-60 whitespace-nowrap transition-colors"
+                  >
+                    {runtimesLoading ? 'Creating…' : '+ Create runtime'}
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">Runtimes run in customer VPC/on-prem and pull approved jobs from SyntheticHR.</p>
+              </div>
+
+              {/* Step 2: Enrollment (shown after creating a runtime) */}
+              {createdEnrollment && (
+                <div className="rounded-2xl border border-cyan-500/20 bg-slate-900/40 p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-xs font-bold text-emerald-300">2</span>
+                    <p className="text-sm font-semibold text-white">Enroll the runtime</p>
+                    <span className="ml-auto text-xs text-slate-500">Expires: {new Date(createdEnrollment.expiresAt).toLocaleString('en-IN')}</span>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-3 mb-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs text-slate-400">Enrollment token <span className="text-amber-400">(shown once)</span></p>
                       <button
                         type="button"
-                        onClick={() => void deleteRuntime(selectedRuntimeId)}
-                        className="px-3 py-2.5 rounded-xl border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10"
-                        title="Delete selected runtime"
+                        onClick={() => void navigator.clipboard.writeText(createdEnrollment.token).then(() => toast.success('Token copied')).catch(() => toast.error('Copy failed'))}
+                        className="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-900/60 text-white text-xs font-medium hover:bg-slate-800 transition-colors"
                       >
-                        ✕
+                        Copy
                       </button>
-                    )}
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500">Runtimes run in customer VPC/on-prem and pull approved jobs from SyntheticHR.</p>
-
-                  {/* New runtime name + create */}
-                  <div className="mt-4 flex gap-2">
-                    <input
-                      type="text"
-                      value={newRuntimeName}
-                      onChange={(e) => setNewRuntimeName(e.target.value)}
-                      placeholder="Runtime name (optional)"
-                      className="flex-1 px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30 placeholder:text-slate-600"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const agentName = agents.find((a) => a.id === deployAgentId)?.name || 'Agent';
-                        void createRuntime(agentName);
-                      }}
-                      disabled={runtimesLoading}
-                      className="px-4 py-2.5 rounded-xl bg-white text-slate-950 font-semibold text-sm hover:bg-slate-100 disabled:opacity-60 whitespace-nowrap"
-                    >
-                      {runtimesLoading ? 'Creating…' : 'Create + token'}
-                    </button>
+                    </div>
+                    <code className="block break-all font-mono text-xs text-cyan-200 leading-relaxed">{createdEnrollment.token}</code>
                   </div>
 
-                  {/* Deploy button */}
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      onClick={() => void deployToRuntime()}
-                      disabled={deploymentLoading || !selectedRuntimeId}
-                      className="w-full px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold text-sm hover:from-blue-600 hover:to-cyan-500 disabled:opacity-60"
-                    >
-                      {deploymentLoading ? 'Deploying…' : 'Deploy agent'}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Enrollment</p>
-                  {!createdEnrollment ? (
-                    <p className="mt-3 text-sm text-slate-400">Create a runtime to get an enrollment token (shown once), then start the runtime in the customer environment.</p>
-                  ) : (
-                    <div className="mt-3 space-y-3">
-                      <div className="rounded-2xl border border-cyan-500/20 bg-slate-950/60 p-3">
-                        <p className="text-xs text-slate-400 mb-2">Enrollment token (shown once)</p>
-                        <code className="block break-all font-mono text-xs text-cyan-200">{createdEnrollment.token}</code>
-                        <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-                          <span>Runtime ID: <span className="font-mono text-slate-300">{createdEnrollment.runtimeId}</span></span>
-                          <span>Expires: {new Date(createdEnrollment.expiresAt).toLocaleString('en-IN')}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void navigator.clipboard.writeText(createdEnrollment.token).then(() => toast.success('Token copied')).catch(() => toast.error('Copy failed'))}
-                          className="mt-3 w-full px-3 py-2 rounded-xl border border-slate-700 bg-slate-900/60 text-white text-xs font-semibold hover:bg-slate-800"
-                        >
-                          Copy token
-                        </button>
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-3">
-                        <p className="text-xs text-slate-400 mb-2">Docker (POC)</p>
-                        <pre className="text-xs text-slate-200 overflow-auto">
-                          <code>{`export SYNTHETICHR_CONTROL_PLANE_URL="${controlPlaneBaseUrl}"
+                  <div className="rounded-xl border border-slate-700 bg-slate-950/40 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs text-slate-400">Quick start (Docker)</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cmd = `export SYNTHETICHR_CONTROL_PLANE_URL="${controlPlaneBaseUrl}"\nexport SYNTHETICHR_RUNTIME_ID="${createdEnrollment.runtimeId}"\nexport SYNTHETICHR_ENROLLMENT_TOKEN="${createdEnrollment.token}"\nexport SYNTHETICHR_API_KEY="sk_..."\n\ndocker compose -f deploy/compose/runtime.yml up`;
+                          void navigator.clipboard.writeText(cmd).then(() => toast.success('Commands copied')).catch(() => toast.error('Copy failed'));
+                        }}
+                        className="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-900/60 text-white text-xs font-medium hover:bg-slate-800 transition-colors"
+                      >
+                        Copy all
+                      </button>
+                    </div>
+                    <pre className="text-xs text-slate-200 overflow-x-auto leading-relaxed"><code>{`export SYNTHETICHR_CONTROL_PLANE_URL="${controlPlaneBaseUrl}"
 export SYNTHETICHR_RUNTIME_ID="${createdEnrollment.runtimeId}"
 export SYNTHETICHR_ENROLLMENT_TOKEN="${createdEnrollment.token}"
+export SYNTHETICHR_API_KEY="sk_..."
 
-# You also need a SyntheticHR API key for /v1 gateway calls (Connect Agent wizard):
-export SYNTHETICHR_API_KEY="rasi_live_..."
-
-docker compose -f deploy/compose/runtime.yml up`}</code>
-                        </pre>
-                      </div>
-                    </div>
-                  )}
+docker compose -f deploy/compose/runtime.yml up`}</code></pre>
+                  </div>
                 </div>
+              )}
+
+              {/* Step 3: Deploy agent to runtime */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-500/15 border border-blue-500/25 text-xs font-bold text-blue-300">3</span>
+                  <p className="text-sm font-semibold text-white">Deploy agent to runtime</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void deployToRuntime()}
+                  disabled={deploymentLoading || !selectedRuntimeId}
+                  className="w-full px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold text-sm hover:from-blue-600 hover:to-cyan-500 disabled:opacity-40 transition-all"
+                >
+                  {deploymentLoading ? 'Deploying…' : !selectedRuntimeId ? 'Select a runtime first' : `Deploy to ${runtimes.find(r => r.id === selectedRuntimeId)?.name || 'runtime'}`}
+                </button>
               </div>
 
               <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-4">
