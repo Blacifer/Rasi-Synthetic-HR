@@ -143,12 +143,23 @@ const enrichAgentRecords = async (
     return supabaseRestAsUser(getUserJwt(req), 'integrations', query) as Promise<IntegrationSummaryRow[]>;
   })();
 
+  const deploymentRows = (() => {
+    const query = new URLSearchParams();
+    query.set('organization_id', eq(orgId));
+    query.set('status', eq('active'));
+    query.set('select', 'agent_id');
+    return supabaseRestAsUser(getUserJwt(req), 'agent_deployments', query).catch(() => []) as Promise<any[]>;
+  })();
+
   let integrations: IntegrationSummaryRow[] = [];
   try {
     integrations = await integrationRows;
   } catch (err: any) {
     logger.warn('Failed to load integrations for agent enrichment', { error: err?.message || err, org_id: orgId });
   }
+
+  const deployments = await deploymentRows;
+  const deployedAgentIds = new Set((deployments || []).map((d: any) => d.agent_id));
 
   const integrationByServiceType = new Map((integrations || []).map((row) => [row.service_type, row]));
 
@@ -166,8 +177,11 @@ const enrichAgentRecords = async (
         lastActivityAt: integration!.last_sync_at || null,
       }));
 
+    const hasActiveDeployment = deployedAgentIds.has(agent.id);
     const publishStatus = publish.publish_status
-      || (connectedTargets.length === 0 ? 'not_live' : connectedTargets.some((t) => t.status === 'connected') ? 'live' : 'ready');
+      || (hasActiveDeployment ? 'live'
+        : connectedTargets.length === 0 ? 'not_live'
+        : connectedTargets.some((t) => t.status === 'connected') ? 'live' : 'ready');
 
     return {
       ...agent,
