@@ -16,6 +16,8 @@ export {
   actionPoliciesApi,
 } from './platform';
 export { marketplaceApi } from './marketplace';
+export { recruitmentApi } from './recruitment';
+export { supportHubApi, salesHubApi, itHubApi, financeHubApi, complianceHubApi, identityHubApi } from './hubs';
 export {
   adminApi,
   gatewayApi,
@@ -62,6 +64,8 @@ import {
   actionPoliciesApi,
 } from './platform';
 import { marketplaceApi } from './marketplace';
+import { recruitmentApi } from './recruitment';
+import { supportHubApi, salesHubApi, itHubApi, financeHubApi, complianceHubApi, identityHubApi } from './hubs';
 import {
   adminApi,
   gatewayApi,
@@ -103,6 +107,15 @@ export const api = {
   actionPolicies: actionPoliciesApi,
   marketplace: marketplaceApi,
   slack: slackApi,
+  recruitment: recruitmentApi,
+  hubs: {
+    support: supportHubApi,
+    sales: salesHubApi,
+    it: itHubApi,
+    finance: financeHubApi,
+    compliance: complianceHubApi,
+    identity: identityHubApi,
+  },
 };
 
 export default api;

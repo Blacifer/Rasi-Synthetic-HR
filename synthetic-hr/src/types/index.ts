@@ -592,6 +592,95 @@ export interface SalesLead {
   updated_at?: string | null;
 }
 
+// ==================== RECRUITMENT HUB TYPES ====================
+export type JobPostingStatus = 'draft' | 'open' | 'paused' | 'closed';
+export type EmploymentType = 'full_time' | 'part_time' | 'contract' | 'internship';
+export type ApplicationStatus = 'new' | 'screening' | 'shortlisted' | 'interviewing' | 'offered' | 'rejected' | 'withdrawn';
+
+export interface PostedPlatform {
+  platform: string;
+  external_id: string;
+  posted_at: string;
+}
+
+export interface JobPosting {
+  id: string;
+  organization_id: string;
+  title: string;
+  description: string;
+  requirements?: string | null;
+  location?: string | null;
+  employment_type: EmploymentType;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  currency?: string;
+  status: JobPostingStatus;
+  posted_to: PostedPlatform[];
+  ai_screening_enabled: boolean;
+  ai_screening_threshold: number;
+  auto_reject_below?: number | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+  // Enriched from GET /jobs/:id
+  application_count?: number;
+  avg_ai_score?: number | null;
+  status_breakdown?: Record<string, number>;
+}
+
+export interface JobApplication {
+  id: string;
+  organization_id: string;
+  job_id: string;
+  candidate_name: string;
+  candidate_email?: string | null;
+  candidate_phone?: string | null;
+  resume_url?: string | null;
+  resume_text?: string | null;
+  cover_letter?: string | null;
+  source_platform?: string | null;
+  external_application_id?: string | null;
+  ai_score?: number | null;
+  ai_summary?: string | null;
+  ai_scored_at?: string | null;
+  status: ApplicationStatus;
+  rejection_reason?: string | null;
+  tags?: string[];
+  notes?: any[];
+  applied_at: string;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export interface AiScoringResult {
+  score: number;
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+}
+
+// ==================== SUPPORT HUB TYPES ====================
+export interface SupportTicketHub extends SupportTicket {
+  ai_urgency_score?: number | null;
+  ai_category?: string | null;
+  ai_draft_response?: string | null;
+  ai_triaged_at?: string | null;
+  sla_deadline?: string | null;
+  channel?: string | null;
+}
+
+// ==================== SALES HUB TYPES ====================
+export interface SalesLeadHub extends SalesLead {
+  ai_deal_score?: number | null;
+  ai_risk_reason?: string | null;
+  ai_next_action?: string | null;
+  ai_scored_at?: string | null;
+  deal_value?: number | null;
+  currency?: string | null;
+  last_activity_at?: string | null;
+}
+
+// ==================== IT HUB TYPES ====================
 export type AccessRequestStatus = 'pending' | 'approved' | 'rejected' | 'completed' | 'canceled' | string;
 
 export interface AccessRequest {
@@ -607,6 +696,158 @@ export interface AccessRequest {
   decided_at?: string | null;
   source?: string | null;
   created_by?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+// ==================== ACCESS REQUEST HUB (IT) ====================
+export interface AccessRequestHub extends AccessRequest {
+  ai_risk_rating?: number | null;
+  ai_policy_result?: string | null;
+  ai_evaluation_notes?: string | null;
+  ai_evaluated_at?: string | null;
+  department?: string | null;
+  sensitivity_level?: string | null;
+}
+
+// ==================== FINANCE HUB TYPES ====================
+export type InvoiceMatchedStatus = 'unmatched' | 'matched' | 'exception' | 'paid';
+export type InvoiceStatus = 'pending' | 'approved' | 'rejected' | 'paid';
+
+export interface HubInvoice {
+  id: string;
+  organization_id: string;
+  vendor_name: string;
+  invoice_number?: string | null;
+  amount: number;
+  currency?: string;
+  due_date?: string | null;
+  received_at?: string | null;
+  po_number?: string | null;
+  matched_status: InvoiceMatchedStatus;
+  ai_match_confidence?: number | null;
+  ai_flags?: Array<{ type: string; detail: string }>;
+  ai_validated_at?: string | null;
+  status: InvoiceStatus;
+  approved_by?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export type ExpenseStatus = 'pending' | 'approved' | 'rejected' | 'reimbursed';
+
+export interface HubExpense {
+  id: string;
+  organization_id: string;
+  claimant_name: string;
+  claimant_email?: string | null;
+  category?: string | null;
+  amount: number;
+  currency?: string;
+  receipt_url?: string | null;
+  description?: string | null;
+  expense_date?: string | null;
+  ai_policy_compliant?: boolean | null;
+  ai_flags?: Array<{ type: string; detail: string }>;
+  ai_validated_at?: string | null;
+  status: ExpenseStatus;
+  approved_by?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+// ==================== COMPLIANCE HUB TYPES ====================
+export type DeadlineStatus = 'upcoming' | 'in_progress' | 'completed' | 'overdue' | 'waived';
+
+export interface HubDeadline {
+  id: string;
+  organization_id: string;
+  title: string;
+  regulation?: string | null;
+  description?: string | null;
+  due_date: string;
+  recurring?: string | null;
+  status: DeadlineStatus;
+  ai_checklist?: Array<{ item: string; done: boolean }>;
+  ai_generated_at?: string | null;
+  assigned_to?: string | null;
+  completed_at?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export type EvidenceStatus = 'collected' | 'reviewed' | 'accepted' | 'rejected';
+
+export interface HubEvidence {
+  id: string;
+  organization_id: string;
+  deadline_id?: string | null;
+  title: string;
+  control_area?: string | null;
+  source?: string | null;
+  file_url?: string | null;
+  collected_at?: string | null;
+  status: EvidenceStatus;
+  reviewed_by?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+// ==================== IDENTITY HUB TYPES ====================
+
+export type IdentityEventType =
+  | 'login' | 'login_failed' | 'mfa_challenge' | 'mfa_failed'
+  | 'password_reset' | 'account_locked'
+  | 'access_granted' | 'access_revoked'
+  | 'user_provisioned' | 'user_deprovisioned'
+  | 'group_changed' | 'role_changed'
+  | 'suspicious_activity' | 'other';
+
+export type IdentityEventSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
+
+export type AccessLevel = 'read' | 'write' | 'admin' | 'owner';
+export type AccessGraphStatus = 'active' | 'inactive' | 'revoked' | 'pending_review';
+
+export interface HubIdentityEvent {
+  id: string;
+  organization_id: string;
+  event_type: IdentityEventType;
+  severity: IdentityEventSeverity;
+  actor_email?: string | null;
+  actor_name?: string | null;
+  actor_id?: string | null;
+  target_resource?: string | null;
+  target_system?: string | null;
+  source_platform?: string | null;
+  source_event_id?: string | null;
+  ip_address?: string | null;
+  geo_location?: string | null;
+  user_agent?: string | null;
+  details?: Record<string, any>;
+  ai_anomaly_score?: number | null;
+  ai_anomaly_reasons?: string[];
+  ai_scored_at?: string | null;
+  event_at: string;
+  created_at: string;
+}
+
+export interface HubAccessGraph {
+  id: string;
+  organization_id: string;
+  user_email: string;
+  user_name?: string | null;
+  system_name: string;
+  access_level: AccessLevel;
+  source_platform?: string | null;
+  granted_at?: string | null;
+  last_used_at?: string | null;
+  status: AccessGraphStatus;
+  risk_score?: number | null;
   created_at: string;
   updated_at?: string | null;
 }

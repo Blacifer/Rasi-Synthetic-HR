@@ -1,10 +1,11 @@
-import { useState, useEffect, lazy, Suspense, useCallback, useRef } from 'react';
+import { useState, useEffect, lazy, Suspense, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation, Routes, Route, Navigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
-  DollarSign, Eye, Database, Building2, Key, CreditCard, Settings, X, Play, Link2,
-  TrendingUp, Sparkles, Webhook, ChevronLeft, MessageSquare, AlertTriangle, PlugZap, ClipboardList, ListChecks, ListTodo, Shield, Bot
+  DollarSign, Database, Key, Settings, X, Play, Link2,
+  TrendingUp, Sparkles, ChevronLeft, MessageSquare, AlertTriangle, PlugZap, Bot, Briefcase,
+  Headset, Building2, Wrench, HandCoins, Gavel, Fingerprint
 } from 'lucide-react';
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
 import { useApp } from '../context/AppContext';
@@ -45,6 +46,13 @@ const DeveloperPage = lazy(() => import('./dashboard/DeveloperPage'));
 const DomainAgentLibraryPage = lazy(() => import('./dashboard/DomainAgentLibraryPage'));
 const MarketplacePage = lazy(() => import('./dashboard/MarketplacePage'));
 const ConnectorsPage = lazy(() => import('./dashboard/ConnectorsPage'));
+const RecruitmentHubPage = lazy(() => import('./dashboard/RecruitmentHubPage'));
+const SupportHubPage = lazy(() => import('./dashboard/SupportHubPage'));
+const SalesHubPage = lazy(() => import('./dashboard/SalesHubPage'));
+const ITHubPage = lazy(() => import('./dashboard/ITHubPage'));
+const FinanceHubPage = lazy(() => import('./dashboard/FinanceHubPage'));
+const ComplianceHubPage = lazy(() => import('./dashboard/ComplianceHubPage'));
+const IdentityHubPage = lazy(() => import('./dashboard/IdentityHubPage'));
 
 interface DashboardProps {
   isDemoMode?: boolean;
@@ -538,6 +546,33 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     } as AIAgent;
   });
 
+  // Pack gating — which hub packs are "active" (have at least one connected integration)
+  const activePacks = useMemo(() => {
+    const packs = new Set<IntegrationPackId>();
+    for (const row of integrationRows) {
+      if (row.status === 'connected' || row.lifecycleStatus === 'connected') {
+        packs.add(guessPackForIntegration(row));
+      }
+    }
+    return packs;
+  }, [integrationRows]);
+
+  // Hub nav items — gated by active packs (always show if no integrations at all so the UI isn't empty)
+  const hubNavItems = useMemo<Array<{ id: string; icon: typeof Headset; label: string; pack: IntegrationPackId }>>(() => {
+    const allHubs: Array<{ id: string; icon: typeof Headset; label: string; pack: IntegrationPackId }> = [
+      { id: 'recruitment', icon: Briefcase, label: 'Recruitment', pack: 'recruitment' as IntegrationPackId },
+      { id: 'support-hub', icon: Headset, label: 'Support', pack: 'support' as IntegrationPackId },
+      { id: 'sales-hub', icon: Building2, label: 'Sales', pack: 'sales' as IntegrationPackId },
+      { id: 'it-hub', icon: Wrench, label: 'IT', pack: 'it' as IntegrationPackId },
+      { id: 'identity-hub', icon: Fingerprint, label: 'Identity', pack: 'it' as IntegrationPackId },
+      { id: 'finance-hub', icon: HandCoins, label: 'Finance', pack: 'finance' as IntegrationPackId },
+      { id: 'compliance-hub', icon: Gavel, label: 'Compliance', pack: 'compliance' as IntegrationPackId },
+    ];
+    // If no integrations are connected yet, show all hubs (onboarding state)
+    if (activePacks.size === 0) return allHubs;
+    return allHubs.filter(h => activePacks.has(h.pack));
+  }, [activePacks]);
+
   useEffect(() => {
     if (!mounted) return;
     if (loading) return;
@@ -927,6 +962,23 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
               <span className="flex-1 min-w-0 text-left">Connectors</span>
             </button>
 
+            {/* ── Work Hubs ── */}
+            <div className="px-2 pt-4 pb-1.5">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-medium">Work Hubs</div>
+            </div>
+            {hubNavItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => navigateTo(item.id)}
+                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
+                aria-current={currentPage === item.id ? 'page' : undefined}
+                aria-label={item.label}
+              >
+                <item.icon className="w-5 h-5 shrink-0" aria-hidden="true" />
+                <span className="flex-1 min-w-0 text-left">{item.label}</span>
+              </button>
+            ))}
+
             {/* ── Monitor ── */}
             <div className="px-2 pt-4 pb-1.5">
               <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-medium">Monitor</div>
@@ -1297,6 +1349,13 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                     />
                   } />
                   <Route path="connectors" element={<ConnectorsPage onNavigate={navigateTo} agents={enrichedAgents} />} />
+                  <Route path="recruitment" element={<RecruitmentHubPage />} />
+                  <Route path="support-hub" element={<SupportHubPage />} />
+                  <Route path="sales-hub" element={<SalesHubPage />} />
+                  <Route path="it-hub" element={<ITHubPage />} />
+                  <Route path="finance-hub" element={<FinanceHubPage />} />
+                  <Route path="compliance-hub" element={<ComplianceHubPage />} />
+                  <Route path="identity-hub" element={<IdentityHubPage />} />
                   <Route path="marketplace" element={<MarketplacePage onNavigate={navigateTo} agents={enrichedAgents} />} />
                   <Route path="integrations" element={
                     <IntegrationsPage
