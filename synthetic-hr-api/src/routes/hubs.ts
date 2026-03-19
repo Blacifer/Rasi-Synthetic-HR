@@ -1082,7 +1082,7 @@ router.post('/identity/revoke-all', requirePermission('workitems.manage'), async
       });
       revoked++;
     }
-    await auditLog(req, 'identity.revoke_all', 'hub_access_graph', null, { user_email: userEmail, revoked });
+    await auditLog.log({ action: 'identity.revoke_all', resource_type: 'hub_access_graph', organization_id: orgId!, user_id: getUserId(req) || '', metadata: { user_email: userEmail, revoked } });
     return res.json({ success: true, data: { revoked } });
   } catch (err: any) { return safeError(res, err); }
 });
