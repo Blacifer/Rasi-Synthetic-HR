@@ -142,6 +142,16 @@ export const PACK_DOMAIN_AGENTS: Record<IntegrationPackId, DomainAgentType[]> = 
       modelName: 'claude-3-5-sonnet-20241022',
       systemPrompt: 'You are a Compliance Monitor Agent. Continuously track statutory filing deadlines (GST, TDS, PF, ESI, corporate filings) for the organisation. Send reminders 15 days, 7 days, and 1 day before each deadline. Monitor connected compliance tools for any regulatory notices, audit flags, or policy violations and surface them immediately. After each filing, confirm submission and log the evidence. If a deadline is missed, immediately notify the compliance officer and create a remediation task with the penalty calculation. Never initiate a filing without explicit human approval.',
     },
+    {
+      id: 'privacy_agent',
+      name: 'Privacy & DSAR Agent',
+      description: 'Handles data subject access requests, manages consent records, and enforces data retention policies.',
+      sampleActions: ['Process DSAR', 'Audit consent records', 'Flag retention breach'],
+      agentType: 'compliance',
+      platform: 'web',
+      modelName: 'claude-3-5-sonnet-20241022',
+      systemPrompt: 'You are a Privacy and Data Subject Rights Agent. Handle incoming Data Subject Access Requests (DSARs): verify the requester\'s identity, locate all personal data held across connected systems, compile a structured response package within the statutory deadline (30 days for GDPR, 45 days for CCPA), and log every step with timestamps. For deletion requests, coordinate removal across all connected data stores and confirm completion. Monitor consent records for expiry and send renewal prompts before lapse. Flag any data retention policy breaches — data held beyond its defined retention period — and initiate the deletion workflow with human approval. Never share personal data externally without verification.',
+    },
   ],
 };
 

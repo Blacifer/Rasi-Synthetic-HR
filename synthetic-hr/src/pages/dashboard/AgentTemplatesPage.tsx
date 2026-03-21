@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { X, Zap, Headphones, Users, RefreshCw, Server, Search, Loader2, CheckCircle2, LineChart, MessageSquare } from 'lucide-react';
+import { X, Zap, RefreshCw, Search, CheckCircle2, LineChart, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase-client';
 import { toast } from '../../lib/toast';
 import { AGENT_TEMPLATES, AGENT_TEMPLATE_INDUSTRIES, type AgentTemplate } from '../../config/agentTemplates';
@@ -20,39 +20,9 @@ type MonthlyCost =
 
 interface AgentTemplatesPageProps {
   onDeploy: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[] }) => void;
-  connectedIntegrations?: Array<{ id: string; name: string; tags?: string[] }>;
 }
 
-const CHANNEL_INTEGRATION_HINTS: Record<string, string[]> = {
-  'Slack': ['slack'],
-  'Microsoft Teams': ['teams', 'microsoft'],
-  'Zendesk': ['zendesk'],
-  'API / SDK': [],
-};
-
-function getChannelIntegrationIds(
-  channel: string,
-  integrations: Array<{ id: string; name: string; tags?: string[] }>
-): string[] {
-  const hints = CHANNEL_INTEGRATION_HINTS[channel] || [];
-  if (!hints.length) return [];
-  return integrations
-    .filter(i => hints.some(h =>
-      i.id.toLowerCase().includes(h) ||
-      i.name.toLowerCase().includes(h) ||
-      (i.tags || []).some(t => t.toLowerCase().includes(h))
-    ))
-    .map(i => i.id);
-}
-
-function isChannelConnected(
-  channel: string,
-  integrations: Array<{ id: string; name: string; tags?: string[] }>
-): boolean {
-  return getChannelIntegrationIds(channel, integrations).length > 0;
-}
-
-export default function AgentTemplatesPage({ onDeploy, connectedIntegrations = [] }: AgentTemplatesPageProps) {
+export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps) {
   const [selectedIndustry, setSelectedIndustry] = useState<string>('all');
   const [selectedTemplate, setSelectedTemplate] = useState<AgentTemplate | null>(null);
   const [templateSearchQuery, setTemplateSearchQuery] = useState('');
@@ -65,8 +35,6 @@ export default function AgentTemplatesPage({ onDeploy, connectedIntegrations = [
   const [systemPrompt, setSystemPrompt] = useState('');
   const [sandboxMessage, setSandboxMessage] = useState('');
   const [sandboxChat, setSandboxChat] = useState<{ role: 'user' | 'agent', content: string }[]>([]);
-  const [deploymentStep, setDeploymentStep] = useState<'configure' | 'channel'>('configure');
-  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
   const WORKLOAD_PRESETS = useMemo(() => [1_000_000, 10_000_000, 100_000_000], []);
   const MIN_MONTHLY_TOKENS = 1_000_000;
   const MAX_MONTHLY_TOKENS = 100_000_000;
@@ -131,7 +99,6 @@ export default function AgentTemplatesPage({ onDeploy, connectedIntegrations = [
       setSystemPrompt(`You are an advanced AI assistant tailored for ${selectedTemplate.industry} tasks, specializing as a ${selectedTemplate.name}.`);
       setSandboxChat([{ role: 'agent', content: `Hi! I'm your ${selectedTemplate.name}. Send me a message to test how I respond in the sandbox.` }]);
       setSandboxMessage('');
-      setDeploymentStep('configure');
     }
   }, [selectedTemplate, liveModels, resolveModel]);
 
@@ -489,29 +456,6 @@ export default function AgentTemplatesPage({ onDeploy, connectedIntegrations = [
                 </div>
               ) : (
                 <>
-                {/* Step progress indicator */}
-                <div className="flex items-center gap-3 mb-5 px-1">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors ${deploymentStep === 'configure' ? 'bg-cyan-500 text-white' : 'bg-emerald-500 text-white'}`}>
-                      {deploymentStep === 'configure' ? '1' : '✓'}
-                    </span>
-                    <span className={`text-xs font-semibold transition-colors ${deploymentStep === 'configure' ? 'text-white' : 'text-emerald-400'}`}>
-                      Configure model
-                    </span>
-                  </div>
-                  <div className="flex-1 h-px bg-slate-700" />
-                  <div className="flex items-center gap-2">
-                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors ${deploymentStep === 'channel' ? 'bg-cyan-500 text-white' : 'bg-slate-700 text-slate-500 border border-slate-600'}`}>
-                      2
-                    </span>
-                    <span className={`text-xs font-semibold transition-colors ${deploymentStep === 'channel' ? 'text-white' : 'text-slate-500'}`}>
-                      Select channel
-                    </span>
-                  </div>
-                </div>
-                {deploymentStep === 'configure' ? (
-                  // STEP 1: Configure Agent details (Model, Context, Sandbox)
-                  <>
                     <div className="space-y-6">
                         {/* Model Browser UI */}
                         <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-4">
@@ -762,10 +706,20 @@ export default function AgentTemplatesPage({ onDeploy, connectedIntegrations = [
 
                     <div className="flex gap-3 mt-6">
                       <button
-                        onClick={() => { setDeploymentStep('channel'); setSelectedChannel(null); }}
+                        onClick={() => {
+                          onDeploy({
+                            ...selectedTemplate,
+                            model: selectedModel?.id ?? selectedTemplate.model,
+                            platform: 'api',
+                            system_prompt: systemPrompt,
+                            integration_ids: [],
+                          });
+                          toast.success(`${selectedTemplate.name} added to Fleet — connect a channel from the workspace to go live`);
+                          setSelectedTemplate(null);
+                        }}
                         className={`w-full py-3 rounded-xl font-bold text-white transition-all shadow-lg ${getColorClasses(selectedTemplate.color).bg} hover:brightness-110 active:scale-[0.98]`}
                       >
-                        Continue to Channel Setup
+                        Add to Fleet →
                       </button>
                       <button
                         onClick={() => setSelectedTemplate(null)}
@@ -774,135 +728,11 @@ export default function AgentTemplatesPage({ onDeploy, connectedIntegrations = [
                         Cancel
                       </button>
                     </div>
-                  </>
-                ) : (
-                  // STEP 2: Channel Setup
-                  <div className="space-y-5 animate-in slide-in-from-right-8 duration-300">
-                    {/* Channel tiles */}
-                    {(() => {
-                      const CHANNELS = [
-                        {
-                          key: 'Slack',
-                          label: 'Slack Workspace',
-                          description: 'Chat with your agent in any Slack channel',
-                          icon: MessageSquare,
-                          borderHover: 'hover:border-[#E01E5A]/50',
-                          bgHover: 'hover:bg-[#4A154B]/10',
-                          iconBgHover: 'group-hover:bg-[#4A154B]/30',
-                          iconColorHover: 'group-hover:text-[#E01E5A]',
-                        },
-                        {
-                          key: 'Microsoft Teams',
-                          label: 'MS Teams',
-                          description: 'Deploy into a Microsoft Teams workspace',
-                          icon: Users,
-                          borderHover: 'hover:border-indigo-500/50',
-                          bgHover: 'hover:bg-indigo-500/10',
-                          iconBgHover: 'group-hover:bg-indigo-900/50',
-                          iconColorHover: 'group-hover:text-indigo-400',
-                        },
-                        {
-                          key: 'Zendesk',
-                          label: 'Zendesk Agent',
-                          description: 'Power your Zendesk ticket workflows',
-                          icon: Headphones,
-                          borderHover: 'hover:border-emerald-500/50',
-                          bgHover: 'hover:bg-emerald-500/10',
-                          iconBgHover: 'group-hover:bg-emerald-900/50',
-                          iconColorHover: 'group-hover:text-emerald-400',
-                        },
-                        {
-                          key: 'API / SDK',
-                          label: 'API / SDK',
-                          description: 'Call via REST API or any SDK',
-                          icon: Server,
-                          borderHover: 'hover:border-cyan-500/50',
-                          bgHover: 'hover:bg-cyan-500/10',
-                          iconBgHover: 'group-hover:bg-cyan-900/50',
-                          iconColorHover: 'group-hover:text-cyan-400',
-                        },
-                      ] as const;
-
-                      return (
-                        <div className="grid grid-cols-2 gap-3">
-                          {CHANNELS.map((ch) => {
-                            const connected = isChannelConnected(ch.key, connectedIntegrations);
-                            const isSelected = selectedChannel === ch.key;
-                            return (
-                              <button
-                                key={ch.key}
-                                onClick={() => setSelectedChannel(isSelected ? null : ch.key)}
-                                className={`relative flex flex-col items-center gap-2.5 p-5 rounded-2xl border transition-all group text-left
-                                  ${isSelected
-                                    ? 'border-cyan-500/60 bg-cyan-500/10'
-                                    : `bg-slate-800 border-slate-700 ${ch.borderHover} ${ch.bgHover}`
-                                  }`}
-                              >
-                                {/* Connection status badge */}
-                                <span className={`absolute top-2.5 right-2.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                                  connected
-                                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
-                                    : 'bg-slate-700 text-slate-500 border border-slate-600'
-                                }`}>
-                                  {connected ? '● Connected' : 'Setup required'}
-                                </span>
-                                <div className={`w-11 h-11 rounded-full bg-slate-900 flex items-center justify-center transition-colors ${isSelected ? 'bg-cyan-900/40' : ch.iconBgHover}`}>
-                                  <ch.icon className={`w-5 h-5 transition-colors ${isSelected ? 'text-cyan-400' : `text-slate-400 ${ch.iconColorHover}`}`} />
-                                </div>
-                                <div className="text-center mt-1">
-                                  <p className={`text-sm font-semibold transition-colors ${isSelected ? 'text-white' : 'text-slate-300 group-hover:text-white'}`}>{ch.label}</p>
-                                  <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">{ch.description}</p>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      );
-                    })()}
-
-                    {/* Confirm / Back row */}
-                    <div className="flex gap-3 pt-1">
-                      <button
-                        onClick={() => { setDeploymentStep('configure'); setSelectedChannel(null); }}
-                        className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-medium rounded-xl transition-colors"
-                      >
-                        ← Back
-                      </button>
-                      <button
-                        disabled={!selectedChannel}
-                        onClick={() => {
-                          if (!selectedChannel) return;
-                          const integrationIds = getChannelIntegrationIds(selectedChannel, connectedIntegrations);
-                          const toDeploy = {
-                            ...selectedTemplate,
-                            model: selectedModel?.id ?? selectedTemplate.model,
-                            platform: selectedChannel,
-                            system_prompt: systemPrompt,
-                            integration_ids: integrationIds,
-                          };
-                          onDeploy(toDeploy);
-                          if (integrationIds.length === 0 && selectedChannel !== 'API / SDK') {
-                            toast.info(`Connect ${selectedChannel} from Marketplace to activate this channel`);
-                          }
-                          setSelectedTemplate(null);
-                        }}
-                        className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all ${
-                          selectedChannel
-                            ? `${getColorClasses(selectedTemplate.color).bg} text-white hover:brightness-110 active:scale-[0.98] shadow-lg`
-                            : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                        }`}
-                      >
-                        {selectedChannel ? `Add to Fleet →` : 'Select a channel above'}
-                      </button>
-                    </div>
-                  </div>
-                )
-                }
                 </>
               )}
 
               <p className="text-center text-slate-500 text-xs mt-3">
-                Adding this template to fleet will create a governed agent record with the selected channel and model settings.
+                Adding this template to fleet will create a governed agent record. Connect a channel from the Fleet workspace to go live.
               </p>
             </div>
           </div>

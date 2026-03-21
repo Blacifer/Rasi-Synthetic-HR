@@ -1247,23 +1247,41 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   } />
                   <Route path="templates" element={
                     <AgentTemplatesPage
-                      connectedIntegrations={integrationRows}
                       onDeploy={async (template) => {
                       const TEMPLATE_TYPE_TO_PACK: Record<string, string> = {
+                        // Support
                         customer_support: 'support',
+                        customer_success: 'support',
+                        call_center: 'support',
+                        healthcare: 'support',
+                        // Sales
                         sales: 'sales',
+                        marketing: 'sales',
+                        // Recruitment
                         hr: 'recruitment',
                         recruiting: 'recruitment',
+                        onboarding: 'recruitment',
+                        learning: 'recruitment',
+                        // Compliance
                         legal: 'compliance',
                         compliance: 'compliance',
                         security: 'compliance',
+                        security_ops: 'compliance',
+                        // Finance
                         finance: 'finance',
                         procurement: 'finance',
                         logistics: 'finance',
+                        refund: 'finance',
+                        payroll: 'finance',
+                        // IT
                         it_support: 'it',
                         devops: 'it',
                         data_analyst: 'it',
-                        marketing: 'sales',
+                        data_analysis: 'it',
+                        engineering: 'it',
+                        qa: 'it',
+                        documentation: 'it',
+                        facilities: 'it',
                       };
                       try {
                         const created = await api.agents.create({
