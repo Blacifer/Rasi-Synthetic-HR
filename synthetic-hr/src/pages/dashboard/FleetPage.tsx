@@ -48,7 +48,11 @@ export default function FleetPage({
   const [highlightedAgentId, setHighlightedAgentId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [configureAgentId, setConfigureAgentId] = useState<string | null>(null);
-  const [workspaceAgentId, setWorkspaceAgentId] = useState<string | null>(selectedAgentId || null);
+  const [workspaceAgentId, setWorkspaceAgentId] = useState<string | null>(
+    selectedAgentId && (agents.length === 0 || agents.some((a) => a.id === selectedAgentId))
+      ? selectedAgentId
+      : null
+  );
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('overview');
   const [workspaceState, setWorkspaceState] = useState<WorkspaceState>({
     summary: null,
@@ -239,6 +243,13 @@ export default function FleetPage({
         loadingAnalytics: false,
         analyticsError: null,
       });
+      return;
+    }
+
+    // If the agents list has loaded and this ID isn't in it, it's stale — skip the request
+    if (agents.length > 0 && !agents.find((a) => a.id === workspaceAgentId)) {
+      setWorkspaceAgentId(null);
+      onSelectAgent?.(null);
       return;
     }
 
