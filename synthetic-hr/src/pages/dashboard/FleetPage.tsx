@@ -1060,7 +1060,7 @@ export default function FleetPage({
                         <span>Conversations: <span className="text-slate-300">{agent.conversations}</span></span>
                         <span>Connected targets: <span className="text-slate-300">{agent.connectedTargets?.length || 0}</span></span>
                         {agent.primaryPack ? (
-                          <span>Primary channel: <span className="text-slate-300">{agent.primaryPack}</span></span>
+                          <span>Domain: <span className="text-slate-300">{agent.primaryPack}</span></span>
                         ) : null}
                       </div>
                     </div>

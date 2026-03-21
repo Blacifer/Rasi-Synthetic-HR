@@ -1246,7 +1246,25 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                     />
                   } />
                   <Route path="templates" element={
-                    <AgentTemplatesPage onDeploy={async (template) => {
+                    <AgentTemplatesPage
+                      connectedIntegrations={integrationRows}
+                      onDeploy={async (template) => {
+                      const TEMPLATE_TYPE_TO_PACK: Record<string, string> = {
+                        customer_support: 'support',
+                        sales: 'sales',
+                        hr: 'recruitment',
+                        recruiting: 'recruitment',
+                        legal: 'compliance',
+                        compliance: 'compliance',
+                        security: 'compliance',
+                        finance: 'finance',
+                        procurement: 'finance',
+                        logistics: 'finance',
+                        it_support: 'it',
+                        devops: 'it',
+                        data_analyst: 'it',
+                        marketing: 'sales',
+                      };
                       try {
                         const created = await api.agents.create({
                           name: template.name,
@@ -1255,7 +1273,9 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                           platform: template.platform,
                           model_name: template.model,
                           budget_limit: template.budget,
-                          config: {},
+                          primary_pack: TEMPLATE_TYPE_TO_PACK[template.type] || null,
+                          integration_ids: (template as any).integration_ids || [],
+                          config: { system_prompt: (template as any).system_prompt || '' },
                         });
                         if (created.success && created.data) {
                           const newId = (created.data as any).id;
@@ -1300,6 +1320,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                     <DomainAgentLibraryPage
                       initialPackId={domainAgentPreselect?.packId}
                       initialAgentId={domainAgentPreselect?.agentId}
+                      connectedIntegrations={integrationRows}
                       onNavigate={navigateTo}
                       onDeploy={async (agentData) => {
                         try {
@@ -1309,6 +1330,8 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                             agent_type: agentData.agent_type,
                             platform: agentData.platform,
                             model_name: agentData.model_name,
+                            primary_pack: (agentData as any).primary_pack || null,
+                            integration_ids: (agentData as any).integration_ids || [],
                             config: { ...agentData.config, system_prompt: agentData.system_prompt },
                           });
                           if (created.success && created.data) {

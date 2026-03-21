@@ -35,6 +35,8 @@ export const agentApi = {
     model_name: string;
     system_prompt?: string;
     budget_limit?: number;
+    primary_pack?: string | null;
+    integration_ids?: string[];
     config?: Record<string, any>;
   }): Promise<ApiResponse<AIAgent>> {
     const response = await authenticatedFetch<AIAgent | AIAgent[]>('/agents', {

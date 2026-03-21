@@ -1,18 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ArrowRight,
   Bot,
   BriefcaseBusiness,
   Building2,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
   Gavel,
   HandCoins,
+  Headphones,
   Headset,
   Loader2,
+  MessageSquare,
+  Search,
+  Server,
   Shield,
   Sparkles,
+  Users,
   Wrench,
   Zap,
 } from 'lucide-react';
@@ -23,10 +26,65 @@ import {
   type IntegrationPackId,
 } from '../../lib/integration-packs';
 import { cn } from '../../lib/utils';
+import { supabase } from '../../lib/supabase-client';
+import { getFrontendConfig } from '../../lib/config';
+import { toast } from '../../lib/toast';
+
+type LiveModel = {
+  id: string;
+  name: string;
+  provider: string;
+  pricing?: { prompt?: string; completion?: string };
+};
+
+const FALLBACK_MODELS: LiveModel[] = [
+  { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'openai', pricing: { prompt: '0.000005', completion: '0.000015' } },
+  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'openai', pricing: { prompt: '0.00000015', completion: '0.0000006' } },
+  { id: 'anthropic/claude-3-5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'anthropic', pricing: { prompt: '0.000003', completion: '0.000015' } },
+  { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', provider: 'anthropic', pricing: { prompt: '0.00000025', completion: '0.00000125' } },
+  { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', provider: 'google', pricing: { prompt: '0.0000001', completion: '0.0000004' } },
+];
+
+const CHANNEL_INTEGRATION_HINTS: Record<string, string[]> = {
+  'Slack': ['slack'],
+  'Microsoft Teams': ['teams', 'microsoft'],
+  'Zendesk': ['zendesk'],
+  'API / SDK': [],
+};
+
+function getChannelIntegrationIds(
+  channel: string,
+  integrations: Array<{ id: string; name: string; tags?: string[] }>
+): string[] {
+  const hints = CHANNEL_INTEGRATION_HINTS[channel] || [];
+  if (!hints.length) return [];
+  return integrations
+    .filter(i => hints.some(h =>
+      i.id.toLowerCase().includes(h) ||
+      i.name.toLowerCase().includes(h) ||
+      (i.tags || []).some(t => t.toLowerCase().includes(h))
+    ))
+    .map(i => i.id);
+}
+
+function isChannelConnected(
+  channel: string,
+  integrations: Array<{ id: string; name: string; tags?: string[] }>
+): boolean {
+  return getChannelIntegrationIds(channel, integrations).length > 0;
+}
+
+const DEPLOY_CHANNELS = [
+  { key: 'Slack', label: 'Slack Workspace', description: 'Chat with your agent in any Slack channel', Icon: MessageSquare, borderHover: 'hover:border-[#E01E5A]/50', bgHover: 'hover:bg-[#4A154B]/10', iconBgHover: 'group-hover:bg-[#4A154B]/30', iconColorHover: 'group-hover:text-[#E01E5A]' },
+  { key: 'Microsoft Teams', label: 'MS Teams', description: 'Deploy into a Microsoft Teams workspace', Icon: Users, borderHover: 'hover:border-indigo-500/50', bgHover: 'hover:bg-indigo-500/10', iconBgHover: 'group-hover:bg-indigo-900/50', iconColorHover: 'group-hover:text-indigo-400' },
+  { key: 'Zendesk', label: 'Zendesk Agent', description: 'Power your Zendesk ticket workflows', Icon: Headphones, borderHover: 'hover:border-emerald-500/50', bgHover: 'hover:bg-emerald-500/10', iconBgHover: 'group-hover:bg-emerald-900/50', iconColorHover: 'group-hover:text-emerald-400' },
+  { key: 'API / SDK', label: 'API / SDK', description: 'Call via REST API or any SDK', Icon: Server, borderHover: 'hover:border-cyan-500/50', bgHover: 'hover:bg-cyan-500/10', iconBgHover: 'group-hover:bg-cyan-900/50', iconColorHover: 'group-hover:text-cyan-400' },
+] as const;
 
 interface DomainAgentLibraryPageProps {
   initialPackId?: IntegrationPackId | null;
   initialAgentId?: string | null;
+  connectedIntegrations?: Array<{ id: string; name: string; tags?: string[] }>;
   onDeploy: (agentData: {
     name: string;
     description: string;
@@ -34,6 +92,8 @@ interface DomainAgentLibraryPageProps {
     platform: string;
     model_name: string;
     system_prompt: string;
+    primary_pack?: string | null;
+    integration_ids?: string[];
     config: Record<string, any>;
   }) => Promise<void>;
   onNavigate?: (page: string) => void;
@@ -75,50 +135,67 @@ const PACK_ICON_BG: Record<IntegrationPackId, string> = {
   compliance: 'border-sky-400/25 bg-sky-500/15',
 };
 
-function SystemPromptPreview({ prompt }: { prompt: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const preview = prompt.length > 180 ? prompt.slice(0, 180) + '…' : prompt;
-  return (
-    <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-2.5">
-      <p className="text-xs font-mono text-slate-300 leading-relaxed whitespace-pre-wrap">
-        {expanded ? prompt : preview}
-      </p>
-      {prompt.length > 180 && (
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-1.5 flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
-        >
-          {expanded ? (
-            <><ChevronUp className="w-3 h-3" /> Collapse</>
-          ) : (
-            <><ChevronDown className="w-3 h-3" /> Show full prompt</>
-          )}
-        </button>
-      )}
-    </div>
-  );
-}
-
 function AgentCard({
   agent,
   packId,
   isActivating,
   isActivated,
   onActivate,
+  connectedIntegrations,
 }: {
   agent: DomainAgentType;
   packId: IntegrationPackId;
   isActivating: boolean;
   isActivated: boolean;
-  onActivate: (agent: DomainAgentType, name: string, model: string) => void;
+  onActivate: (agent: DomainAgentType, name: string, model: string, systemPrompt: string, channel: string, integrationIds: string[]) => void;
+  connectedIntegrations: Array<{ id: string; name: string; tags?: string[] }>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editName, setEditName] = useState(agent.name);
   const [editModel, setEditModel] = useState(agent.modelName);
+  const [editSystemPrompt, setEditSystemPrompt] = useState(agent.systemPrompt);
+  const [cardStep, setCardStep] = useState<'configure' | 'channel'>('configure');
+  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
+  const [liveModels, setLiveModels] = useState<LiveModel[]>([]);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const [modelSearch, setModelSearch] = useState('');
+
   const PackIcon = PACK_ICONS[packId];
   const colorClass = PACK_COLORS[packId];
   const borderClass = PACK_BORDER[packId];
   const iconBgClass = PACK_ICON_BG[packId];
+
+  useEffect(() => {
+    if (!expanded || liveModels.length > 0) return;
+    const load = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const apiUrl = getFrontendConfig().apiUrl || 'http://localhost:3001/api';
+          const res = await fetch(`${apiUrl}/models`, {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+          if (res.ok) {
+            const json = await res.json();
+            if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+              setLiveModels(json.data);
+              return;
+            }
+          }
+        }
+      } catch { /* fall through */ }
+      setLiveModels(FALLBACK_MODELS);
+    };
+    load();
+  }, [expanded]);
+
+  const selectedModelData = liveModels.find(m => m.id === editModel || m.name === editModel);
+  const monthlyCostUsd = selectedModelData?.pricing
+    ? 10_000_000 * (parseFloat(selectedModelData.pricing.prompt || '0') * 0.5 + parseFloat(selectedModelData.pricing.completion || '0') * 0.5)
+    : null;
+  const filteredModels = liveModels.filter(m =>
+    !modelSearch || m.name.toLowerCase().includes(modelSearch.toLowerCase()) || m.provider.toLowerCase().includes(modelSearch.toLowerCase())
+  );
 
   return (
     <div className={cn('rounded-2xl border p-5 flex flex-col gap-3 transition-all', borderClass)}>
@@ -145,7 +222,7 @@ function AgentCard({
           </span>
         ) : (
           <button
-            onClick={() => setExpanded((v) => !v)}
+            onClick={() => { setExpanded((v) => !v); setCardStep('configure'); setSelectedChannel(null); }}
             className={cn(
               'shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors',
               expanded
@@ -177,48 +254,175 @@ function AgentCard({
       {/* Expanded config panel */}
       {expanded && !isActivated && (
         <div className="mt-1 rounded-xl border border-white/10 bg-black/20 p-4 space-y-4">
-          <p className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Configure Agent</p>
+          {cardStep === 'configure' ? (
+            <>
+              <p className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Configure Agent</p>
 
-          {/* Name */}
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Agent Name</label>
-            <input
-              type="text"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-white/10 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-sm"
-            />
-          </div>
+              {/* Name */}
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Agent Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-white/10 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-sm"
+                />
+              </div>
 
-          {/* Model */}
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Model</label>
-            <input
-              type="text"
-              value={editModel}
-              onChange={(e) => setEditModel(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-white/10 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-sm font-mono"
-            />
-          </div>
+              {/* Model picker */}
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Model</label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 px-3 py-2 rounded-xl bg-slate-900/60 border border-white/10 min-w-0">
+                    <p className="text-sm text-slate-100 font-mono truncate">{selectedModelData?.name || editModel}</p>
+                    {editModel === agent.modelName && (
+                      <span className="text-[10px] font-semibold text-emerald-400">Recommended</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setShowModelPicker((v) => !v)}
+                    className="shrink-0 px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 border border-white/10 text-xs text-slate-300 font-medium transition-colors"
+                  >
+                    {showModelPicker ? 'Close' : 'Change'}
+                  </button>
+                </div>
+                {showModelPicker && (
+                  <div className="mt-2 rounded-xl border border-white/10 bg-slate-900 p-3 space-y-2">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-slate-500" />
+                      <input
+                        type="text"
+                        value={modelSearch}
+                        onChange={(e) => setModelSearch(e.target.value)}
+                        placeholder="Search models…"
+                        className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-slate-800 border border-white/10 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
+                      />
+                    </div>
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {filteredModels.map((m) => (
+                        <button
+                          key={m.id}
+                          onClick={() => { setEditModel(m.id); setShowModelPicker(false); setModelSearch(''); }}
+                          className={cn(
+                            'w-full flex items-center justify-between px-3 py-2 rounded-lg text-left text-xs transition-colors',
+                            editModel === m.id
+                              ? 'bg-blue-500/20 border border-blue-400/30 text-blue-200'
+                              : 'hover:bg-white/5 text-slate-300'
+                          )}
+                        >
+                          <span>
+                            <span className="font-medium">{m.name}</span>
+                            <span className="text-slate-500 ml-1.5">{m.provider}</span>
+                            {m.id === agent.modelName && (
+                              <span className="ml-2 text-[10px] font-semibold text-emerald-400">Recommended</span>
+                            )}
+                          </span>
+                          {m.pricing?.prompt && (
+                            <span className="text-slate-500 shrink-0 ml-2">${parseFloat(m.pricing.prompt) * 1_000_000}/M</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {monthlyCostUsd !== null && (
+                  <p className="text-[11px] text-slate-500 mt-1.5">≈ ${monthlyCostUsd.toFixed(2)} / mo at 10M tokens</p>
+                )}
+              </div>
 
-          {/* System prompt preview */}
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">System Prompt (pre-built)</label>
-            <SystemPromptPreview prompt={agent.systemPrompt} />
-          </div>
+              {/* System prompt (editable) */}
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">System Prompt</label>
+                <textarea
+                  value={editSystemPrompt}
+                  onChange={(e) => setEditSystemPrompt(e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-900/60 border border-white/10 text-slate-200 text-xs font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-none"
+                />
+              </div>
 
-          {/* Deploy button */}
-          <button
-            onClick={() => onActivate(agent, editName.trim() || agent.name, editModel.trim() || agent.modelName)}
-            disabled={isActivating}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
-          >
-            {isActivating ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Activating…</>
-            ) : (
-              <><Sparkles className="w-4 h-4" /> Deploy to Fleet</>
-            )}
-          </button>
+              {/* Continue to channel */}
+              <button
+                onClick={() => { setCardStep('channel'); setSelectedChannel(null); }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition-colors"
+              >
+                <Sparkles className="w-4 h-4" /> Deploy to Fleet
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Select Deployment Channel</p>
+
+              <div className="grid grid-cols-2 gap-2">
+                {DEPLOY_CHANNELS.map((ch) => {
+                  const connected = isChannelConnected(ch.key, connectedIntegrations);
+                  const isSelected = selectedChannel === ch.key;
+                  return (
+                    <button
+                      key={ch.key}
+                      onClick={() => setSelectedChannel(isSelected ? null : ch.key)}
+                      className={cn(
+                        'relative flex flex-col items-center gap-2 p-4 rounded-xl border transition-all group text-left',
+                        isSelected
+                          ? 'border-blue-500/60 bg-blue-500/10'
+                          : `bg-slate-800/60 border-white/10 ${ch.borderHover} ${ch.bgHover}`
+                      )}
+                    >
+                      <span className={cn(
+                        'absolute top-2 right-2 text-[9px] font-semibold px-1.5 py-0.5 rounded-full',
+                        connected
+                          ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                          : 'bg-slate-700 text-slate-500 border border-slate-600'
+                      )}>
+                        {connected ? '● Connected' : 'Setup required'}
+                      </span>
+                      <div className={cn('w-9 h-9 rounded-full bg-slate-900 flex items-center justify-center transition-colors', isSelected ? 'bg-blue-900/40' : ch.iconBgHover)}>
+                        <ch.Icon className={cn('w-4 h-4 transition-colors', isSelected ? 'text-blue-400' : `text-slate-400 ${ch.iconColorHover}`)} />
+                      </div>
+                      <div className="text-center">
+                        <p className={cn('text-xs font-semibold', isSelected ? 'text-white' : 'text-slate-300 group-hover:text-white')}>{ch.label}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">{ch.description}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => { setCardStep('configure'); setSelectedChannel(null); }}
+                  className="px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-medium transition-colors"
+                >
+                  ← Back
+                </button>
+                <button
+                  disabled={!selectedChannel || isActivating}
+                  onClick={() => {
+                    if (!selectedChannel) return;
+                    const integrationIds = getChannelIntegrationIds(selectedChannel, connectedIntegrations);
+                    onActivate(agent, editName.trim() || agent.name, editModel.trim() || agent.modelName, editSystemPrompt, selectedChannel, integrationIds);
+                    if (integrationIds.length === 0 && selectedChannel !== 'API / SDK') {
+                      toast.info(`Connect ${selectedChannel} from Marketplace to activate this channel`);
+                    }
+                  }}
+                  className={cn(
+                    'flex-1 flex items-center justify-center gap-2 py-2 rounded-xl font-semibold text-xs transition-colors',
+                    selectedChannel && !isActivating
+                      ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                      : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  )}
+                >
+                  {isActivating ? (
+                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Deploying…</>
+                  ) : selectedChannel ? (
+                    <><Sparkles className="w-3.5 h-3.5" /> Add to Fleet →</>
+                  ) : (
+                    'Select a channel above'
+                  )}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -228,6 +432,7 @@ function AgentCard({
 export default function DomainAgentLibraryPage({
   initialPackId,
   initialAgentId,
+  connectedIntegrations = [],
   onDeploy,
   onNavigate,
 }: DomainAgentLibraryPageProps) {
@@ -239,7 +444,7 @@ export default function DomainAgentLibraryPage({
     ? INTEGRATION_PACKS
     : INTEGRATION_PACKS.filter((p) => p.id === activePack);
 
-  const handleActivate = async (packId: IntegrationPackId, agent: DomainAgentType, name: string, model: string) => {
+  const handleActivate = async (packId: IntegrationPackId, agent: DomainAgentType, name: string, model: string, systemPrompt: string, channel: string, integrationIds: string[]) => {
     const key = `${packId}:${agent.id}`;
     setActivatingId(key);
     try {
@@ -247,9 +452,11 @@ export default function DomainAgentLibraryPage({
         name,
         description: agent.description,
         agent_type: agent.agentType,
-        platform: agent.platform,
+        platform: channel,
         model_name: model,
-        system_prompt: agent.systemPrompt,
+        system_prompt: systemPrompt,
+        primary_pack: packId,
+        integration_ids: integrationIds,
         config: { pack_id: packId, domain_agent_id: agent.id },
       });
       setActivatedIds((prev) => new Set([...prev, key]));
@@ -335,7 +542,10 @@ export default function DomainAgentLibraryPage({
                     packId={pack.id}
                     isActivating={activatingId === key}
                     isActivated={activatedIds.has(key)}
-                    onActivate={(a, name, model) => handleActivate(pack.id, a, name, model)}
+                    connectedIntegrations={connectedIntegrations}
+                    onActivate={(a, name, model, systemPrompt, channel, integrationIds) =>
+                      handleActivate(pack.id, a, name, model, systemPrompt, channel, integrationIds)
+                    }
                   />
                 );
               })}
