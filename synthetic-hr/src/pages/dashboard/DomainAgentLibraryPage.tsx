@@ -7,15 +7,11 @@ import {
   CheckCircle2,
   Gavel,
   HandCoins,
-  Headphones,
   Headset,
   Loader2,
-  MessageSquare,
   Search,
-  Server,
   Shield,
   Sparkles,
-  Users,
   Wrench,
   Zap,
 } from 'lucide-react';
@@ -45,46 +41,9 @@ const FALLBACK_MODELS: LiveModel[] = [
   { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', provider: 'google', pricing: { prompt: '0.0000001', completion: '0.0000004' } },
 ];
 
-const CHANNEL_INTEGRATION_HINTS: Record<string, string[]> = {
-  'Slack': ['slack'],
-  'Microsoft Teams': ['teams', 'microsoft'],
-  'Zendesk': ['zendesk'],
-  'API / SDK': [],
-};
-
-function getChannelIntegrationIds(
-  channel: string,
-  integrations: Array<{ id: string; name: string; tags?: string[] }>
-): string[] {
-  const hints = CHANNEL_INTEGRATION_HINTS[channel] || [];
-  if (!hints.length) return [];
-  return integrations
-    .filter(i => hints.some(h =>
-      i.id.toLowerCase().includes(h) ||
-      i.name.toLowerCase().includes(h) ||
-      (i.tags || []).some(t => t.toLowerCase().includes(h))
-    ))
-    .map(i => i.id);
-}
-
-function isChannelConnected(
-  channel: string,
-  integrations: Array<{ id: string; name: string; tags?: string[] }>
-): boolean {
-  return getChannelIntegrationIds(channel, integrations).length > 0;
-}
-
-const DEPLOY_CHANNELS = [
-  { key: 'Slack', label: 'Slack Workspace', description: 'Chat with your agent in any Slack channel', Icon: MessageSquare, borderHover: 'hover:border-[#E01E5A]/50', bgHover: 'hover:bg-[#4A154B]/10', iconBgHover: 'group-hover:bg-[#4A154B]/30', iconColorHover: 'group-hover:text-[#E01E5A]' },
-  { key: 'Microsoft Teams', label: 'MS Teams', description: 'Deploy into a Microsoft Teams workspace', Icon: Users, borderHover: 'hover:border-indigo-500/50', bgHover: 'hover:bg-indigo-500/10', iconBgHover: 'group-hover:bg-indigo-900/50', iconColorHover: 'group-hover:text-indigo-400' },
-  { key: 'Zendesk', label: 'Zendesk Agent', description: 'Power your Zendesk ticket workflows', Icon: Headphones, borderHover: 'hover:border-emerald-500/50', bgHover: 'hover:bg-emerald-500/10', iconBgHover: 'group-hover:bg-emerald-900/50', iconColorHover: 'group-hover:text-emerald-400' },
-  { key: 'API / SDK', label: 'API / SDK', description: 'Call via REST API or any SDK', Icon: Server, borderHover: 'hover:border-cyan-500/50', bgHover: 'hover:bg-cyan-500/10', iconBgHover: 'group-hover:bg-cyan-900/50', iconColorHover: 'group-hover:text-cyan-400' },
-] as const;
-
 interface DomainAgentLibraryPageProps {
   initialPackId?: IntegrationPackId | null;
   initialAgentId?: string | null;
-  connectedIntegrations?: Array<{ id: string; name: string; tags?: string[] }>;
   onDeploy: (agentData: {
     name: string;
     description: string;
@@ -141,21 +100,17 @@ function AgentCard({
   isActivating,
   isActivated,
   onActivate,
-  connectedIntegrations,
 }: {
   agent: DomainAgentType;
   packId: IntegrationPackId;
   isActivating: boolean;
   isActivated: boolean;
-  onActivate: (agent: DomainAgentType, name: string, model: string, systemPrompt: string, channel: string, integrationIds: string[]) => void;
-  connectedIntegrations: Array<{ id: string; name: string; tags?: string[] }>;
+  onActivate: (agent: DomainAgentType, name: string, model: string, systemPrompt: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editName, setEditName] = useState(agent.name);
   const [editModel, setEditModel] = useState(agent.modelName);
   const [editSystemPrompt, setEditSystemPrompt] = useState(agent.systemPrompt);
-  const [cardStep, setCardStep] = useState<'configure' | 'channel'>('configure');
-  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
   const [liveModels, setLiveModels] = useState<LiveModel[]>([]);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [modelSearch, setModelSearch] = useState('');
@@ -222,7 +177,7 @@ function AgentCard({
           </span>
         ) : (
           <button
-            onClick={() => { setExpanded((v) => !v); setCardStep('configure'); setSelectedChannel(null); }}
+            onClick={() => setExpanded((v) => !v)}
             className={cn(
               'shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors',
               expanded
@@ -254,8 +209,7 @@ function AgentCard({
       {/* Expanded config panel */}
       {expanded && !isActivated && (
         <div className="mt-1 rounded-xl border border-white/10 bg-black/20 p-4 space-y-4">
-          {cardStep === 'configure' ? (
-            <>
+          <>
               <p className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Configure Agent</p>
 
               {/* Name */}
@@ -341,88 +295,18 @@ function AgentCard({
                 />
               </div>
 
-              {/* Continue to channel */}
+              {/* Add to Fleet */}
               <button
-                onClick={() => { setCardStep('channel'); setSelectedChannel(null); }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition-colors"
+                disabled={isActivating}
+                onClick={() => onActivate(agent, editName.trim() || agent.name, editModel.trim() || agent.modelName, editSystemPrompt)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Sparkles className="w-4 h-4" /> Deploy to Fleet
+                {isActivating
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Deploying…</>
+                  : <><Sparkles className="w-4 h-4" /> Add to Fleet →</>
+                }
               </button>
             </>
-          ) : (
-            <>
-              <p className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Select Deployment Channel</p>
-
-              <div className="grid grid-cols-2 gap-2">
-                {DEPLOY_CHANNELS.map((ch) => {
-                  const connected = isChannelConnected(ch.key, connectedIntegrations);
-                  const isSelected = selectedChannel === ch.key;
-                  return (
-                    <button
-                      key={ch.key}
-                      onClick={() => setSelectedChannel(isSelected ? null : ch.key)}
-                      className={cn(
-                        'relative flex flex-col items-center gap-2 p-4 rounded-xl border transition-all group text-left',
-                        isSelected
-                          ? 'border-blue-500/60 bg-blue-500/10'
-                          : `bg-slate-800/60 border-white/10 ${ch.borderHover} ${ch.bgHover}`
-                      )}
-                    >
-                      <span className={cn(
-                        'absolute top-2 right-2 text-[9px] font-semibold px-1.5 py-0.5 rounded-full',
-                        connected
-                          ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
-                          : 'bg-slate-700 text-slate-500 border border-slate-600'
-                      )}>
-                        {connected ? '● Connected' : 'Setup required'}
-                      </span>
-                      <div className={cn('w-9 h-9 rounded-full bg-slate-900 flex items-center justify-center transition-colors', isSelected ? 'bg-blue-900/40' : ch.iconBgHover)}>
-                        <ch.Icon className={cn('w-4 h-4 transition-colors', isSelected ? 'text-blue-400' : `text-slate-400 ${ch.iconColorHover}`)} />
-                      </div>
-                      <div className="text-center">
-                        <p className={cn('text-xs font-semibold', isSelected ? 'text-white' : 'text-slate-300 group-hover:text-white')}>{ch.label}</p>
-                        <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">{ch.description}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => { setCardStep('configure'); setSelectedChannel(null); }}
-                  className="px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-medium transition-colors"
-                >
-                  ← Back
-                </button>
-                <button
-                  disabled={!selectedChannel || isActivating}
-                  onClick={() => {
-                    if (!selectedChannel) return;
-                    const integrationIds = getChannelIntegrationIds(selectedChannel, connectedIntegrations);
-                    onActivate(agent, editName.trim() || agent.name, editModel.trim() || agent.modelName, editSystemPrompt, selectedChannel, integrationIds);
-                    if (integrationIds.length === 0 && selectedChannel !== 'API / SDK') {
-                      toast.info(`Connect ${selectedChannel} from Marketplace to activate this channel`);
-                    }
-                  }}
-                  className={cn(
-                    'flex-1 flex items-center justify-center gap-2 py-2 rounded-xl font-semibold text-xs transition-colors',
-                    selectedChannel && !isActivating
-                      ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                      : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                  )}
-                >
-                  {isActivating ? (
-                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Deploying…</>
-                  ) : selectedChannel ? (
-                    <><Sparkles className="w-3.5 h-3.5" /> Add to Fleet →</>
-                  ) : (
-                    'Select a channel above'
-                  )}
-                </button>
-              </div>
-            </>
-          )}
         </div>
       )}
     </div>
@@ -432,7 +316,6 @@ function AgentCard({
 export default function DomainAgentLibraryPage({
   initialPackId,
   initialAgentId,
-  connectedIntegrations = [],
   onDeploy,
   onNavigate,
 }: DomainAgentLibraryPageProps) {
@@ -444,7 +327,7 @@ export default function DomainAgentLibraryPage({
     ? INTEGRATION_PACKS
     : INTEGRATION_PACKS.filter((p) => p.id === activePack);
 
-  const handleActivate = async (packId: IntegrationPackId, agent: DomainAgentType, name: string, model: string, systemPrompt: string, channel: string, integrationIds: string[]) => {
+  const handleActivate = async (packId: IntegrationPackId, agent: DomainAgentType, name: string, model: string, systemPrompt: string) => {
     const key = `${packId}:${agent.id}`;
     setActivatingId(key);
     try {
@@ -452,11 +335,11 @@ export default function DomainAgentLibraryPage({
         name,
         description: agent.description,
         agent_type: agent.agentType,
-        platform: channel,
+        platform: 'api',
         model_name: model,
         system_prompt: systemPrompt,
         primary_pack: packId,
-        integration_ids: integrationIds,
+        integration_ids: [],
         config: { pack_id: packId, domain_agent_id: agent.id },
       });
       setActivatedIds((prev) => new Set([...prev, key]));
@@ -542,9 +425,8 @@ export default function DomainAgentLibraryPage({
                     packId={pack.id}
                     isActivating={activatingId === key}
                     isActivated={activatedIds.has(key)}
-                    connectedIntegrations={connectedIntegrations}
-                    onActivate={(a, name, model, systemPrompt, channel, integrationIds) =>
-                      handleActivate(pack.id, a, name, model, systemPrompt, channel, integrationIds)
+                    onActivate={(a, name, model, systemPrompt) =>
+                      handleActivate(pack.id, a, name, model, systemPrompt)
                     }
                   />
                 );

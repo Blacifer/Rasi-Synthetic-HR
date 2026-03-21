@@ -1338,7 +1338,6 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                     <DomainAgentLibraryPage
                       initialPackId={domainAgentPreselect?.packId}
                       initialAgentId={domainAgentPreselect?.agentId}
-                      connectedIntegrations={integrationRows}
                       onNavigate={navigateTo}
                       onDeploy={async (agentData) => {
                         try {
