@@ -22,7 +22,7 @@ interface FleetPageProps {
   onOpenOperationsPage?: (page: string, options?: { agentId?: string }) => void;
 }
 
-type WorkspaceTab = 'overview' | 'deployment' | 'conversations' | 'integrations' | 'policies' | 'analytics' | 'controls';
+type WorkspaceTab = 'overview' | 'deployment' | 'conversations' | 'integrations' | 'policies' | 'analytics' | 'controls' | 'settings';
 type DeployMethod = 'website' | 'api' | 'terminal' | 'advanced';
 type DeployCodeTab = 'curl' | 'python' | 'nodejs' | 'php';
 type WorkspaceState = {
@@ -50,7 +50,13 @@ export default function FleetPage({
   const [killSwitchAgent, setKillSwitchAgent] = useState<string | null>(null);
   const [highlightedAgentId, setHighlightedAgentId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const [configureAgentId, setConfigureAgentId] = useState<string | null>(null);
+  const [wsSettingsBudget, setWsSettingsBudget] = useState(0);
+  const [wsSettingsAutoThrottle, setWsSettingsAutoThrottle] = useState(false);
+  const [wsSettingsModel, setWsSettingsModel] = useState('gpt-4o');
+  const [wsSettingsPlatform, setWsSettingsPlatform] = useState('');
+  const [wsModels, setWsModels] = useState<{ id: string; name: string; provider: string; pricing?: { prompt?: string; completion?: string } }[]>([]);
+  const [wsModelsLoading, setWsModelsLoading] = useState(false);
+  const [wsSettingsSaving, setWsSettingsSaving] = useState(false);
   const [workspaceAgentId, setWorkspaceAgentId] = useState<string | null>(
     selectedAgentId && (agents.length === 0 || agents.some((a) => a.id === selectedAgentId))
       ? selectedAgentId
@@ -71,7 +77,6 @@ export default function FleetPage({
   });
   const [policyDraft, setPolicyDraft] = useState({ systemPrompt: '', operationalPolicy: '' });
   const [policySaving, setPolicySaving] = useState(false);
-  const [editBudget, setEditBudget] = useState<Record<string, { budget: number; autoThrottle: boolean }>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'paused' | 'terminated'>('all');
   const [filterType, setFilterType] = useState<string>('all');
@@ -612,42 +617,32 @@ export default function FleetPage({
     );
   };
 
-  const openConfigure = (agent: AIAgent) => {
-    setConfigureAgentId(agent.id);
-    setEditBudget(prev => ({
-      ...prev,
-      [agent.id]: { budget: agent.budget_limit ?? 0, autoThrottle: agent.auto_throttle ?? false },
-    }));
-  };
-
-  const saveConfigure = async (agentId: string) => {
-    const vals = editBudget[agentId];
-    if (!vals) return;
-    const agent = agents.find((item) => item.id === agentId);
-    if (!agent) return;
-    if (vals.budget === 0 && !window.confirm(`Setting the budget to ₹0 will immediately stop ${agent.name} from processing any requests. Continue?`)) return;
+  const saveWsSettings = async () => {
+    if (!activeWorkspaceAgent) return;
+    const agent = activeWorkspaceAgent;
+    if (wsSettingsBudget === 0 && !window.confirm(`Setting the budget to ₹0 will immediately stop ${agent.name} from processing any requests. Continue?`)) return;
+    setWsSettingsSaving(true);
     try {
-      const response = await api.agents.update(agentId, {
-        budget_limit: vals.budget,
+      const response = await api.agents.update(agent.id, {
+        budget_limit: wsSettingsBudget,
+        model_name: wsSettingsModel,
         config: {
           ...((agent as any).config || {}),
-          budget_limit: vals.budget,
-          auto_throttle: vals.autoThrottle,
+          auto_throttle: wsSettingsAutoThrottle,
         },
       });
-      if (!response.success || !response.data) {
-        throw new Error(response.error || 'Failed to save agent configuration.');
-      }
+      if (!response.success || !response.data) throw new Error(response.error || 'Failed to save settings.');
       await mergeAgent({
         ...(response.data as AIAgent),
-        auto_throttle: vals.autoThrottle,
-        budget_limit: vals.budget,
+        auto_throttle: wsSettingsAutoThrottle,
+        budget_limit: wsSettingsBudget,
+        model_name: wsSettingsModel,
       });
-      toast.success('Agent configuration saved.');
-      setConfigureAgentId(null);
+      toast.success('Settings saved.');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to save agent configuration.';
-      toast.error(message);
+      toast.error(error instanceof Error ? error.message : 'Failed to save settings.');
+    } finally {
+      setWsSettingsSaving(false);
     }
   };
 
@@ -843,12 +838,61 @@ export default function FleetPage({
     setWorkspaceAgentId(agentId);
     setWorkspaceTab(tab);
     onSelectAgent?.(agentId);
+    const agent = agents.find(a => a.id === agentId);
+    if (agent) {
+      setWsSettingsBudget(agent.budget_limit ?? 0);
+      setWsSettingsAutoThrottle(agent.auto_throttle ?? false);
+      setWsSettingsModel(agent.model_name || 'gpt-4o');
+      setWsSettingsPlatform('');
+    }
   };
 
   const closeWorkspace = () => {
     setWorkspaceAgentId(null);
     onSelectAgent?.(null);
   };
+
+  // Lazy-load models when user opens the Settings tab
+  useEffect(() => {
+    if (workspaceTab !== 'settings' || wsModels.length > 0 || wsModelsLoading) return;
+    const load = async () => {
+      setWsModelsLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const apiUrl = getFrontendConfig().apiUrl || 'http://localhost:3001/api';
+          const res = await fetch(`${apiUrl}/models`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+          if (res.ok) {
+            const json = await res.json();
+            if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+              const fetched = json.data.map((m: any) => ({
+                id: m.id, name: m.name || m.id,
+                provider: m.provider || m.id.split('/')[0] || 'Unknown',
+                pricing: m.pricing,
+              }));
+              setWsModels(fetched);
+              const match = fetched.find((m: any) => m.id === wsSettingsModel);
+              setWsSettingsPlatform(match ? match.provider : fetched[0].provider);
+              setWsModelsLoading(false);
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load models for workspace settings', err);
+      }
+      const fallback = [
+        { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'openai', pricing: { prompt: '0.000005', completion: '0.000015' } },
+        { id: 'anthropic/claude-3-5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'anthropic', pricing: { prompt: '0.000003', completion: '0.000015' } },
+        { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', provider: 'google', pricing: { prompt: '0.0000001', completion: '0.0000004' } },
+      ];
+      setWsModels(fallback);
+      const match = fallback.find(m => m.id === wsSettingsModel);
+      setWsSettingsPlatform(match ? match.provider : fallback[0].provider);
+      setWsModelsLoading(false);
+    };
+    void load();
+  }, [workspaceTab, wsModels.length, wsModelsLoading, wsSettingsModel]);
 
   const activeWorkspaceAgent = workspaceAgentId ? agents.find((agent) => agent.id === workspaceAgentId) || null : null;
   const openIncidentCount = workspaceState.incidents.filter((incident) => incident.status !== 'resolved' && incident.status !== 'false_positive').length;
@@ -950,14 +994,12 @@ export default function FleetPage({
       ) : (
         <div className="grid gap-4">
           {filteredAgents.map((agent) => {
-            const isConfigOpen = configureAgentId === agent.id;
-            const budgetVals = editBudget[agent.id] ?? { budget: agent.budget_limit ?? 0, autoThrottle: agent.auto_throttle ?? false };
             return (
               <div
                 key={agent.id}
                 className={`relative bg-slate-800/30 border rounded-2xl overflow-hidden transition-all ${highlightedAgentId === agent.id
                   ? 'border-cyan-400/60 ring-1 ring-cyan-400/40 bg-cyan-500/5'
-                  : isConfigOpen ? 'border-emerald-500/40' : 'border-slate-700'
+                  : 'border-slate-700'
                   }`}
               >
                 {/* Main card row */}
@@ -1068,19 +1110,6 @@ export default function FleetPage({
                         );
                       })()}
 
-                      {/* Configure */}
-                      <button
-                        onClick={() => isConfigOpen ? setConfigureAgentId(null) : openConfigure(agent)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${isConfigOpen
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                          : 'bg-slate-700/60 text-slate-300 border border-slate-600 hover:bg-slate-700 hover:text-white'
-                          }`}
-                        title="Configure agent"
-                      >
-                        <Key className="w-3.5 h-3.5" />
-                        Configure
-                      </button>
-
                       {/* Pause / Activate */}
                       {agent.status !== 'terminated' && (
                         agent.status === 'active' ? (
@@ -1124,117 +1153,6 @@ export default function FleetPage({
                   </div>
                 </div>
 
-                {/* ── Configure Panel (inline expansion) ── */}
-                {isConfigOpen && (
-                  <div className="border-t border-slate-700/50 bg-slate-900/40 animate-in slide-in-from-top-2 duration-200">
-                    <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                      {/* Budget & Throttle */}
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                          <DollarSign className="w-4 h-4 text-emerald-400" /> Budget & Spend Controls
-                        </h4>
-                        <div>
-                          <label className="block text-xs text-slate-400 mb-1.5">Monthly Budget Cap (₹)</label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 text-sm font-bold">₹</span>
-                            <input
-                              id={`budget-${agent.id}`}
-                              name={`budget-${agent.id}`}
-                              type="number"
-                              value={budgetVals.budget}
-                              onChange={(e) => setEditBudget(prev => ({
-                                ...prev,
-                                [agent.id]: { ...budgetVals, budget: parseInt(e.target.value) || 0 }
-                              }))}
-                              className="w-full pl-7 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 text-sm"
-                              min="0"
-                            />
-                          </div>
-                          <p className="text-xs text-slate-500 mt-1">Current spend: ₹{(agent.current_spend || 0).toLocaleString()}</p>
-                        </div>
-                        <label className="flex items-center gap-3 cursor-pointer group">
-                          <div className="relative shrink-0">
-                            <input
-                              type="checkbox"
-                              className="sr-only"
-                              checked={budgetVals.autoThrottle}
-                              onChange={(e) => setEditBudget(prev => ({
-                                ...prev,
-                                [agent.id]: { ...budgetVals, autoThrottle: e.target.checked }
-                              }))}
-                            />
-                            <div className={`w-10 h-5 rounded-full transition-colors ${budgetVals.autoThrottle ? 'bg-emerald-500' : 'bg-slate-700'}`} />
-                            <div className={`absolute left-1 top-0.5 bg-white w-4 h-4 rounded-full shadow transition-transform ${budgetVals.autoThrottle ? 'translate-x-5' : ''}`} />
-                          </div>
-                          <div>
-                            <p className="text-sm text-white font-medium">Auto-Throttle</p>
-                            <p className="text-xs text-slate-400">Slow down responses as budget limit approaches</p>
-                          </div>
-                        </label>
-                        <div className="pt-4 border-t border-slate-700/50">
-                          <p className="text-xs text-slate-500">Shadow testing is available in the <button onClick={() => setWorkspaceTab('analytics')} className="underline hover:text-slate-300 transition-colors">Analytics tab</button> of the workspace.</p>
-                        </div>
-                      </div>
-
-                      {/* Kill Switch — always visible danger zone */}
-                      <div className="space-y-3">
-                        <h4 className="text-sm font-bold text-rose-400 flex items-center gap-2">
-                          <ShieldAlert className="w-4 h-4" /> Emergency Controls
-                        </h4>
-                        <p className="text-xs text-slate-400">Use these if the agent is behaving incorrectly or causing harm.</p>
-                        <div className="space-y-2">
-                          <button
-                            onClick={() => handleKillSwitch(agent.id, 1)}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 transition-all text-sm font-medium"
-                          >
-                            <span className="text-base">⏸</span>
-                            <div className="text-left">
-                              <p className="font-semibold">Pause agent</p>
-                              <p className="text-xs text-amber-400/70">Temporarily stop the agent — you can resume it later</p>
-                            </div>
-                          </button>
-                          <button
-                            onClick={() => handleKillSwitch(agent.id, 2)}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border border-orange-500/30 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20 transition-all text-sm font-medium"
-                          >
-                            <span className="text-base">🚩</span>
-                            <div className="text-left">
-                              <p className="font-semibold">Flag for human review</p>
-                              <p className="text-xs text-orange-400/70">Pause the agent and alert your team to investigate</p>
-                            </div>
-                          </button>
-                          <button
-                            onClick={() => handleKillSwitch(agent.id, 3)}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition-all text-sm font-medium"
-                          >
-                            <span className="text-base">🛑</span>
-                            <div className="text-left">
-                              <p className="font-semibold">Permanently shut down</p>
-                              <p className="text-xs text-rose-400/70 font-semibold">This cannot be undone — the agent will be terminated forever</p>
-                            </div>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Save / Cancel */}
-                    <div className="px-5 pb-5 flex gap-3 justify-end border-t border-slate-700/50 pt-4">
-                      <button
-                        onClick={() => setConfigureAgentId(null)}
-                        className="px-4 py-2 bg-slate-800 border border-slate-700 text-slate-300 rounded-xl text-sm hover:bg-slate-700 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => saveConfigure(agent.id)}
-                        className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-400 text-white font-semibold rounded-xl text-sm hover:from-emerald-400 hover:to-teal-300 transition-all"
-                      >
-                        Save Changes
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })}
@@ -1269,6 +1187,7 @@ export default function FleetPage({
               ['policies', 'Policies / Persona'],
               ['analytics', 'Analytics / Usage'],
               ['controls', 'Controls'],
+              ['settings', 'Settings'],
             ] as Array<[WorkspaceTab, string]>).map(([tabId, label]) => (
               <button
                 key={tabId}
@@ -2167,7 +2086,170 @@ export default function FleetPage({
                   </div>
                 </div>
               </div>
-            ) : null}
+            ) : workspaceTab === 'settings' ? (() => {
+              const wsPlatforms = Array.from(new Set(wsModels.map(m => m.provider)));
+              const wsFilteredModels = wsModels.filter(m => m.provider === wsSettingsPlatform);
+              const wsSelectedModel = wsModels.find(m => m.id === wsSettingsModel);
+              const wsFormatPrice = (model: any) => {
+                const p = Number(model?.pricing?.prompt || 0);
+                const c = Number(model?.pricing?.completion || 0);
+                if (!p && !c) return 'Free / Open Source';
+                return `$${(((p + c) / 2) * 1000).toFixed(4)} avg / 1K tokens`;
+              };
+              return (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                    {/* Left column: AI Model + Budget */}
+                    <div className="space-y-6">
+                      {/* AI Model */}
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                          <Brain className="w-4 h-4 text-purple-400" /> AI Model
+                        </h4>
+                        {wsModelsLoading ? (
+                          <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading models…
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs text-slate-400 mb-1.5">Platform</label>
+                              <select
+                                value={wsSettingsPlatform}
+                                onChange={(e) => {
+                                  setWsSettingsPlatform(e.target.value);
+                                  const first = wsModels.find(m => m.provider === e.target.value);
+                                  if (first) setWsSettingsModel(first.id);
+                                }}
+                                className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-purple-500 text-sm"
+                              >
+                                {wsPlatforms.length > 0 ? wsPlatforms.map(p => (
+                                  <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
+                                )) : <option value="">—</option>}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-400 mb-1.5">Model</label>
+                              <select
+                                value={wsSettingsModel}
+                                onChange={(e) => setWsSettingsModel(e.target.value)}
+                                className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-purple-500 text-sm"
+                              >
+                                {wsFilteredModels.length > 0 ? wsFilteredModels.map(m => (
+                                  <option key={m.id} value={m.id}>{m.name || m.id}</option>
+                                )) : <option value={wsSettingsModel}>{wsSettingsModel}</option>}
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                        {wsSelectedModel && (
+                          <div className="flex items-center justify-between text-xs bg-purple-500/10 px-3 py-2 rounded-lg border border-purple-500/20">
+                            <span className="text-purple-300/80 font-medium">Gateway pricing</span>
+                            <span className="font-mono text-purple-300">{wsFormatPrice(wsSelectedModel)}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Budget & Throttle */}
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                          <DollarSign className="w-4 h-4 text-emerald-400" /> Budget & Spend Controls
+                        </h4>
+                        <div>
+                          <label className="block text-xs text-slate-400 mb-1.5">Monthly Budget Cap (₹)</label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 text-sm font-bold">₹</span>
+                            <input
+                              type="number"
+                              value={wsSettingsBudget}
+                              onChange={(e) => setWsSettingsBudget(parseInt(e.target.value) || 0)}
+                              className="w-full pl-7 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 text-sm"
+                              min="0"
+                            />
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1">Current spend: ₹{(activeWorkspaceAgent.current_spend || 0).toLocaleString()}</p>
+                        </div>
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <div className="relative shrink-0">
+                            <input type="checkbox" className="sr-only" checked={wsSettingsAutoThrottle} onChange={(e) => setWsSettingsAutoThrottle(e.target.checked)} />
+                            <div className={`w-10 h-5 rounded-full transition-colors ${wsSettingsAutoThrottle ? 'bg-emerald-500' : 'bg-slate-700'}`} />
+                            <div className={`absolute left-1 top-0.5 bg-white w-4 h-4 rounded-full shadow transition-transform ${wsSettingsAutoThrottle ? 'translate-x-5' : ''}`} />
+                          </div>
+                          <div>
+                            <p className="text-sm text-white font-medium">Auto-Throttle</p>
+                            <p className="text-xs text-slate-400">Slow down responses as budget limit approaches</p>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Right column: Emergency Controls */}
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-bold text-rose-400 flex items-center gap-2">
+                        <ShieldAlert className="w-4 h-4" /> Emergency Controls
+                      </h4>
+                      <p className="text-xs text-slate-400">Use these if the agent is behaving incorrectly or causing harm.</p>
+                      <div className="space-y-2">
+                        <button
+                          onClick={() => handleKillSwitch(activeWorkspaceAgent.id, 1)}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 transition-all text-sm font-medium"
+                        >
+                          <span className="text-base">⏸</span>
+                          <div className="text-left">
+                            <p className="font-semibold">Pause agent</p>
+                            <p className="text-xs text-amber-400/70">Temporarily stop the agent — you can resume it later</p>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => handleKillSwitch(activeWorkspaceAgent.id, 2)}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border border-orange-500/30 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20 transition-all text-sm font-medium"
+                        >
+                          <span className="text-base">🚩</span>
+                          <div className="text-left">
+                            <p className="font-semibold">Flag for human review</p>
+                            <p className="text-xs text-orange-400/70">Pause the agent and alert your team to investigate</p>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => handleKillSwitch(activeWorkspaceAgent.id, 3)}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition-all text-sm font-medium"
+                        >
+                          <span className="text-base">🛑</span>
+                          <div className="text-left">
+                            <p className="font-semibold">Permanently shut down</p>
+                            <p className="text-xs text-rose-400/70 font-semibold">This cannot be undone — the agent will be terminated forever</p>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Save / Cancel */}
+                  <div className="flex gap-3 justify-end pt-4 border-t border-slate-700/50">
+                    <button
+                      onClick={() => {
+                        setWsSettingsBudget(activeWorkspaceAgent.budget_limit ?? 0);
+                        setWsSettingsAutoThrottle(activeWorkspaceAgent.auto_throttle ?? false);
+                        setWsSettingsModel(activeWorkspaceAgent.model_name || 'gpt-4o');
+                        setWsSettingsPlatform('');
+                      }}
+                      className="px-4 py-2 bg-slate-800 border border-slate-700 text-slate-300 rounded-xl text-sm hover:bg-slate-700 transition-colors"
+                    >
+                      Reset
+                    </button>
+                    <button
+                      onClick={() => void saveWsSettings()}
+                      disabled={wsSettingsSaving}
+                      className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-400 text-white font-semibold rounded-xl text-sm hover:from-emerald-400 hover:to-teal-300 disabled:opacity-60 transition-all flex items-center gap-2"
+                    >
+                      {wsSettingsSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      Save Changes
+                    </button>
+                  </div>
+                </div>
+              );
+            })() : null}
           </div>
         </div>
       ) : null}
@@ -2319,9 +2401,12 @@ export default function FleetPage({
                   </div>
 
                   {hasFullKey ? (
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 flex items-start gap-2">
-                      <Info className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-amber-300">Your API key is already in the code above. <strong>Copy it now</strong> — it won't be shown again.</p>
+                    <div className="space-y-2">
+                      <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 flex items-start gap-2">
+                        <Info className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
+                        <p className="text-xs text-amber-300">Your API key is already in the code above. <strong>Copy it now</strong> — it won't be shown again.</p>
+                      </div>
+                      <p className="text-xs text-slate-500 pl-1">Your API key does not expire unless you revoke it.</p>
                     </div>
                   ) : (
                     <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 flex items-start gap-3">
@@ -2336,6 +2421,7 @@ export default function FleetPage({
                           <RefreshCw className={`w-3 h-3 ${deployApiKeyLoading ? 'animate-spin' : ''}`} />
                           {deployApiKeyLoading ? 'Generating…' : 'Generate API key'}
                         </button>
+                        <p className="text-xs text-slate-500 mt-2">Once generated, your key does not expire unless you revoke it.</p>
                       </div>
                     </div>
                   )}
@@ -2390,6 +2476,7 @@ export default function FleetPage({
                           <RefreshCw className={`w-3 h-3 ${deployApiKeyLoading ? 'animate-spin' : ''}`} />
                           {deployApiKeyLoading ? 'Generating…' : 'Generate a fresh key'}
                         </button>
+                        <p className="text-xs text-slate-500 mt-2">Once generated, your key does not expire unless you revoke it.</p>
                       </div>
                     </div>
                   )}
@@ -2418,9 +2505,12 @@ export default function FleetPage({
                   </div>
 
                   {hasFullKey && (
-                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-3 flex items-center gap-2">
-                      <Info className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                      <p className="text-xs text-emerald-300">Your key is already in the code above. <strong>Copy it now</strong> — it won't be shown again.</p>
+                    <div className="space-y-2">
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-3 flex items-center gap-2">
+                        <Info className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                        <p className="text-xs text-emerald-300">Your key is already in the code above. <strong>Copy it now</strong> — it won't be shown again.</p>
+                      </div>
+                      <p className="text-xs text-slate-500 pl-1">Your API key does not expire unless you revoke it.</p>
                     </div>
                   )}
                 </div>
@@ -2446,9 +2536,12 @@ export default function FleetPage({
                     </div>
                   )}
                   {hasFullKey && (
-                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-3 flex items-center gap-2">
-                      <Info className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                      <p className="text-xs text-emerald-300">Your key is already in the commands below. <strong>Copy and run them now</strong> — the key won't be shown again.</p>
+                    <div className="space-y-2">
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-3 flex items-center gap-2">
+                        <Info className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                        <p className="text-xs text-emerald-300">Your key is already in the commands below. <strong>Copy and run them now</strong> — the key won't be shown again.</p>
+                      </div>
+                      <p className="text-xs text-slate-500 pl-1">Your API key does not expire unless you revoke it.</p>
                     </div>
                   )}
                   <div>
@@ -2530,6 +2623,10 @@ export default function FleetPage({
                         <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-xs font-bold text-emerald-300">2</span>
                         <p className="text-sm font-semibold text-white">Enroll the runtime</p>
                         <span className="ml-auto text-xs text-slate-500">Expires: {new Date(createdEnrollment.expiresAt).toLocaleString()}</span>
+                      </div>
+                      <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 flex items-start gap-2 mb-4">
+                        <Clock3 className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
+                        <p className="text-xs text-amber-300">You have 30 minutes to enroll using this token. Once enrolled, your runtime works permanently — the timer only applies to this setup step.</p>
                       </div>
                       <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-3 mb-3">
                         <div className="flex items-center justify-between mb-2">
