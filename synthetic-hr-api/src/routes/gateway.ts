@@ -1,13 +1,16 @@
 import crypto from 'crypto';
 import express, { Request, Response } from 'express';
 import multer from 'multer';
-import { AnthropicService, OpenAIService } from '../services/ai-service';
+import { AnthropicService, OpenAIService, type ConnectorTool, type ToolCall } from '../services/ai-service';
 import { incidentDetection } from '../services/incident-detection';
 import { validateApiKey } from '../middleware/api-key-validation';
 import { logger } from '../lib/logger';
 import { supabaseRest, eq } from '../lib/supabase-rest';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
 import { recordPromptCacheObservation } from '../lib/prompt-caching';
+import { ACTION_REGISTRY } from '../lib/connectors/action-registry';
+import { executeConnectorAction } from '../lib/connectors/action-executor';
+import { decryptSecret, encryptSecret } from '../lib/integrations/encryption';
 
 const router = express.Router();
 
@@ -464,6 +467,222 @@ const updateAgentBudgetAndLogCost = async (
   } catch (err) {
     logger.error('Failed to log cost or update budget', { error: err });
   }
+};
+
+// ─── Connector Tool Injection ─────────────────────────────────────────────────
+
+const MAX_TOOL_LOOPS = 5;
+
+type CredentialMap = Record<string, string>;
+
+interface AgentToolContext {
+  tools: ConnectorTool[];
+  /** Map of connectorId → decrypted credentials for that connector */
+  credentialsByConnector: Record<string, CredentialMap>;
+}
+
+// 60-second in-memory cache for agent tool contexts, keyed by `orgId:agentId`.
+// Avoids repeated DB reads on every message in a multi-turn conversation.
+const agentToolCache = new Map<string, { ctx: AgentToolContext; expiresAt: number }>();
+const AGENT_TOOL_CACHE_TTL_MS = 60_000;
+
+/**
+ * OAuth token refresh: if an OAuth connector's access_token is within 5 minutes
+ * of expiry (or already expired), fetch a new one via the provider's refresh endpoint
+ * and persist the updated credentials back to `integration_credentials`.
+ *
+ * Supported providers: salesforce, hubspot.
+ * Returns the (possibly updated) credential map — original creds on any failure.
+ */
+async function refreshOAuthIfNeeded(
+  connectorId: string,
+  integrationId: string,
+  creds: CredentialMap,
+): Promise<CredentialMap> {
+  if (!creds.refresh_token || !creds.expires_at) return creds;
+  const expiresAt = new Date(creds.expires_at).getTime();
+  if (expiresAt > Date.now() + 5 * 60_000) return creds; // still valid for 5+ minutes
+
+  try {
+    let formBody: URLSearchParams | null = null;
+
+    if (connectorId === 'salesforce') {
+      formBody = new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: process.env.SALESFORCE_CLIENT_ID || '',
+        client_secret: process.env.SALESFORCE_CLIENT_SECRET || '',
+        refresh_token: creds.refresh_token,
+      });
+    } else if (connectorId === 'hubspot') {
+      formBody = new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: process.env.HUBSPOT_CLIENT_ID || '',
+        client_secret: process.env.HUBSPOT_CLIENT_SECRET || '',
+        refresh_token: creds.refresh_token,
+      });
+    }
+
+    if (!formBody) return creds; // provider not yet supported for auto-refresh
+
+    const providerUrl = connectorId === 'salesforce'
+      ? 'https://login.salesforce.com/services/oauth2/token'
+      : 'https://api.hubapi.com/oauth/v1/token';
+
+    const resp = await fetch(providerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formBody,
+    });
+
+    if (!resp.ok) {
+      logger.warn('OAuth refresh request failed', { connectorId, status: resp.status });
+      return creds;
+    }
+
+    const json: any = await resp.json();
+    if (!json.access_token) return creds;
+
+    const newExpiry = json.expires_in
+      ? new Date(Date.now() + json.expires_in * 1000).toISOString()
+      : new Date(Date.now() + 3600_000).toISOString();
+
+    const updates: Record<string, string> = {
+      access_token: json.access_token,
+      expires_at: newExpiry,
+      ...(json.refresh_token ? { refresh_token: json.refresh_token } : {}),
+    };
+
+    // Persist each updated credential back to DB (PATCH by integration_id + key)
+    for (const [key, value] of Object.entries(updates)) {
+      const q = new URLSearchParams();
+      q.set('integration_id', eq(integrationId));
+      q.set('key', eq(key));
+      await supabaseRest('integration_credentials', q, {
+        method: 'PATCH',
+        body: { value: encryptSecret(value) },
+      }).catch((e) => logger.warn('Failed to persist refreshed credential', { connectorId, key, error: e?.message }));
+    }
+
+    logger.info('OAuth token refreshed', { connectorId, newExpiry });
+    return { ...creds, ...updates };
+  } catch (err: any) {
+    logger.warn('OAuth token refresh error', { connectorId, error: err?.message });
+    return creds;
+  }
+}
+
+/**
+ * Load the tools available to an agent based on its linked connector IDs.
+ * Results are cached for 60 seconds per (orgId, agentId) pair to avoid
+ * repeated DB round-trips on every message in a conversation.
+ */
+const loadAgentTools = async (agentId: string, orgId: string): Promise<AgentToolContext> => {
+  // Cache hit
+  const cacheKey = `${orgId}:${agentId}`;
+  const hit = agentToolCache.get(cacheKey);
+  if (hit && Date.now() < hit.expiresAt) return hit.ctx;
+
+  const empty: AgentToolContext = { tools: [], credentialsByConnector: {} };
+  try {
+    // 1. Load agent metadata to read integration_ids
+    const agentQuery = new URLSearchParams();
+    agentQuery.set('id', eq(agentId));
+    agentQuery.set('organization_id', eq(orgId));
+    const agents = await supabaseRest('ai_agents', agentQuery) as any[];
+    if (!agents || agents.length === 0) return empty;
+
+    const publish = agents[0]?.metadata?.publish;
+    const integrationIds: string[] = Array.isArray(publish?.integration_ids)
+      ? publish.integration_ids.filter((id: any) => typeof id === 'string')
+      : [];
+    if (integrationIds.length === 0) return empty;
+
+    // 2. Filter to connectors that have an ACTION_REGISTRY entry
+    const actionableIds = integrationIds.filter((id) => !!ACTION_REGISTRY[id]);
+    if (actionableIds.length === 0) return empty;
+
+    // 3. Load connected integrations from DB for this org
+    const intQuery = new URLSearchParams();
+    intQuery.set('organization_id', eq(orgId));
+    intQuery.set('status', eq('connected'));
+    const allIntegrations = await supabaseRest('integrations', intQuery) as any[];
+    const connectedServiceTypes = new Set(
+      (allIntegrations || []).map((i: any) => i.service_type).filter(Boolean)
+    );
+
+    // 4. Intersect with actionable IDs that are actually connected
+    const connectedActionable = actionableIds.filter((id) => connectedServiceTypes.has(id));
+    if (connectedActionable.length === 0) return empty;
+
+    // 5. For each connected connector, load + decrypt credentials, then refresh
+    //    OAuth tokens that are near-expiry before they are used in tool calls.
+    const credentialsByConnector: Record<string, CredentialMap> = {};
+    for (const connectorId of connectedActionable) {
+      const integration = (allIntegrations || []).find((i: any) => i.service_type === connectorId);
+      if (!integration?.id) continue;
+
+      const credQuery = new URLSearchParams();
+      credQuery.set('integration_id', eq(integration.id));
+      const credRows = await supabaseRest('integration_credentials', credQuery) as Array<{ key: string; value: string }>;
+      let creds: CredentialMap = {};
+      for (const row of credRows || []) {
+        try { creds[row.key] = decryptSecret(row.value); } catch { creds[row.key] = row.value; }
+      }
+
+      // Refresh OAuth token if near-expiry (modifies creds + updates DB)
+      creds = await refreshOAuthIfNeeded(connectorId, integration.id, creds);
+
+      credentialsByConnector[connectorId] = creds;
+    }
+
+    // 6. Build the merged tools array from the ACTION_REGISTRY
+    const tools: ConnectorTool[] = connectedActionable.flatMap(
+      (id) => ACTION_REGISTRY[id]?.tools || []
+    );
+
+    const ctx: AgentToolContext = { tools, credentialsByConnector };
+    agentToolCache.set(cacheKey, { ctx, expiresAt: Date.now() + AGENT_TOOL_CACHE_TTL_MS });
+    return ctx;
+  } catch (err) {
+    logger.warn('loadAgentTools failed — continuing without tools', { error: (err as any)?.message, agentId });
+    return empty;
+  }
+};
+
+/**
+ * Execute a single tool call and return the result as a stringified JSON content.
+ */
+const executeSingleToolCall = async (
+  tc: ToolCall,
+  credentialsByConnector: Record<string, CredentialMap>,
+  orgId: string,
+  agentId: string | null,
+): Promise<string> => {
+  const [connectorId, action] = tc.function.name.split('__');
+  let params: Record<string, any> = {};
+  try { params = JSON.parse(tc.function.arguments); } catch { /* use empty */ }
+
+  const credentials = credentialsByConnector[connectorId] || {};
+  const result = await executeConnectorAction(connectorId, action, params, credentials, orgId);
+
+  // Log the execution (non-critical)
+  if (agentId) {
+    supabaseRest('connector_action_executions', '', {
+      method: 'POST',
+      body: {
+        organization_id: orgId,
+        agent_id: agentId,
+        connector_id: connectorId,
+        action,
+        params,
+        result: result.data || result.error || {},
+        success: result.success,
+        error_message: result.error || null,
+      },
+    }).catch(() => {/* non-critical */});
+  }
+
+  return JSON.stringify(result);
 };
 
 const enforceApiKeyRateLimit = async (req: Request, res: Response): Promise<boolean> => {
@@ -1239,14 +1458,21 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
       });
     }
 
-    const normalizedMessages = messages.map((m: any) => ({
+    const normalizedMessages: { role: string; content: any }[] = messages.map((m: any) => ({
       role: m.role,
       content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
     }));
 
+    // Load agent tools (no-op if agentId is null or agent has no connectors)
+    const orgId = req.apiKey?.organization_id || '';
+    const toolContext = (agentId && orgId && modelConfig.provider !== 'openrouter')
+      ? await loadAgentTools(agentId, orgId)
+      : { tools: [], credentialsByConnector: {} };
+
     const chatOptions = {
       temperature: typeof temperature === 'number' ? temperature : undefined,
       maxTokens: typeof max_tokens === 'number' ? max_tokens : undefined,
+      tools: toolContext.tools.length > 0 ? toolContext.tools : undefined,
     };
 
     let completion: {
@@ -1258,37 +1484,83 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
       latency: number;
     };
 
-    if (modelConfig.provider === 'openai') {
-      const aiResponse = await new OpenAIService(providerKey).chat(normalizedMessages, modelConfig.upstreamModel, chatOptions);
-      completion = {
-        content: aiResponse.content,
-        inputTokens: aiResponse.tokenCount.input,
-        outputTokens: aiResponse.tokenCount.output,
-        totalTokens: aiResponse.tokenCount.total,
-        costUSD: aiResponse.costUSD,
-        latency: aiResponse.latency,
-      };
-    } else if (modelConfig.provider === 'anthropic') {
-      const aiResponse = await new AnthropicService(providerKey).chat(normalizedMessages, modelConfig.upstreamModel, chatOptions);
-      completion = {
-        content: aiResponse.content,
-        inputTokens: aiResponse.tokenCount.input,
-        outputTokens: aiResponse.tokenCount.output,
-        totalTokens: aiResponse.tokenCount.total,
-        costUSD: aiResponse.costUSD,
-        latency: aiResponse.latency,
-      };
-    } else {
-      const aiResponse = await routeViaOpenRouter(modelConfig.upstreamModel, normalizedMessages, chatOptions);
-      completion = {
-        content: aiResponse.content,
-        inputTokens: aiResponse.inputTokens,
-        outputTokens: aiResponse.outputTokens,
-        totalTokens: aiResponse.totalTokens,
-        costUSD: aiResponse.costUSD,
-        latency: aiResponse.latency,
-      };
+    // ── Tool-call continuation loop ────────────────────────────────────────────
+    const conversationMessages = [...normalizedMessages];
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let totalCostUSD = 0;
+    let totalLatency = 0;
+    let finalContent = '';
+
+    for (let loopCount = 0; loopCount < MAX_TOOL_LOOPS; loopCount++) {
+      let aiResponse: { content: string; tokenCount: { input: number; output: number; total: number }; costUSD: number; latency: number; toolCalls?: ToolCall[] };
+
+      if (modelConfig.provider === 'openai') {
+        aiResponse = await new OpenAIService(providerKey).chat(conversationMessages, modelConfig.upstreamModel, chatOptions);
+      } else if (modelConfig.provider === 'anthropic') {
+        aiResponse = await new AnthropicService(providerKey).chat(conversationMessages, modelConfig.upstreamModel, chatOptions);
+      } else {
+        // OpenRouter — no tool support; single pass
+        const orResponse = await routeViaOpenRouter(modelConfig.upstreamModel, conversationMessages, chatOptions);
+        totalInputTokens += orResponse.inputTokens;
+        totalOutputTokens += orResponse.outputTokens;
+        totalCostUSD += orResponse.costUSD;
+        totalLatency += orResponse.latency;
+        finalContent = orResponse.content;
+        break;
+      }
+
+      totalInputTokens += aiResponse.tokenCount.input;
+      totalOutputTokens += aiResponse.tokenCount.output;
+      totalCostUSD += aiResponse.costUSD;
+      totalLatency += aiResponse.latency;
+
+      // No tool calls → we have the final answer
+      if (!aiResponse.toolCalls || aiResponse.toolCalls.length === 0) {
+        finalContent = aiResponse.content;
+        break;
+      }
+
+      // Append the assistant's tool-call turn
+      conversationMessages.push({
+        role: 'assistant',
+        content: aiResponse.content || null,
+        tool_calls: aiResponse.toolCalls,
+      } as any);
+
+      // Execute each tool call and append results
+      for (const tc of aiResponse.toolCalls) {
+        const resultContent = await executeSingleToolCall(tc, toolContext.credentialsByConnector, orgId, agentId);
+        conversationMessages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: resultContent,
+        } as any);
+      }
+
+      // If this is the last allowed iteration, make one final call without tools to get a text answer
+      if (loopCount === MAX_TOOL_LOOPS - 1) {
+        logger.warn('Tool loop hit MAX_TOOL_LOOPS — forcing final text response', { agentId, loopCount });
+        const finalOptions = { ...chatOptions, tools: undefined };
+        const finalAi = modelConfig.provider === 'openai'
+          ? await new OpenAIService(providerKey).chat(conversationMessages, modelConfig.upstreamModel, finalOptions)
+          : await new AnthropicService(providerKey).chat(conversationMessages, modelConfig.upstreamModel, finalOptions);
+        totalInputTokens += finalAi.tokenCount.input;
+        totalOutputTokens += finalAi.tokenCount.output;
+        totalCostUSD += finalAi.costUSD;
+        totalLatency += finalAi.latency;
+        finalContent = finalAi.content;
+      }
     }
+
+    completion = {
+      content: finalContent,
+      inputTokens: totalInputTokens,
+      outputTokens: totalOutputTokens,
+      totalTokens: totalInputTokens + totalOutputTokens,
+      costUSD: totalCostUSD,
+      latency: totalLatency,
+    };
 
     await updateAgentBudgetAndLogCost(req, agentId, modelConfig.id, modelConfig.provider, completion);
 

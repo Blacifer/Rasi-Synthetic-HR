@@ -275,8 +275,6 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
   const [integrationRows, setIntegrationRows] = useState<IntegrationSummaryRow[]>([]);
   const [agentConnections, setAgentConnections] = useState<Record<string, AgentConnectionDraft>>({});
   const [fleetWorkspaceAgentId, setFleetWorkspaceAgentId] = useState<string | null>(null);
-  const [integrationAgentId, setIntegrationAgentId] = useState<string | null>(null);
-  const [integrationRecommendedPack, setIntegrationRecommendedPack] = useState<IntegrationPackId | null>(null);
   const [domainAgentPreselect, setDomainAgentPreselect] = useState<{ packId: IntegrationPackId; agentId: string } | null>(null);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
@@ -310,13 +308,11 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     return 'it';
   }, []);
 
-  const openIntegrationsForAgent = useCallback((agent: AIAgent, packId?: IntegrationPackId | null) => {
-    setIntegrationAgentId(agent.id);
+  const openIntegrationsForAgent = useCallback((agent: AIAgent, _packId?: IntegrationPackId | null) => {
     setFleetWorkspaceAgentId(agent.id);
     writeFocusedAgentWorkspace(agent.id);
-    setIntegrationRecommendedPack(packId || agent.primaryPack || suggestPackForAgent(agent));
-    navigateTo('integrations', { userInitiated: false });
-  }, [navigateTo, suggestPackForAgent]);
+    navigateTo(`connectors?agentId=${agent.id}&tab=all`, { userInitiated: false });
+  }, [navigateTo]);
 
   const handleIntegrationConnected = useCallback((payload: {
     agentId: string;
@@ -380,7 +376,6 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     const focusedAgentId = readFocusedAgentWorkspace();
     if (focusedAgentId) {
       setFleetWorkspaceAgentId(focusedAgentId);
-      setIntegrationAgentId(focusedAgentId);
     }
   }, [mounted]);
 
@@ -1398,21 +1393,8 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="finance-hub" element={<FinanceHubPage />} />
                   <Route path="compliance-hub" element={<ComplianceHubPage />} />
                   <Route path="identity-hub" element={<IdentityHubPage />} />
-                  <Route path="marketplace" element={<MarketplacePage onNavigate={navigateTo} agents={enrichedAgents} />} />
-                  <Route path="integrations" element={
-                    <IntegrationsPage
-                      selectedAgent={enrichedAgents.find((a) => a.id === integrationAgentId) || enrichedAgents.find((a) => a.id === fleetWorkspaceAgentId) || null}
-                      recommendedPackId={integrationRecommendedPack}
-                      entryMode={integrationAgentId || fleetWorkspaceAgentId ? 'publish' : 'browse'}
-                      onNavigate={navigateTo}
-                      onActivateDomainAgent={(packId, agentId) => {
-                        setDomainAgentPreselect({ packId, agentId });
-                        navigateTo('agent-library', { userInitiated: false });
-                      }}
-                      onIntegrationConnected={handleIntegrationConnected}
-                      onIntegrationDisconnected={() => { void refreshData(); }}
-                    />
-                  } />
+                  <Route path="marketplace" element={<MarketplacePage />} />
+                  <Route path="integrations" element={<IntegrationsPage />} />
                   <Route path="conversations" element={<ConversationsPage agents={enrichedAgents} onNavigate={navigateTo} initialAgentId={fleetWorkspaceAgentId} />} />
                   <Route path="incidents" element={<IncidentsPage incidents={incidents} setIncidents={saveIncidents} agents={enrichedAgents} onNavigate={navigateTo} />} />
                   <Route path="approvals" element={<ApprovalsPage />} />

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowRight,
@@ -553,7 +554,7 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
   onConfigure: (c: UnifiedConnector) => void;
   onDisconnect: (c: UnifiedConnector) => void;
 }) {
-  type Tab = 'overview' | 'logs' | 'actions' | 'slack';
+  type Tab = 'overview' | 'agents' | 'logs' | 'actions' | 'slack';
   const isSlack = connector.source === 'integration' && connector.integrationData?.id?.toLowerCase().includes('slack');
   const [tab, setTab] = useState<Tab>('overview');
   const [logs, setLogs] = useState<ConnectionLog[]>([]);
@@ -565,6 +566,18 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
   const [refreshing, setRefreshing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [uninstalling, setUninstalling] = useState(false);
+  const [agentLinkBusy, setAgentLinkBusy] = useState<string | null>(null);
+  // Local linked-agent set so toggling re-renders immediately without waiting for parent reload
+  const [linkedAgentIds, setLinkedAgentIds] = useState<Set<string>>(() => {
+    const rawId = connector.source === 'marketplace' ? connector.appData?.id : connector.integrationData?.id;
+    if (!rawId) return new Set();
+    return new Set(agents.filter((a) => (a.integrationIds || []).includes(rawId)).map((a) => a.id));
+  });
+
+  // The raw connector id used in integration_ids (e.g. "salesforce", "zendesk")
+  const rawConnectorId = connector.source === 'marketplace'
+    ? connector.appData?.id
+    : connector.integrationData?.id;
 
   const agentNames = useMemo(() => {
     if (connector.source === 'marketplace' && connector.appData) {
@@ -586,17 +599,39 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
     setLogsLoading(false);
   }, [connector]);
 
+  const toActionLabel = (name: string) =>
+    name.split('__').pop()!.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
   const loadCatalog = useCallback(async () => {
-    if (connector.source !== 'integration') return;
+    if (!rawConnectorId) return;
     setCatalogLoading(true);
-    const res = await api.integrations.getActionCatalog();
-    if (res.success) {
-      const sid = connector.integrationData?.id;
-      const items = ((res.data as any[]) || []).filter((a) => !sid || a.service === sid || !a.service);
-      setCatalog(items);
+
+    if (connector.source === 'marketplace') {
+      // Pull live tool schemas from the ACTION_REGISTRY endpoint
+      const res = await api.unifiedConnectors.getActions(rawConnectorId);
+      if (res.success) {
+        const tools = (res.data as any[]) || [];
+        const items = tools.map((t: any) => ({
+          action: t.function?.name?.split('__').pop() ?? t.function?.name,
+          label: toActionLabel(t.function?.name ?? ''),
+          description: t.function?.description,
+          enabled: true,
+          service: rawConnectorId,
+        }));
+        setCatalog(items);
+      }
+    } else {
+      // Legacy integration connector: use action_policies table
+      const res = await api.integrations.getActionCatalog();
+      if (res.success) {
+        const sid = connector.integrationData?.id;
+        const items = ((res.data as any[]) || []).filter((a) => !sid || a.service === sid || !a.service);
+        setCatalog(items);
+      }
     }
+
     setCatalogLoading(false);
-  }, [connector]);
+  }, [connector, rawConnectorId]);
 
   useEffect(() => {
     if (tab === 'logs') void loadLogs();
@@ -649,8 +684,9 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
 
   const TABS: Array<{ id: Tab; label: string }> = [
     { id: 'overview', label: 'Overview' },
+    ...(connector.connected ? [{ id: 'agents' as Tab, label: `Agents (${linkedAgentIds.size})` }] : []),
     ...(connector.source === 'integration' && connector.connected ? [{ id: 'logs' as Tab, label: 'Logs' }] : []),
-    ...(connector.source === 'integration' ? [{ id: 'actions' as Tab, label: 'Actions' }] : []),
+    ...(rawConnectorId ? [{ id: 'actions' as Tab, label: 'Actions' }] : []),
     ...(isSlack && connector.connected ? [{ id: 'slack' as Tab, label: 'Slack Inbox' }] : []),
   ];
 
@@ -853,6 +889,66 @@ function DetailDrawer({ connector, agents, onClose, onConfigure, onDisconnect }:
             </>
           )}
 
+          {/* ── AGENTS TAB ── */}
+          {tab === 'agents' && (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-400">Toggle which agents can use this connector. Linked agents will have these tools available during conversations.</p>
+              {agents.length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-8">No agents in your workspace yet.</p>
+              ) : (
+                agents.map((agent) => {
+                  const isLinked = linkedAgentIds.has(agent.id);
+                  const isBusy = agentLinkBusy === agent.id;
+
+                  const toggleLink = async () => {
+                    if (!rawConnectorId) return;
+                    setAgentLinkBusy(agent.id);
+                    try {
+                      const currentIds: string[] = agent.integrationIds || [];
+                      const newIds = isLinked
+                        ? currentIds.filter((id) => id !== rawConnectorId)
+                        : [...new Set([...currentIds, rawConnectorId])];
+                      const res = await api.unifiedConnectors.updateAgentConnectors(agent.id, newIds);
+                      if (res.success) {
+                        setLinkedAgentIds((prev) => {
+                          const next = new Set(prev);
+                          if (isLinked) next.delete(agent.id); else next.add(agent.id);
+                          return next;
+                        });
+                        toast.success(isLinked ? `Unlinked from ${agent.name}` : `Linked to ${agent.name}`);
+                      } else {
+                        toast.error((res as any).error || 'Failed to update');
+                      }
+                    } catch { toast.error('Failed to update'); }
+                    finally { setAgentLinkBusy(null); }
+                  };
+
+                  return (
+                    <div key={agent.id} className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-white/8 border border-white/10 flex items-center justify-center shrink-0">
+                        <Bot className="w-3.5 h-3.5 text-slate-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-slate-200 truncate">{agent.name}</p>
+                        <p className="text-[10px] text-slate-500">{agent.agent_type || 'agent'}</p>
+                      </div>
+                      <button
+                        onClick={() => void toggleLink()}
+                        disabled={isBusy || !rawConnectorId}
+                        className={cn('shrink-0 w-9 h-5 rounded-full transition-colors relative disabled:opacity-50', isLinked ? 'bg-emerald-500' : 'bg-white/10')}
+                      >
+                        {isBusy
+                          ? <Loader2 className="w-3 h-3 text-white animate-spin absolute top-1 left-3" />
+                          : <span className={cn('absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform', isLinked ? 'translate-x-4' : 'translate-x-0.5')} />
+                        }
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
           {/* ── LOGS TAB ── */}
           {tab === 'logs' && (
             <div className="space-y-2">
@@ -972,7 +1068,7 @@ function BundleCard({ bundle, apps, onInstallAll }: {
 
 // ─── Browse Modal ─────────────────────────────────────────────────────────────
 
-function BrowseModal({ connectors, apps, bundles, agents, onClose, onConnect, onManage }: {
+function BrowseModal({ connectors, apps, bundles, agents, onClose, onConnect, onManage, initialCategory }: {
   connectors: UnifiedConnector[];
   apps: MarketplaceApp[];
   bundles: AppBundle[];
@@ -980,11 +1076,12 @@ function BrowseModal({ connectors, apps, bundles, agents, onClose, onConnect, on
   onClose: () => void;
   onConnect: (c: UnifiedConnector) => void;
   onManage: (c: UnifiedConnector) => void;
+  initialCategory?: string;
 }) {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('popular');
   const [filterType, setFilterType] = useState<'all' | 'marketplace' | 'integration'>('all');
-  const [filterCategory, setFilterCategory] = useState('all');
+  const [filterCategory, setFilterCategory] = useState(initialCategory && CATEGORY_META[initialCategory] ? initialCategory : 'all');
   const [activeDropdown, setActiveDropdown] = useState<'sort' | 'type' | 'cat' | null>(null);
   const [intentDone, setIntentDone] = useState(connectors.some((c) => c.connected));
   const [highlightBundle, setHighlightBundle] = useState<string | null>(null);
@@ -1288,13 +1385,21 @@ function ConnectorRow({ connector, agentNames, onClick, onConfigure }: {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ConnectorsPage({ onNavigate: _onNavigate, agents = [] }: ConnectorsPageProps) {
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const agentIdParam = searchParams.get('agentId');
+  const domainParam = searchParams.get('domain');
+
   const [apps, setApps] = useState<MarketplaceApp[]>([]);
   const [integrations, setIntegrations] = useState<any[]>([]);
   const [bundles, setBundles] = useState<AppBundle[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showBrowse, setShowBrowse] = useState(false);
+  const [activeTab, setActiveTab] = useState<'my' | 'all'>(tabParam === 'all' ? 'all' : 'my');
+  const [showBrowse, setShowBrowse] = useState(tabParam === 'all');
   const [drawerConnector, setDrawerConnector] = useState<UnifiedConnector | null>(null);
   const [modalTarget, setModalTarget] = useState<{ connector: UnifiedConnector; mode: 'connect' | 'configure' } | null>(null);
+
+  const linkedAgent = agentIdParam ? agents.find((a) => a.id === agentIdParam) : null;
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -1367,14 +1472,35 @@ export default function ConnectorsPage({ onNavigate: _onNavigate, agents = [] }:
           <h1 className="text-2xl font-bold text-white">Connectors</h1>
           <p className="text-slate-400 text-sm mt-1">Connect your agents to apps and integrations.</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button onClick={() => void loadData()} className="p-2 rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors" title="Refresh">
-            <RefreshCw className="w-4 h-4" />
-          </button>
-          <button onClick={() => setShowBrowse(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 text-sm font-medium transition-colors">
-            Browse connectors
-          </button>
+        <button onClick={() => void loadData()} className="p-2 rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0" title="Refresh">
+          <RefreshCw className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Agent context banner */}
+      {linkedAgent && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-violet-400/20 bg-violet-500/[0.06]">
+          <Bot className="w-4 h-4 text-violet-300 shrink-0" />
+          <p className="text-sm text-slate-300 flex-1">
+            Showing connectors for <strong className="text-white">{linkedAgent.name}</strong> — connected apps will be linked to this agent.
+          </p>
         </div>
+      )}
+
+      {/* Browse All / My Connectors tab switcher */}
+      <div className="flex items-center gap-1 p-1 rounded-xl bg-white/[0.04] border border-white/8 w-fit">
+        <button
+          onClick={() => { setActiveTab('my'); setShowBrowse(false); }}
+          className={cn('px-4 py-1.5 rounded-lg text-sm font-medium transition-colors', activeTab === 'my' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200')}
+        >
+          My Connectors{connectedList.length > 0 ? ` (${connectedList.length})` : ''}
+        </button>
+        <button
+          onClick={() => { setActiveTab('all'); setShowBrowse(true); }}
+          className={cn('px-4 py-1.5 rounded-lg text-sm font-medium transition-colors', activeTab === 'all' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200')}
+        >
+          Browse All
+        </button>
       </div>
 
       {/* Stats bar */}
@@ -1437,9 +1563,10 @@ export default function ConnectorsPage({ onNavigate: _onNavigate, agents = [] }:
           apps={apps}
           bundles={bundles}
           agents={agents}
-          onClose={() => setShowBrowse(false)}
-          onConnect={(c) => { setShowBrowse(false); openModal(c, 'connect'); }}
-          onManage={(c) => { setShowBrowse(false); setDrawerConnector(c); }}
+          initialCategory={domainParam || undefined}
+          onClose={() => { setShowBrowse(false); setActiveTab('my'); }}
+          onConnect={(c) => { setShowBrowse(false); setActiveTab('my'); openModal(c, 'connect'); }}
+          onManage={(c) => { setShowBrowse(false); setActiveTab('my'); setDrawerConnector(c); }}
         />
       )}
 

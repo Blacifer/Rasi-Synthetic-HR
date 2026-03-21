@@ -30,6 +30,33 @@ export interface AIResponse {
   costUSD: number;
   model: string;
   latency: number;
+  /** Populated when the model wants to call a connector tool */
+  toolCalls?: ToolCall[];
+}
+
+/** Normalized tool call (OpenAI format — used by both providers) */
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    /** JSON-encoded arguments string */
+    arguments: string;
+  };
+}
+
+/** OpenAI function-calling tool schema */
+export interface ConnectorTool {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: {
+      type: 'object';
+      properties: Record<string, { type: string; description: string; enum?: string[] }>;
+      required: string[];
+    };
+  };
 }
 
 export interface AIConfig {
@@ -41,6 +68,7 @@ export interface AIConfig {
 interface AIChatOptions {
   temperature?: number;
   maxTokens?: number;
+  tools?: ConnectorTool[];
 }
 
 // OpenAI Service
@@ -52,7 +80,7 @@ export class OpenAIService {
   }
 
   async chat(
-    messages: { role: string; content: string }[],
+    messages: { role: string; content: any }[],
     model: string = 'gpt-4o',
     options: AIChatOptions = {}
   ): Promise<AIResponse> {
@@ -63,6 +91,7 @@ export class OpenAIService {
       messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
       temperature: options.temperature ?? 0.7,
       ...(typeof options.maxTokens === 'number' ? { max_tokens: options.maxTokens } : {}),
+      ...(options.tools && options.tools.length > 0 ? { tools: options.tools as any, tool_choice: 'auto' } : {}),
     });
 
     const latency = Date.now() - startTime;
@@ -76,12 +105,19 @@ export class OpenAIService {
     const pricing = OPENAI_PRICING[model as keyof typeof OPENAI_PRICING] || OPENAI_PRICING['gpt-4o'];
     const costUSD = ((inputTokens * pricing.input) + (outputTokens * pricing.output)) / 1000000;
 
+    const toolCalls: ToolCall[] = (completion.tool_calls || []).map((tc) => ({
+      id: tc.id,
+      type: 'function' as const,
+      function: { name: tc.function.name, arguments: tc.function.arguments },
+    }));
+
     return {
       content: completion.content || '',
       tokenCount: { input: inputTokens, output: outputTokens, total: totalTokens },
       costUSD,
       model: response.model,
       latency,
+      ...(toolCalls.length > 0 ? { toolCalls } : {}),
     };
   }
 }
@@ -106,22 +142,86 @@ export class AnthropicService {
       .join('');
   }
 
+  /** Translate OpenAI tool schema → Anthropic format */
+  private static toAnthropicTools(tools: ConnectorTool[]): any[] {
+    return tools.map((t) => ({
+      name: t.function.name,
+      description: t.function.description,
+      input_schema: t.function.parameters,
+    }));
+  }
+
+  /** Translate Anthropic tool_use content blocks → OpenAI ToolCall format */
+  private static extractToolCalls(content: any[]): ToolCall[] {
+    if (!Array.isArray(content)) return [];
+    return content
+      .filter((block) => block?.type === 'tool_use')
+      .map((block) => ({
+        id: block.id as string,
+        type: 'function' as const,
+        function: {
+          name: block.name as string,
+          arguments: JSON.stringify(block.input ?? {}),
+        },
+      }));
+  }
+
+  /**
+   * Translate messages for Anthropic — handles tool_calls (assistant) and
+   * tool results (role: 'tool') that come from the gateway continuation loop.
+   */
+  private static toAnthropicMessages(messages: { role: string; content: any }[]): any[] {
+    const out: any[] = [];
+    for (const m of messages) {
+      if (m.role === 'system') continue;
+
+      if (m.role === 'tool') {
+        // Tool result — must be appended as user content block
+        const last = out[out.length - 1];
+        const block = { type: 'tool_result', tool_use_id: (m as any).tool_call_id, content: String(m.content) };
+        if (last?.role === 'user' && Array.isArray(last.content)) {
+          last.content.push(block);
+        } else {
+          out.push({ role: 'user', content: [block] });
+        }
+        continue;
+      }
+
+      if (m.role === 'assistant' && Array.isArray((m as any).tool_calls)) {
+        // Assistant asking for tool calls
+        out.push({
+          role: 'assistant',
+          content: (m as any).tool_calls.map((tc: ToolCall) => ({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.function.name,
+            input: (() => { try { return JSON.parse(tc.function.arguments); } catch { return {}; } })(),
+          })),
+        });
+        continue;
+      }
+
+      out.push({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+      });
+    }
+    return out;
+  }
+
   async chat(
-    messages: { role: string; content: string }[],
+    messages: { role: string; content: any }[],
     model: string = 'claude-3-sonnet',
     options: AIChatOptions = {}
   ): Promise<AIResponse> {
     const startTime = Date.now();
 
-    // Convert messages format for Anthropic
-    const anthropicMessages = messages
-      .filter(m => m.role !== 'system')
-      .map(m => ({
-        role: m.role === 'assistant' ? 'assistant' : 'user',
-        content: m.content,
-      }));
-
+    const anthropicMessages = AnthropicService.toAnthropicMessages(messages);
     const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
+
+    const anthropicTools = options.tools && options.tools.length > 0
+      ? AnthropicService.toAnthropicTools(options.tools)
+      : undefined;
 
     const response = await fetch(`${this.baseUrl.replace(/\/$/, '')}/v1/messages`, {
       method: 'POST',
@@ -136,6 +236,7 @@ export class AnthropicService {
         messages: anthropicMessages,
         max_tokens: options.maxTokens ?? 4096,
         temperature: options.temperature ?? 0.7,
+        ...(anthropicTools ? { tools: anthropicTools } : {}),
       }),
     });
 
@@ -148,15 +249,15 @@ export class AnthropicService {
     }
 
     const data = (await response.json()) as any;
-
     const latency = Date.now() - startTime;
 
     const outputText = AnthropicService.extractTextBlocks(data?.content);
+    const toolCalls = AnthropicService.extractToolCalls(data?.content || []);
 
     // Token counts (fallback to heuristic if missing)
     const inputTokens = Number.isFinite(data?.usage?.input_tokens)
       ? Number(data.usage.input_tokens)
-      : Math.ceil(messages.reduce((acc, m) => acc + m.content.length / 4, 0));
+      : Math.ceil(messages.reduce((acc, m) => acc + String(m.content).length / 4, 0));
     const outputTokens = Number.isFinite(data?.usage?.output_tokens)
       ? Number(data.usage.output_tokens)
       : Math.ceil(outputText.length / 4);
@@ -172,6 +273,7 @@ export class AnthropicService {
       costUSD,
       model: data?.model || model,
       latency,
+      ...(toolCalls.length > 0 ? { toolCalls } : {}),
     };
   }
 }

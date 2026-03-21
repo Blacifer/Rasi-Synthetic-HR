@@ -1589,13 +1589,22 @@ export default function FleetPage({
                 {/* Header */}
                 <div className="flex items-center justify-between gap-4">
                   <h3 className="text-sm font-semibold text-white">Where this agent works</h3>
-                  <button
-                    onClick={() => void openAddIntegrationPanel(activeWorkspaceAgent)}
-                    className="rounded-xl bg-blue-500/20 border border-blue-400/30 px-3 py-1.5 text-xs font-semibold text-blue-100 hover:bg-blue-500/25 inline-flex items-center gap-1.5"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Connect a channel
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => onOpenOperationsPage?.(`connectors?agentId=${activeWorkspaceAgent.id}&tab=all`)}
+                      className="rounded-xl bg-violet-500/15 border border-violet-400/25 px-3 py-1.5 text-xs font-semibold text-violet-200 hover:bg-violet-500/25 inline-flex items-center gap-1.5"
+                    >
+                      <ShoppingBag className="w-3.5 h-3.5" />
+                      Connect data sources
+                    </button>
+                    <button
+                      onClick={() => void openAddIntegrationPanel(activeWorkspaceAgent)}
+                      className="rounded-xl bg-blue-500/20 border border-blue-400/30 px-3 py-1.5 text-xs font-semibold text-blue-100 hover:bg-blue-500/25 inline-flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Connect a channel
+                    </button>
+                  </div>
                 </div>
 
                 {/* Publish checklist */}

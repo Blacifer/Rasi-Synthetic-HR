@@ -224,7 +224,14 @@ export function guessPackForIntegration(integration: IntegrationSummary): Integr
   if (category === 'RECRUITMENT' || category === 'ATS' || category === 'HRMS') return 'recruitment';
 
   // Heuristics for CRMs and ticketing systems.
-  const salesHints = ['crm', 'sales', 'salesforce', 'hubspot', 'freshsales', 'zoho-crm', 'pipedrive'];
+  // Explicit connector ID rules (take precedence over category heuristics)
+  const itConnectors = ['slack', 'flock', 'microsoft-365', 'google-workspace', 'okta', 'jira', 'azure'];
+  if (itConnectors.some((h) => id === h || id.startsWith(h))) return 'it';
+
+  const financeConnectors = ['deel', 'gusto', 'razorpay', 'stripe', 'quickbooks', 'xero', 'paytm'];
+  if (financeConnectors.some((h) => id === h || id.startsWith(h))) return 'finance';
+
+  const salesHints = ['crm', 'sales', 'salesforce', 'hubspot', 'freshsales', 'zoho', 'pipedrive'];
   if (salesHints.some((h) => id.includes(h)) || tags.some((t) => t.includes('crm') || t.includes('sales'))) return 'sales';
 
   const supportHints = ['zendesk', 'freshdesk', 'intercom', 'jira'];

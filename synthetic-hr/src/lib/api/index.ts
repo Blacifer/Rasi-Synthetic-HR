@@ -3,6 +3,8 @@ export { agentApi, conversationApi } from './agents';
 export { incidentApi, escalationsApi, alertsApi } from './incidents';
 export { costApi, metricsApi } from './costs';
 export { connectorsApi, integrationsApi, slackApi } from './integrations';
+export { unifiedConnectorsApi } from './connectors';
+export type { UnifiedConnectorEntry, ConnectorAction, ConnectorActionResult } from './connectors';
 export { policiesApi, complianceApi, safeHarborApi } from './governance';
 export {
   webhooksApi,
@@ -53,6 +55,7 @@ import { agentApi, conversationApi } from './agents';
 import { incidentApi, escalationsApi, alertsApi } from './incidents';
 import { costApi, metricsApi } from './costs';
 import { connectorsApi, integrationsApi, slackApi } from './integrations';
+import { unifiedConnectorsApi } from './connectors';
 import { policiesApi, complianceApi, safeHarborApi } from './governance';
 import {
   webhooksApi,
@@ -90,6 +93,7 @@ export const api = {
   team: teamApi,
   dashboard: dashboardApi,
   connectors: connectorsApi,
+  unifiedConnectors: unifiedConnectorsApi,
   integrations: integrationsApi,
   webhooks: webhooksApi,
   metrics: metricsApi,

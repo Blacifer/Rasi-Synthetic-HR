@@ -780,4 +780,29 @@ router.post('/agents/:id/test', requirePermission('agents.update'), async (req: 
 // Suppress unused import warnings — crypto is kept for future use in this module
 void crypto;
 
+// ─── Connector linking ────────────────────────────────────────────────────────
+
+router.patch('/agents/:id/connectors', requirePermission('agents.update'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const { connectorIds } = req.body;
+    if (!Array.isArray(connectorIds) || connectorIds.some((c) => typeof c !== 'string')) {
+      return res.status(400).json({ success: false, error: 'connectorIds must be an array of strings' });
+    }
+
+    const existingAgent = await getAgentRecord(req, orgId, id);
+    const updatedMetadata = writeAgentPublishMetadata(existingAgent, {
+      integration_ids: connectorIds,
+    });
+
+    await patchAgentRecord(req, orgId, id, { metadata: updatedMetadata });
+    res.json({ success: true, data: { connectorIds } });
+  } catch (error: any) {
+    errorResponse(res, error, error?.message === 'Agent not found' ? 404 : 500);
+  }
+});
+
 export default router;

@@ -3699,4 +3699,226 @@ router.delete('/scrapers/:id', requirePermission('connectors.manage'), async (re
   }
 });
 
+// ---------------------------------------------------------------------------
+// Unified Connector Catalog
+// ---------------------------------------------------------------------------
+
+import { PARTNER_APP_CATALOG, getInstalledAppHealth } from './marketplace';
+import { PHASE1_INTEGRATIONS } from '../lib/integrations/spec-registry';
+import { ACTION_REGISTRY } from '../lib/connectors/action-registry';
+import { executeConnectorAction } from '../lib/connectors/action-executor';
+import { eq as eqFilter, supabaseRestAsService } from '../lib/supabase-rest';
+import { authenticateToken } from '../middleware/auth';
+
+// GET /api/connectors/catalog/unified — merged catalog (marketplace + spec-driven)
+// with per-org install status and agent-usage counts.
+router.get('/catalog/unified', authenticateToken, async (req, res) => {
+  try {
+    const orgId = (req as any).user?.organization_id;
+    if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const domain = (req.query.domain as string | undefined)?.toLowerCase();
+
+    // Load installed status for all integrations in this org
+    const healthMap = await getInstalledAppHealth(orgId);
+
+    // Load agents to compute agentCount per connector
+    const agents = (await supabaseRestAsService('ai_agents', new URLSearchParams({
+      organization_id: eqFilter(orgId),
+      select: 'id,metadata',
+    }))) as Array<{ id: string; metadata?: any }>;
+
+    // Build a map: connectorId → count of agents using it
+    const agentCountMap = new Map<string, number>();
+    for (const agent of agents || []) {
+      const integrationIds: string[] = agent.metadata?.publish?.integration_ids || [];
+      for (const id of integrationIds) {
+        agentCountMap.set(id, (agentCountMap.get(id) || 0) + 1);
+      }
+    }
+
+    // Get catalog ids already covered by marketplace
+    const marketplaceIds = new Set(PARTNER_APP_CATALOG.map((a) => a.id));
+
+    const entries: object[] = [];
+
+    // Marketplace apps first
+    for (const app of PARTNER_APP_CATALOG) {
+      if (domain && app.category !== domain) continue;
+      const health = healthMap.get(app.id);
+      entries.push({
+        id: app.id,
+        name: app.name,
+        category: app.category,
+        description: app.description,
+        authType: app.installMethod,
+        requiredFields: app.requiredFields,
+        badge: app.badge,
+        comingSoon: !!app.comingSoon,
+        featured: app.featured,
+        installCount: app.installCount,
+        logoLetter: app.logoLetter,
+        colorHex: app.colorHex,
+        developer: app.developer,
+        setupTimeMinutes: app.setupTimeMinutes,
+        permissions: app.permissions,
+        actionsUnlocked: app.actionsUnlocked,
+        bundleIds: app.bundleIds,
+        relatedAgentIds: app.relatedAgentIds,
+        source: 'marketplace' as const,
+        installed: !!health,
+        connectionStatus: health?.status ?? null,
+        lastSyncAt: health?.last_sync_at ?? null,
+        lastErrorMsg: health?.last_error_msg ?? null,
+        agentCount: agentCountMap.get(app.id) || 0,
+        hasActions: ACTION_REGISTRY.hasOwnProperty(app.id),
+      });
+    }
+
+    // Spec-driven integrations not already in marketplace catalog
+    for (const spec of PHASE1_INTEGRATIONS) {
+      if (marketplaceIds.has(spec.id)) continue; // marketplace version wins
+      const catLower = (spec.category || '').toLowerCase();
+      if (domain && catLower !== domain) continue;
+      const health = healthMap.get(spec.id);
+      entries.push({
+        id: spec.id,
+        name: spec.name,
+        category: catLower,
+        description: spec.description || '',
+        authType: spec.authType,
+        requiredFields: spec.apiKeyConfig?.requiredFields,
+        badge: spec.tags?.[0],
+        comingSoon: spec.status === 'COMING_SOON',
+        featured: false,
+        installCount: 0,
+        logoLetter: (spec.name || '?')[0].toUpperCase(),
+        colorHex: spec.color || '#6B7280',
+        developer: undefined,
+        setupTimeMinutes: undefined,
+        permissions: spec.capabilities?.reads?.map((r: string) => `Read: ${r}`),
+        actionsUnlocked: spec.capabilities?.writes?.map((w: any) => w.label),
+        bundleIds: [],
+        relatedAgentIds: [],
+        source: 'integration' as const,
+        installed: !!health,
+        connectionStatus: health?.status ?? null,
+        lastSyncAt: health?.last_sync_at ?? null,
+        lastErrorMsg: health?.last_error_msg ?? null,
+        agentCount: agentCountMap.get(spec.id) || 0,
+        hasActions: ACTION_REGISTRY.hasOwnProperty(spec.id),
+      });
+    }
+
+    return res.json({ success: true, data: entries });
+  } catch (err: any) {
+    logger.error('Failed to load unified connector catalog', { error: err.message });
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/connectors/:connectorId/actions — tool definitions for a connector
+router.get('/:connectorId/actions', authenticateToken, (req, res) => {
+  const { connectorId } = req.params;
+  const schema = (ACTION_REGISTRY as any)[connectorId];
+  if (!schema) return res.json({ success: true, data: [] });
+  return res.json({ success: true, data: schema.tools || [] });
+});
+
+// POST /api/connectors/:connectorId/execute — run a connector action
+router.post('/:connectorId/execute', authenticateToken, requirePermission('connectors.manage'), async (req, res) => {
+  try {
+    const orgId = (req as any).user?.organization_id;
+    if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const { connectorId } = req.params;
+    const { action, params = {}, agentId } = req.body as { action: string; params?: Record<string, any>; agentId?: string };
+
+    if (!action) return res.status(400).json({ success: false, error: 'action is required' });
+
+    // Check action_policies — is this action enabled for the org?
+    const policies = (await supabaseRestAsService('action_policies', new URLSearchParams({
+      organization_id: eqFilter(orgId),
+      service: eqFilter(connectorId),
+      action: eqFilter(action),
+      select: 'enabled,require_approval',
+      limit: '1',
+    }))) as Array<{ enabled: boolean; require_approval: boolean }>;
+
+    if (policies?.length > 0 && policies[0].enabled === false) {
+      return res.status(403).json({ success: false, error: `Action "${action}" is disabled for this connector` });
+    }
+
+    if (policies?.length > 0 && policies[0].require_approval) {
+      // Create an approval request instead of executing
+      const now = new Date().toISOString();
+      const approvalRows = (await supabaseRestAsService('approval_requests', '', {
+        method: 'POST',
+        body: {
+          organization_id: orgId,
+          connector_id: connectorId,
+          action_type: action,
+          action_data: params,
+          requested_by: (req as any).user?.id,
+          status: 'pending',
+          created_at: now,
+        },
+      })) as any[];
+      const approvalId = approvalRows?.[0]?.id;
+      return res.json({ success: true, pending: true, approvalId, message: 'Action requires approval before executing' });
+    }
+
+    // Load credentials for the org's integration
+    const integrations = (await supabaseRestAsService('integrations', new URLSearchParams({
+      organization_id: eqFilter(orgId),
+      service_type: eqFilter(connectorId),
+      select: 'id,status',
+      limit: '1',
+    }))) as Array<{ id: string; status: string }>;
+
+    if (!integrations?.length || integrations[0].status !== 'connected') {
+      return res.status(400).json({ success: false, error: `${connectorId} is not connected` });
+    }
+
+    const integrationId = integrations[0].id;
+    const credRows = (await supabaseRestAsService('integration_credentials', new URLSearchParams({
+      integration_id: eqFilter(integrationId),
+      select: 'key,value,expires_at',
+    }))) as Array<{ key: string; value: string; expires_at?: string }>;
+
+    const credentials: Record<string, string> = {};
+    for (const row of credRows || []) {
+      try { credentials[row.key] = decryptSecret(row.value); } catch { credentials[row.key] = row.value; }
+    }
+
+    const start = Date.now();
+    const result = await executeConnectorAction(connectorId, action, params, credentials);
+    const duration = Date.now() - start;
+
+    // Log the action execution
+    try {
+      await supabaseRestAsService('connector_action_executions', '', {
+        method: 'POST',
+        body: {
+          organization_id: orgId,
+          agent_id: agentId || null,
+          integration_id: integrationId,
+          connector_id: connectorId,
+          action,
+          params,
+          result: result.data || result.error || {},
+          success: result.success,
+          error_message: result.error || null,
+          duration_ms: duration,
+        },
+      });
+    } catch { /* non-critical */ }
+
+    return res.json({ success: true, data: result });
+  } catch (err: any) {
+    logger.error('Connector action execution failed', { error: err.message });
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

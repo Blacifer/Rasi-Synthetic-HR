@@ -75,16 +75,25 @@ export const APP_BUNDLES: AppBundle[] = [
     name: 'Sales Stack',
     description: 'Qualify leads, enrich contacts, and log CRM activity.',
     intentLabel: 'Sales',
-    appIds: ['hubspot', 'salesforce', 'pipedrive'],
+    appIds: ['hubspot', 'salesforce', 'pipedrive', 'zoho'],
     colorHex: '#059669',
     icon: 'Building2',
+  },
+  {
+    id: 'hr-stack',
+    name: 'HR & Payroll Stack',
+    description: 'Manage employee records, payroll, and workforce tools.',
+    intentLabel: 'HR & Payroll',
+    appIds: ['google-workspace', 'microsoft-365', 'deel', 'gusto'],
+    colorHex: '#7C3AED',
+    icon: 'Users',
   },
   {
     id: 'it-stack',
     name: 'IT & Access Stack',
     description: 'Provision accounts, manage incidents, and control access.',
     intentLabel: 'IT / Access Management',
-    appIds: ['okta', 'jira-service-management'],
+    appIds: ['okta', 'jira-service-management', 'slack', 'microsoft-365', 'flock'],
     colorHex: '#D97706',
     icon: 'Wrench',
   },
@@ -99,7 +108,7 @@ export const APP_BUNDLES: AppBundle[] = [
   },
 ];
 
-const PARTNER_APP_CATALOG: MarketplaceApp[] = [
+export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
   // --- Finance ---
   {
     id: 'stripe',
@@ -419,6 +428,133 @@ const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     logoLetter: 'G',
     comingSoon: true,
   },
+
+  // --- HR / Payroll ---
+  {
+    id: 'google-workspace',
+    name: 'Google Workspace',
+    developer: 'Google LLC',
+    category: 'hr',
+    description: 'Gmail, Calendar, Drive, and Admin SDK. HR agents can onboard employees, manage directory records, send emails, and schedule events automatically.',
+    permissions: ['Read and write Gmail', 'Manage Calendar events', 'Read/write Admin directory', 'Access Drive files'],
+    relatedAgentIds: ['access_agent', 'onboarding_agent'],
+    actionsUnlocked: ['Send emails', 'Create calendar events', 'Manage directory users', 'Access shared drives'],
+    setupTimeMinutes: 5,
+    bundleIds: ['hr-stack', 'it-stack'],
+    installMethod: 'oauth2',
+    installCount: 7200,
+    featured: true,
+    badge: 'Popular',
+    colorHex: '#EA4335',
+    logoLetter: 'G',
+  },
+  {
+    id: 'microsoft-365',
+    name: 'Microsoft 365',
+    developer: 'Microsoft Corporation',
+    category: 'hr',
+    description: 'Teams, Outlook, OneDrive, and Azure AD. IT and HR agents can send messages, manage users, schedule meetings, and handle access requests.',
+    permissions: ['Send Teams messages', 'Read/write Outlook calendar', 'Manage Azure AD users', 'Read SharePoint'],
+    relatedAgentIds: ['access_agent', 'oncall_agent'],
+    actionsUnlocked: ['Send Teams messages', 'Schedule meetings', 'Manage AD users', 'Create Teams channels'],
+    setupTimeMinutes: 6,
+    bundleIds: ['hr-stack', 'it-stack'],
+    installMethod: 'oauth2',
+    installCount: 8900,
+    featured: true,
+    badge: 'Popular',
+    colorHex: '#0078D4',
+    logoLetter: 'M',
+  },
+  {
+    id: 'slack',
+    name: 'Slack',
+    developer: 'Salesforce, Inc.',
+    category: 'it',
+    description: 'Team messaging and collaboration. Agents can send alerts, post updates, read channel history, and notify on-call engineers automatically.',
+    permissions: ['Send messages to channels', 'Read channel history', 'Manage channel members', 'Read user profiles'],
+    relatedAgentIds: ['oncall_agent', 'triage_agent', 'access_agent'],
+    actionsUnlocked: ['Send channel alerts', 'Post incident updates', 'Notify on-call', 'Read conversation history'],
+    setupTimeMinutes: 3,
+    bundleIds: ['it-stack'],
+    installMethod: 'oauth2',
+    installCount: 11400,
+    featured: true,
+    badge: 'Popular',
+    colorHex: '#4A154B',
+    logoLetter: 'S',
+  },
+  {
+    id: 'zoho',
+    name: 'Zoho',
+    developer: 'Zoho Corporation Pvt. Ltd.',
+    category: 'sales',
+    description: 'Zoho CRM and Zoho People in one connector. Lead Agent qualifies contacts and updates your pipeline; HR Agent reads employee records.',
+    permissions: ['Read and write CRM contacts/deals', 'Read Zoho People employee data', 'Update pipeline stages', 'Create tasks'],
+    relatedAgentIds: ['lead_agent', 'outreach_agent'],
+    actionsUnlocked: ['Qualify CRM leads', 'Update deal stages', 'Read employee records', 'Create CRM tasks'],
+    setupTimeMinutes: 5,
+    bundleIds: ['sales-stack'],
+    installMethod: 'oauth2',
+    installCount: 3100,
+    featured: false,
+    badge: 'Verified',
+    colorHex: '#E42527',
+    logoLetter: 'Z',
+  },
+  {
+    id: 'deel',
+    name: 'Deel',
+    developer: 'Deel, Inc.',
+    category: 'hr',
+    description: 'Global payroll and contractor management. Finance Ops Agent reads contracts, payslips, and payment status across 150+ countries automatically.',
+    permissions: ['Read employee contracts', 'Read payslip data', 'Read payment status', 'List workers'],
+    relatedAgentIds: ['finance_ops_agent', 'compliance_agent'],
+    actionsUnlocked: ['Read contract details', 'Get payslip summaries', 'Check payment status', 'List global workers'],
+    setupTimeMinutes: 4,
+    bundleIds: ['hr-stack'],
+    installMethod: 'oauth2',
+    installCount: 2800,
+    featured: false,
+    badge: 'Verified',
+    colorHex: '#FF6B35',
+    logoLetter: 'D',
+  },
+  {
+    id: 'gusto',
+    name: 'Gusto',
+    developer: 'Gusto, Inc.',
+    category: 'hr',
+    description: 'US payroll, benefits, and HR in one place. Finance Ops Agent reads payroll runs, time-off balances, and benefit elections automatically.',
+    permissions: ['Read employee records', 'Read payroll runs', 'Read time-off requests', 'Read benefits enrollment'],
+    relatedAgentIds: ['finance_ops_agent'],
+    actionsUnlocked: ['Get payroll summaries', 'Check time-off balances', 'Read benefit details', 'List employees'],
+    setupTimeMinutes: 4,
+    bundleIds: ['hr-stack'],
+    installMethod: 'oauth2',
+    installCount: 1950,
+    featured: false,
+    badge: 'Verified',
+    colorHex: '#F45D48',
+    logoLetter: 'G',
+  },
+  {
+    id: 'flock',
+    name: 'Flock',
+    developer: 'Flock FZ-LLC',
+    category: 'it',
+    description: 'Team messaging for growing businesses. Agents can send automated alerts, post incident notifications, and keep teams informed in real time.',
+    permissions: ['Send messages to channels', 'Read channel info', 'Post notifications'],
+    relatedAgentIds: ['oncall_agent', 'triage_agent'],
+    actionsUnlocked: ['Send channel messages', 'Post incident alerts', 'Notify teams'],
+    setupTimeMinutes: 3,
+    bundleIds: ['it-stack'],
+    installMethod: 'oauth2',
+    installCount: 890,
+    featured: false,
+    colorHex: '#6B4FBB',
+    logoLetter: 'F',
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -433,7 +569,7 @@ type InstalledAppHealth = {
   connectionSource: 'marketplace' | 'connections';
 };
 
-async function getInstalledAppHealth(orgId: string): Promise<Map<string, InstalledAppHealth>> {
+export async function getInstalledAppHealth(orgId: string): Promise<Map<string, InstalledAppHealth>> {
   try {
     // Fetch all integrations for the org — both marketplace-installed and spec-driven.
     // This lets marketplace apps appear "installed" even when connected via the
@@ -1077,6 +1213,27 @@ function buildOAuthUrl(appId: string, state: string, redirectUri: string): strin
     case 'xero':
       if (!process.env.XERO_CLIENT_ID) return null;
       return `https://login.xero.com/identity/connect/authorize?response_type=code&client_id=${enc(process.env.XERO_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=offline_access%20accounting.transactions&state=${state}`;
+    case 'google-workspace':
+      if (!process.env.GOOGLE_CLIENT_ID) return null;
+      return `https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=${enc(process.env.GOOGLE_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=${enc('openid email profile https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/admin.directory.user.readonly')}&access_type=offline&prompt=consent&state=${state}`;
+    case 'microsoft-365':
+      if (!process.env.MICROSOFT_CLIENT_ID) return null;
+      return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?response_type=code&client_id=${enc(process.env.MICROSOFT_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=${enc('openid email profile offline_access User.Read Mail.Send Calendars.ReadWrite Team.ReadBasic.All')}&state=${state}`;
+    case 'slack':
+      if (!process.env.SLACK_CLIENT_ID) return null;
+      return `https://slack.com/oauth/v2/authorize?client_id=${enc(process.env.SLACK_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=chat%3Awrite%2Cchannels%3Ahistory%2Cusers%3Aread%2Cchannels%3Aread&state=${state}`;
+    case 'zoho':
+      if (!process.env.ZOHO_CLIENT_ID) return null;
+      return `https://accounts.zoho.com/oauth/v2/auth?response_type=code&client_id=${enc(process.env.ZOHO_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=${enc('ZohoCRM.modules.contacts.ALL ZohoCRM.modules.deals.ALL ZohoPeople.employee.ALL')}&access_type=offline&state=${state}`;
+    case 'deel':
+      if (!process.env.DEEL_CLIENT_ID) return null;
+      return `https://app.deel.com/oauth2/authorize?response_type=code&client_id=${enc(process.env.DEEL_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=contracts%3Aread%20payslips%3Aread%20workers%3Aread&state=${state}`;
+    case 'gusto':
+      if (!process.env.GUSTO_CLIENT_ID) return null;
+      return `https://api.gusto.com/oauth/authorize?response_type=code&client_id=${enc(process.env.GUSTO_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&state=${state}`;
+    case 'flock':
+      if (!process.env.FLOCK_CLIENT_ID) return null;
+      return `https://api.flock.com/v2/auth/authorize?response_type=code&client_id=${enc(process.env.FLOCK_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&state=${state}`;
     default:
       return null;
   }
@@ -1114,6 +1271,34 @@ async function exchangeOAuthCode(
     case 'xero':
       tokenUrl = 'https://identity.xero.com/connect/token';
       params = { grant_type: 'authorization_code', client_id: process.env.XERO_CLIENT_ID!, client_secret: process.env.XERO_CLIENT_SECRET!, redirect_uri: redirectUri, code };
+      break;
+    case 'google-workspace':
+      tokenUrl = 'https://oauth2.googleapis.com/token';
+      params = { grant_type: 'authorization_code', client_id: process.env.GOOGLE_CLIENT_ID!, client_secret: process.env.GOOGLE_CLIENT_SECRET!, redirect_uri: redirectUri, code };
+      break;
+    case 'microsoft-365':
+      tokenUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/token`;
+      params = { grant_type: 'authorization_code', client_id: process.env.MICROSOFT_CLIENT_ID!, client_secret: process.env.MICROSOFT_CLIENT_SECRET!, redirect_uri: redirectUri, code };
+      break;
+    case 'slack':
+      tokenUrl = 'https://slack.com/api/oauth.v2.access';
+      params = { grant_type: 'authorization_code', client_id: process.env.SLACK_CLIENT_ID!, client_secret: process.env.SLACK_CLIENT_SECRET!, redirect_uri: redirectUri, code };
+      break;
+    case 'zoho':
+      tokenUrl = 'https://accounts.zoho.com/oauth/v2/token';
+      params = { grant_type: 'authorization_code', client_id: process.env.ZOHO_CLIENT_ID!, client_secret: process.env.ZOHO_CLIENT_SECRET!, redirect_uri: redirectUri, code };
+      break;
+    case 'deel':
+      tokenUrl = 'https://app.deel.com/oauth2/token';
+      params = { grant_type: 'authorization_code', client_id: process.env.DEEL_CLIENT_ID!, client_secret: process.env.DEEL_CLIENT_SECRET!, redirect_uri: redirectUri, code };
+      break;
+    case 'gusto':
+      tokenUrl = 'https://api.gusto.com/oauth/token';
+      params = { grant_type: 'authorization_code', client_id: process.env.GUSTO_CLIENT_ID!, client_secret: process.env.GUSTO_CLIENT_SECRET!, redirect_uri: redirectUri, code };
+      break;
+    case 'flock':
+      tokenUrl = 'https://api.flock.com/v2/auth/token';
+      params = { grant_type: 'authorization_code', client_id: process.env.FLOCK_CLIENT_ID!, client_secret: process.env.FLOCK_CLIENT_SECRET!, redirect_uri: redirectUri, code };
       break;
     default:
       throw new Error(`No token exchange configured for app: ${appId}`);
