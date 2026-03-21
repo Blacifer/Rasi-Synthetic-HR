@@ -1054,7 +1054,11 @@ export default function FleetPage({
                       <p className="text-slate-400 text-sm mb-2.5">{agent.description}</p>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                         <span>Type: <span className="text-slate-300">{agent.agent_type}</span></span>
-                        <span>Provider: <span className="text-slate-300">{agent.platform}</span></span>
+                        <span>Provider: <span className="text-slate-300">{(() => {
+                          const prefix = (agent.model_name || '').split('/')[0].toLowerCase();
+                          const labels: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', meta: 'Meta', mistral: 'Mistral', openrouter: 'OpenRouter' };
+                          return labels[prefix] || prefix || 'Unknown';
+                        })()}</span></span>
                         <span>Model: <span className="text-slate-300 font-mono">{agent.model_name}</span></span>
                         <span className="w-full sm:w-auto" />
                         <span>Conversations: <span className="text-slate-300">{agent.conversations}</span></span>
@@ -2737,11 +2741,13 @@ function AddAgentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (agent:
   const [step, setStep] = useState(1);
   const [featureInput, setFeatureInput] = useState('');
 
+  const [providerFilter, setProviderFilter] = useState('openai');
+
   const [form, setForm] = useState({
     name: '',
     description: '',
     agent_type: 'support',
-    platform: 'custom',
+    platform: 'api',
     model_name: 'gpt-4o',
     system_prompt: '',
     status: 'active' as const,
@@ -2779,7 +2785,8 @@ function AddAgentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (agent:
               }));
               setLiveModels(fetched);
               if (fetched.length > 0) {
-                setForm(f => ({ ...f, platform: fetched[0].provider, model_name: fetched[0].id }));
+                setProviderFilter(fetched[0].provider);
+                setForm(f => ({ ...f, model_name: fetched[0].id }));
               }
               setLoadingModels(false);
               return;
@@ -2796,14 +2803,15 @@ function AddAgentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (agent:
         { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', provider: 'google', pricing: { prompt: '0.0000001', completion: '0.0000004' } }
       ];
       setLiveModels(fallback);
-      setForm(f => ({ ...f, platform: fallback[0].provider, model_name: fallback[0].id }));
+      setProviderFilter(fallback[0].provider);
+      setForm(f => ({ ...f, model_name: fallback[0].id }));
       setLoadingModels(false);
     };
     loadModels();
   }, []);
 
   const platforms = Array.from(new Set(liveModels.map(m => m.provider)));
-  const filteredModels = liveModels.filter(m => m.provider === form.platform);
+  const filteredModels = liveModels.filter(m => m.provider === providerFilter);
   const selectedModelData = liveModels.find(m => m.id === form.model_name);
 
   const formatPrice = (model: any) => {
@@ -2861,11 +2869,12 @@ function AddAgentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (agent:
   const handleChange = (field: string, value: string | number | boolean) => {
     setForm({ ...form, [field]: value });
     if (errors[field]) setErrors({ ...errors, [field]: '' });
-    if (field === 'platform') {
-      const firstForPlatform = liveModels.find(m => m.provider === value);
-      if (firstForPlatform) {
-        setForm(f => ({ ...f, platform: String(value), model_name: firstForPlatform.id }));
-      }
+    if (field === 'providerFilter') {
+      const newProvider = String(value);
+      setProviderFilter(newProvider);
+      const first = liveModels.find(m => m.provider === newProvider);
+      if (first) setForm(f => ({ ...f, model_name: first.id }));
+      return;
     }
   };
 
@@ -2985,16 +2994,16 @@ function AddAgentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (agent:
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Platform</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-1.5">AI Provider</label>
                   <select
-                    value={form.platform}
-                    onChange={(e) => handleChange('platform', e.target.value)}
+                    value={providerFilter}
+                    onChange={(e) => handleChange('providerFilter', e.target.value)}
                     disabled={loadingModels}
                     className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-white outline-none focus:border-purple-500"
                   >
                     {platforms.length > 0 ? platforms.map(p => (
                       <option key={String(p)} value={String(p)}>{String(p).charAt(0).toUpperCase() + String(p).slice(1)}</option>
-                    )) : <option value="custom">Custom</option>}
+                    )) : <option value="openai">OpenAI</option>}
                   </select>
                 </div>
                 <div>
