@@ -739,23 +739,25 @@ router.post('/apps/:id/install', async (req: Request, res: Response) => {
 
     const now = new Date().toISOString();
 
-    // Check if a waitlisted row already exists — if so, update it instead of inserting
+    // Check if any row already exists for this org + service_type (any status, any source)
     const existingRows = (await supabaseRestAsService('integrations', new URLSearchParams({
       organization_id: eq(orgId),
       service_type: eq(app.id),
-      'metadata->>marketplace_app': eq('true'),
       select: 'id,status',
       limit: '1',
     }))) as Array<{ id: string; status: string }>;
 
     let integrationId: string;
 
-    if (existingRows?.length > 0 && existingRows[0].status === 'waitlisted') {
-      // Upgrade waitlisted row to configured
+    if (existingRows?.length > 0) {
+      // Row exists (waitlisted, configured, or from the old integrations system) — update in place
       integrationId = existingRows[0].id;
       await supabaseRestAsService('integrations', new URLSearchParams({ id: eq(integrationId) }), {
         method: 'PATCH',
         body: {
+          service_name: app.name,
+          category: app.category.toUpperCase(),
+          auth_type: app.installMethod,
           status: 'configured',
           ai_enabled: true,
           updated_at: now,
@@ -763,7 +765,7 @@ router.post('/apps/:id/install', async (req: Request, res: Response) => {
         },
       });
     } else {
-      // Create integration record
+      // No existing row — create one
       const integrationBody = {
         organization_id: orgId,
         service_type: app.id,
