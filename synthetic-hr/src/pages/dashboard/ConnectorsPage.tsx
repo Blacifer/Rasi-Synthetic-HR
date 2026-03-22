@@ -1108,7 +1108,10 @@ function BrowseModal({ connectors, apps, bundles, agents, onClose, onConnect, on
   }, [connectors, agents]);
 
   const filtered = useMemo(() => {
-    let list = [...connectors];
+    // Deduplicate: hide integration-source entries that have a matching marketplace app.
+    // This ensures users always connect via the marketplace path (richer metadata, more actions).
+    const marketplaceIds = new Set(connectors.filter((c) => c.source === 'marketplace').map((c) => c.appData?.id).filter(Boolean));
+    let list = connectors.filter((c) => c.source !== 'integration' || !marketplaceIds.has(c.integrationData?.id));
     if (filterType !== 'all')     list = list.filter((c) => c.source === filterType);
     if (filterCategory !== 'all') list = list.filter((c) => c.category === filterCategory);
     if (search) {
