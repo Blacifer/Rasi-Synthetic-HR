@@ -247,10 +247,13 @@ function AppConnectModal({ connector, mode, onClose, onDone }: {
       const res = await api.marketplace.install(app.id, creds);
       if (!res.success) throw new Error((res as any).error || 'Failed');
       if ((res.data as any)?.oauth) {
+        // OAuth flow: redirect browser to provider — do NOT call onDone yet.
+        // Connection completes when the OAuth callback returns.
         toast.info(`Redirecting to ${app.name} for authorization…`);
-      } else {
-        toast.success(mode === 'configure' ? `${app.name} credentials updated` : `${app.name} connected`);
+        window.location.href = (res.data as any).authUrl;
+        return;
       }
+      toast.success(mode === 'configure' ? `${app.name} credentials updated` : `${app.name} connected`);
       onDone(connector.id);
     } catch (e: any) { toast.error(e.message || 'Connection failed'); }
     finally { setBusy(false); }
