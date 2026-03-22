@@ -1431,7 +1431,15 @@ export default function ConnectorsPage({ onNavigate: _onNavigate, agents = [] }:
     ...integrations.map(fromIntegration),
   ], [apps, integrations]);
 
-  const connectedList = useMemo(() => allConnectors.filter((c) => c.connected), [allConnectors]);
+  const connectedList = useMemo(() => {
+    const connected = allConnectors.filter((c) => c.connected);
+    // If a marketplace app and a spec-integration share the same service ID,
+    // show only the marketplace entry (it has richer metadata + more actions).
+    const marketplaceIds = new Set(
+      connected.filter((c) => c.source === 'marketplace').map((c) => c.appData?.id).filter(Boolean)
+    );
+    return connected.filter((c) => c.source !== 'integration' || !marketplaceIds.has(c.integrationData?.id));
+  }, [allConnectors]);
 
   const agentNamesFor = useCallback((c: UnifiedConnector): string[] => {
     if (c.source === 'marketplace' && c.appData) {
