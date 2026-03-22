@@ -1111,7 +1111,16 @@ function BrowseModal({ connectors, apps, bundles, agents, onClose, onConnect, on
     // Deduplicate: hide integration-source entries that have a matching marketplace app.
     // This ensures users always connect via the marketplace path (richer metadata, more actions).
     const marketplaceIds = new Set(connectors.filter((c) => c.source === 'marketplace').map((c) => c.appData?.id).filter(Boolean));
-    let list = connectors.filter((c) => c.source !== 'integration' || !marketplaceIds.has(c.integrationData?.id));
+    // Sub-integrations covered by a parent marketplace app (e.g. zoho_people covered by zoho)
+    const coveredByMarketplace: Record<string, string[]> = {
+      'zoho': ['zoho_people', 'zoho_recruit', 'zoho_learn'],
+    };
+    const coveredIntegrationIds = new Set(
+      Object.entries(coveredByMarketplace)
+        .filter(([appId]) => marketplaceIds.has(appId))
+        .flatMap(([, ids]) => ids)
+    );
+    let list = connectors.filter((c) => c.source !== 'integration' || (!marketplaceIds.has(c.integrationData?.id) && !coveredIntegrationIds.has(c.integrationData?.id)));
     if (filterType !== 'all')     list = list.filter((c) => c.source === filterType);
     if (filterCategory !== 'all') list = list.filter((c) => c.category === filterCategory);
     if (search) {
