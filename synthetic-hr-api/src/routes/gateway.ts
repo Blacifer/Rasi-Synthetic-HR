@@ -326,6 +326,41 @@ const fetchOpenRouterModels = async (): Promise<GatewayModel[]> => {
   return models;
 };
 
+// Pricing per 1M tokens for models routed via OpenRouter (provider/model format)
+const OPENROUTER_PRICING: Record<string, { input: number; output: number }> = {
+  // OpenAI
+  'openai/gpt-4o': { input: 5, output: 15 },
+  'openai/gpt-4o-mini': { input: 0.15, output: 0.6 },
+  'openai/gpt-4-turbo': { input: 10, output: 30 },
+  'openai/gpt-4': { input: 30, output: 60 },
+  'openai/gpt-3.5-turbo': { input: 0.5, output: 1.5 },
+  'openai/gpt-5.4': { input: 5, output: 15 }, // approximate — no official price yet
+  // Anthropic
+  'anthropic/claude-3-5-sonnet': { input: 3, output: 15 },
+  'anthropic/claude-3-opus': { input: 15, output: 75 },
+  'anthropic/claude-3-haiku': { input: 0.25, output: 1.25 },
+  // Google
+  'google/gemini-pro': { input: 0.5, output: 1.5 },
+  'google/gemini-flash': { input: 0.075, output: 0.3 },
+  // Meta
+  'meta-llama/llama-3-70b-instruct': { input: 0.59, output: 0.79 },
+  'meta-llama/llama-3-8b-instruct': { input: 0.07, output: 0.07 },
+  // DeepSeek
+  'deepseek/deepseek-r1': { input: 0.55, output: 2.19 },
+  'deepseek/deepseek-chat': { input: 0.14, output: 0.28 },
+  // AI21
+  'ai21/jamba-large-1.7': { input: 2, output: 8 },
+  'ai21/jamba-mini': { input: 0.2, output: 0.4 },
+};
+
+const estimateOpenRouterCost = (model: string, inputTokens: number, outputTokens: number): number => {
+  // Try exact match first, then prefix match (e.g. "openai/gpt-4o-mini-2024...")
+  const pricing = OPENROUTER_PRICING[model]
+    ?? Object.entries(OPENROUTER_PRICING).find(([k]) => model.startsWith(k))?.[1]
+    ?? { input: 1, output: 3 }; // conservative default ~gpt-4 class
+  return ((inputTokens * pricing.input) + (outputTokens * pricing.output)) / 1_000_000;
+};
+
 const routeViaOpenRouter = async (
   model: string,
   messages: Array<{ role: string; content: string }>,
@@ -366,7 +401,8 @@ const routeViaOpenRouter = async (
   const inputTokens = data?.usage?.prompt_tokens || 0;
   const outputTokens = data?.usage?.completion_tokens || 0;
   const totalTokens = data?.usage?.total_tokens || (inputTokens + outputTokens);
-  const costUSD = Number(data?.usage?.cost || 0);
+  // OpenRouter doesn't return cost in usage — compute from our pricing table
+  const costUSD = Number(data?.usage?.cost || 0) || estimateOpenRouterCost(model, inputTokens, outputTokens);
 
   return {
     content: data?.choices?.[0]?.message?.content || '',

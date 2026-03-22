@@ -228,8 +228,10 @@ export const useCostData = (period: '7d' | '30d' | '90d' | 'all' = '30d', option
           id: item.id as string,
           date: item.date as string,
           cost: (item.cost_usd as number) || 0,
-          tokens: (item.total_tokens as number) || 0,
-          requests: (item.request_count as number) || 0,
+          // fall back to input+output when total_tokens was not stored
+          tokens: (item.total_tokens as number) || ((item.input_tokens as number || 0) + (item.output_tokens as number || 0)),
+          // request_count defaults to 1 per gateway insert but guard against 0
+          requests: (item.request_count as number) || 1,
           agent_id: item.agent_id as string | undefined,
           model: (item.model_name as string | undefined),
         })) as CostData[],

@@ -162,19 +162,21 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
     return Math.max(0, Math.round(100 - incidentRate * 10));
   }, [incidents, totalRequests]);
 
+  // When cost_usd is not stored in DB, fall back to token-based distribution
+  const modelSpendByTokens = totalCost === 0 && totalTokens > 0;
   const modelSpend = useMemo(() => {
     const grouped: Record<string, number> = {};
-    filteredCostData.filter(d => d.cost > 0).forEach(d => {
+    filteredCostData.filter((d: CostData) => d.cost > 0 || d.tokens > 0).forEach((d: CostData) => {
       const raw = d.model || 'unknown';
       const m = raw.replace(/^[^/]+\//, ''); // strip provider prefix e.g. "openai/"
-      grouped[m] = (grouped[m] || 0) + (d.cost || 0);
+      grouped[m] = (grouped[m] || 0) + (modelSpendByTokens ? (d.tokens || 0) : (d.cost || 0));
     });
     const sorted = Object.entries(grouped).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
     if (sorted.length <= 5) return sorted;
     const top4 = sorted.slice(0, 4);
     const others = sorted.slice(4).reduce((s, i) => s + i.value, 0);
     return [...top4, { name: 'Others', value: others }];
-  }, [filteredCostData]);
+  }, [filteredCostData, modelSpendByTokens]);
 
   const PIE_COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899'];
 
@@ -422,8 +424,8 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
               <BarChart2 className="w-5 h-5 text-blue-400" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">Cost by Model</h2>
-              <p className="text-xs text-slate-400">Total spending distribution</p>
+              <h2 className="text-base font-bold text-white">{modelSpendByTokens ? 'Usage by Model' : 'Cost by Model'}</h2>
+              <p className="text-xs text-slate-400">{modelSpendByTokens ? 'Token distribution (no cost data stored)' : 'Total spending distribution'}</p>
             </div>
           </div>
           <div className="flex-1 flex flex-col items-center justify-center relative min-h-[220px]">
@@ -445,7 +447,7 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(value: number) => [`₹${value.toLocaleString()}`, 'Spend']}
+                      formatter={(value: number) => [modelSpendByTokens ? `${value.toLocaleString()} tokens` : `₹${value.toLocaleString()}`, modelSpendByTokens ? 'Tokens' : 'Spend']}
                       contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '10px', color: '#fff' }}
                     />
                   </PieChart>
@@ -457,7 +459,7 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
                         <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }} />
                         <span className="text-slate-300 truncate max-w-[100px]">{entry.name}</span>
                       </div>
-                      <span className="text-white font-medium shrink-0">₹{entry.value.toLocaleString()}</span>
+                      <span className="text-white font-medium shrink-0">{modelSpendByTokens ? `${(entry.value / 1000).toFixed(1)}K tok` : `₹${entry.value.toLocaleString()}`}</span>
                     </div>
                   ))}
                 </div>
