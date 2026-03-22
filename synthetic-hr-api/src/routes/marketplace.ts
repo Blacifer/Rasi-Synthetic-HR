@@ -1209,7 +1209,7 @@ function buildOAuthUrl(appId: string, state: string, redirectUri: string): strin
       return `https://app.intercom.com/oauth?client_id=${enc(process.env.INTERCOM_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&state=${state}`;
     case 'linkedin-recruiter':
       if (!process.env.LINKEDIN_CLIENT_ID) return null;
-      return `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${enc(process.env.LINKEDIN_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=r_liteprofile%20r_emailaddress&state=${state}`;
+      return `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${enc(process.env.LINKEDIN_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=openid%20profile%20email&state=${state}`;
     case 'xero':
       if (!process.env.XERO_CLIENT_ID) return null;
       return `https://login.xero.com/identity/connect/authorize?response_type=code&client_id=${enc(process.env.XERO_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=offline_access%20accounting.transactions&state=${state}`;
