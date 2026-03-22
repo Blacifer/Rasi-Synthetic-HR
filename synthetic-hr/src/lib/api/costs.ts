@@ -118,7 +118,7 @@ export const costApi = {
    */
   async getAnalytics(filters?: {
     agent_id?: string;
-    period?: '7d' | '30d' | '90d';
+    period?: '7d' | '30d' | '90d' | 'all';
   }): Promise<ApiResponse<{
     data: CostData[];
     totals: {

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useCostData } from '../../hooks/useData';
 import {
   Plus, DollarSign, Cpu, Activity, AlertOctagon, ShieldCheck,
   AlertTriangle, TrendingDown, AlertCircle, TrendingUp,
@@ -25,8 +26,6 @@ import { toast } from '../../lib/toast';
 import { validateCostForm } from '../../lib/validation';
 
 interface CostsPageProps {
-  costData: CostData[];
-  setCostData: (data: CostData[]) => void;
   agents: AIAgent[];
   incidents: Incident[];
   onNavigate: (page: string) => void;
@@ -56,15 +55,16 @@ const formatInr = (value: number) =>
     maximumFractionDigits: value >= 1000 ? 0 : 2,
   }).format(value || 0);
 
-export default function CostsPage({ costData, setCostData, agents, incidents, onNavigate }: CostsPageProps) {
+export default function CostsPage({ agents, incidents, onNavigate }: CostsPageProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [dateRange, setDateRange] = useState<'7d' | '30d' | 'all'>('30d');
   const [chartMode, setChartMode] = useState<'cost' | 'tokens' | 'requests'>('cost');
 
-  const addCostEntry = (entry: Omit<CostData, 'id'>) => {
-    const newEntry: CostData = { ...entry, id: crypto.randomUUID() };
-    setCostData([...costData, newEntry]);
+  const { costData, refetch: refetchCosts } = useCostData(dateRange);
+
+  const addCostEntry = (_entry: Omit<CostData, 'id'>) => {
     setShowAddModal(false);
+    refetchCosts();
   };
 
   const filteredCostData = useMemo(() => {
@@ -127,21 +127,32 @@ export default function CostsPage({ costData, setCostData, agents, incidents, on
     toast.success('Cost data exported successfully');
   };
 
-  // Per-agent spend for the breakdown table
+  // Per-agent spend for the breakdown table — aggregate from cost_tracking data
   const agentSpend = useMemo(() => {
-    return agents
-      .filter(a => a.budget_limit > 0 || a.current_spend > 0)
+    const grouped: Record<string, { id: string; name: string; model: string; spend: number; budget: number; pct: number; status: string }> = {};
+    filteredCostData.forEach(d => {
+      const key = d.agent_id || '__unattributed__';
+      if (!grouped[key]) {
+        const agent = agents.find(a => a.id === d.agent_id);
+        grouped[key] = {
+          id: d.agent_id || '__unattributed__',
+          name: agent?.name ?? 'Unattributed',
+          model: agent?.model_name ?? ((d.model || '').replace(/^[^/]+\//, '') || '—'),
+          spend: 0,
+          budget: agent?.budget_limit || 0,
+          pct: 0,
+          status: agent?.status || 'active',
+        };
+      }
+      grouped[key].spend += d.cost || 0;
+    });
+    return Object.values(grouped)
       .map(a => ({
-        id: a.id,
-        name: a.name,
-        model: a.model_name,
-        spend: a.current_spend || 0,
-        budget: a.budget_limit || 0,
-        pct: a.budget_limit > 0 ? Math.min((a.current_spend / a.budget_limit) * 100, 100) : 0,
-        status: a.status,
+        ...a,
+        pct: a.budget > 0 ? Math.min((a.spend / a.budget) * 100, 100) : 0,
       }))
       .sort((a, b) => b.spend - a.spend);
-  }, [agents]);
+  }, [filteredCostData, agents]);
 
   // Efficiency score: 100 - (incidents per 1000 requests * 10) clamped 0-100
   const efficiencyScore = useMemo(() => {
@@ -153,16 +164,17 @@ export default function CostsPage({ costData, setCostData, agents, incidents, on
 
   const modelSpend = useMemo(() => {
     const grouped: Record<string, number> = {};
-    agents.filter(a => a.current_spend > 0).forEach(a => {
-      const m = a.model_name || 'unknown';
-      grouped[m] = (grouped[m] || 0) + (a.current_spend || 0);
+    filteredCostData.filter(d => d.cost > 0).forEach(d => {
+      const raw = d.model || 'unknown';
+      const m = raw.replace(/^[^/]+\//, ''); // strip provider prefix e.g. "openai/"
+      grouped[m] = (grouped[m] || 0) + (d.cost || 0);
     });
     const sorted = Object.entries(grouped).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
     if (sorted.length <= 5) return sorted;
     const top4 = sorted.slice(0, 4);
     const others = sorted.slice(4).reduce((s, i) => s + i.value, 0);
     return [...top4, { name: 'Others', value: others }];
-  }, [agents]);
+  }, [filteredCostData]);
 
   const PIE_COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899'];
 

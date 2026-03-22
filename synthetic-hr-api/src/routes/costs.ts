@@ -394,19 +394,20 @@ router.get('/costs', requirePermission('costs.read'), async (req: Request, res: 
       return res.status(400).json({ success: false, error: 'Organization not found' });
     }
 
-    let days = 30;
+    let days: number | null = 30;
     if (period === '7d') days = 7;
     if (period === '90d') days = 90;
-
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-    const startDateStr = startDate.toISOString().split('T')[0];
+    if (period === 'all') days = null;
 
     logger.info('Fetching cost analytics', { org_id: orgId, period, agent_id });
 
     const costsQuery = new URLSearchParams();
     costsQuery.set('organization_id', eq(orgId));
-    costsQuery.set('date', gte(startDateStr));
+    if (days !== null) {
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      costsQuery.set('date', gte(startDate.toISOString().split('T')[0]));
+    }
     costsQuery.set('order', 'date.asc');
     if (agent_id) costsQuery.set('agent_id', eq(String(agent_id)));
 

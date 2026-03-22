@@ -216,7 +216,7 @@ export const useIncidentMutations = () => {
 // ---------------------------------------------------------------------------
 // Cost analytics
 // ---------------------------------------------------------------------------
-export const useCostData = (period: '7d' | '30d' | '90d' = '30d', options?: { enabled?: boolean }) => {
+export const useCostData = (period: '7d' | '30d' | '90d' | 'all' = '30d', options?: { enabled?: boolean }) => {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.costAnalytics(period),
     enabled: options?.enabled !== false,
