@@ -26,7 +26,7 @@ import gatewayRoutes, { initializeIdempotencyCache } from './routes/gateway';
 import runtimesRoutes from './routes/runtimes';
 import jobsRoutes from './routes/jobs';
 import workItemsRoutes from './routes/work-items';
-import playbooksRoutes from './routes/playbooks';
+import playbooksRoutes, { handleShareToken, handlePublicPlaybookRun } from './routes/playbooks';
 import eventsRoutes from './routes/events';
 import slackWebhookRoutes from './routes/slack';
 import marketplaceRoutes from './routes/marketplace';
@@ -37,6 +37,7 @@ import hubsRoutes from './routes/hubs';
 import { initializeObservability, shutdownObservability, tracingMiddleware } from './lib/observability';
 import { validateEnvironment } from './lib/env-validation';
 import { authenticateToken, authErrorHandler, checkOrgAccess } from './middleware/auth';
+import { validateApiKey } from './middleware/api-key-validation';
 import { metricsMiddleware, getMetricsSnapshot } from './middleware/metrics';
 import { protectMutationsFromCsrf } from './middleware/request-security';
 import { setupSwagger } from './lib/swagger';
@@ -287,6 +288,12 @@ const connectorsEnabled =
 
 // Public auth routes (no authentication required)
 app.use('/auth', authRoutes);
+
+// Public playbook share links (no auth — token-gated)
+app.get('/share/:token', handleShareToken);
+
+// Public playbook API endpoint (API key auth — no user JWT required)
+app.post('/public/playbooks/:slug', validateApiKey, handlePublicPlaybookRun);
 
 // Public API-key gateway routes (OpenAI-compatible)
 app.use('/v1', gatewayRoutes);

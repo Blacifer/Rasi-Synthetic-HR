@@ -10,7 +10,8 @@ export type WebhookEventId =
   | 'reconciliation.alert'
   | 'error.occurred'
   | 'rate_limit.exceeded'
-  | 'model.deprecated';
+  | 'model.deprecated'
+  | 'playbook.completed';
 
 type StoredWebhook = {
   id: string;

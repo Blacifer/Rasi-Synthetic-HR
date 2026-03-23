@@ -36,6 +36,7 @@ const API_KEY = env('SYNTHETICHR_API_KEY', '')!;
 const GATEWAY_URL = env('SYNTHETICHR_GATEWAY_URL', `${CONTROL_PLANE_URL}/v1`)!.replace(/\/+$/, '');
 const POLL_INTERVAL_MS = Math.max(750, Number(env('SYNTHETICHR_POLL_INTERVAL_MS', '2000')));
 const HEARTBEAT_INTERVAL_MS = Math.max(5000, Number(env('SYNTHETICHR_HEARTBEAT_INTERVAL_MS', '15000')));
+const SCHEDULER_INTERVAL_MS = Math.max(30_000, Number(env('SYNTHETICHR_SCHEDULER_INTERVAL_MS', '60000')));
 const DEFAULT_MODEL = env('SYNTHETICHR_MODEL', 'openai/gpt-4o-mini')!;
 const STREAM_MODE = env('SYNTHETICHR_STREAM_MODE', 'poll')!; // poll | stream
 const WEBHOOK_ALLOWLIST = env('SYNTHETICHR_WEBHOOK_ALLOWLIST', '')!;
@@ -256,6 +257,75 @@ function renderTemplate(value: string, context: any): string {
   });
 }
 
+// ─── Workflow step types ───────────────────────────────────────────────────
+
+type LlmStep = {
+  id: string;
+  kind: 'llm';
+  agent_id?: string | null;   // B7: per-step agent override
+  model?: string;
+  temperature?: number;
+  messages?: Array<{ role: string; content: string }>;
+};
+
+type BranchCondition = {
+  test: 'contains' | 'equals' | 'starts_with' | 'ends_with' | 'else' | 'llm';
+  value?: string;             // text to match (case-insensitive)
+  prompt?: string;            // LLM judge: ask this yes/no question about the source text
+  next: string;               // step id to jump to
+};
+
+type BranchStep = {
+  id: string;
+  kind: 'branch';
+  source: string;             // step id whose output to evaluate
+  conditions: BranchCondition[];
+};
+
+type WorkflowStep = LlmStep | BranchStep;
+
+/** Evaluate branch conditions against source text; return matching next-step id. */
+async function evalBranch(conditions: BranchCondition[], text: string, agentId: string): Promise<string | null> {
+  const lower = text.toLowerCase();
+  for (const cond of conditions) {
+    if (cond.test === 'else') return cond.next;
+
+    // Text-match conditions
+    const val = (cond.value || '').toLowerCase();
+    if (cond.test === 'contains'    && lower.includes(val))    return cond.next;
+    if (cond.test === 'equals'      && lower === val)           return cond.next;
+    if (cond.test === 'starts_with' && lower.startsWith(val))  return cond.next;
+    if (cond.test === 'ends_with'   && lower.endsWith(val))    return cond.next;
+
+    // LLM judge condition: ask the LLM a yes/no question about the text
+    if (cond.test === 'llm' && cond.prompt) {
+      try {
+        const resp = await fetch(`${GATEWAY_URL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${API_KEY}`,
+            'x-rasi-agent-id': agentId,
+          },
+          body: JSON.stringify({
+            model: DEFAULT_MODEL,
+            messages: [
+              { role: 'system', content: 'You are a classifier. Answer only "yes" or "no".' },
+              { role: 'user', content: `Text:\n${text}\n\nQuestion: ${cond.prompt}\n\nAnswer yes or no.` },
+            ],
+            temperature: 0,
+            max_tokens: 5,
+          }),
+        });
+        const payload = await resp.json().catch(() => ({}));
+        const answer = (payload?.choices?.[0]?.message?.content || '').trim().toLowerCase();
+        if (answer.startsWith('yes')) return cond.next;
+      } catch { /* non-fatal — skip condition */ }
+    }
+  }
+  return null;
+}
+
 async function runWorkflow(job: JobRow) {
   const input = job.input && typeof job.input === 'object' ? job.input : {};
   const wf = input.workflow && typeof input.workflow === 'object' ? input.workflow : null;
@@ -263,80 +333,113 @@ async function runWorkflow(job: JobRow) {
     throw new Error('Invalid workflow input: expected input.workflow.steps[]');
   }
 
-  const steps = wf.steps as Array<{
-    id: string;
-    kind: string;
-    model?: string;
-    temperature?: number;
-    messages?: any[];
-  }>;
+  // Field values: prefer input.fields (clean separation); fall back to input directly (legacy).
+  const fields: Record<string, any> = (input.fields && typeof input.fields === 'object')
+    ? input.fields
+    : input;
 
+  const steps = wf.steps as WorkflowStep[];
+  const stepById = new Map(steps.map((s) => [s.id, s]));
   const stepResults: Record<string, { message: string; model: string; raw: any }> = {};
 
-  for (const step of steps) {
-    if (!step?.id || typeof step.id !== 'string') {
-      throw new Error('Invalid workflow step: missing id');
+  // Graph traversal: start at first step (or wf.start), follow next pointers.
+  let currentId: string | null = (typeof wf.start === 'string' && wf.start) ? wf.start : steps[0].id;
+  let lastLlmId: string | null = null;
+  const visited = new Set<string>();
+
+  while (currentId) {
+    if (visited.has(currentId)) {
+      await logJob(job.id, `Workflow cycle detected at step=${currentId}, stopping`, 'warn');
+      break;
     }
-    if (step.kind !== 'llm') {
-      throw new Error(`Unsupported workflow step kind: ${String(step.kind)}`);
-    }
+    visited.add(currentId);
 
-    const model = typeof step.model === 'string' ? step.model : (typeof input.model === 'string' ? input.model : DEFAULT_MODEL);
-    const temperature = typeof step.temperature === 'number' ? step.temperature : (typeof input.temperature === 'number' ? input.temperature : 0.2);
-
-    const ctx = {
-      input,
-      steps: Object.fromEntries(Object.entries(stepResults).map(([id, r]) => [id, { message: r.message, model: r.model }])),
-    };
-
-    const rawMessages = Array.isArray(step.messages) ? step.messages : [];
-    const messages = rawMessages.map((m) => {
-      const role = typeof m?.role === 'string' ? m.role : 'user';
-      const contentRaw = typeof m?.content === 'string' ? m.content : '';
-      const content = renderTemplate(contentRaw, ctx);
-      return { role, content };
-    });
-
-    if (messages.length === 0) {
-      throw new Error(`Workflow step ${step.id} has no messages`);
+    const step = stepById.get(currentId);
+    if (!step) {
+      await logJob(job.id, `Step not found: ${currentId}`, 'warn');
+      break;
     }
 
-    await logJob(job.id, `Workflow step=${step.id} model=${model}`, 'info');
-
-    const response = await fetch(`${GATEWAY_URL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${API_KEY}`,
-        'x-rasi-agent-id': job.agent_id || '',
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature,
-        stream: false,
-        agent_id: job.agent_id || undefined,
-      }),
-    });
-
-    const payload = await response.json().catch(() => ({} as any));
-    if (!response.ok) {
-      const msg = payload?.error?.message || payload?.error || `Gateway error ${response.status}`;
-      throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    // ── Branch step (B8) ────────────────────────────────────────────────────
+    if (step.kind === 'branch') {
+      const bs = step as BranchStep;
+      const sourceText = stepResults[bs.source]?.message || '';
+      const nextId = await evalBranch(bs.conditions || [], sourceText, job.agent_id || '');
+      await logJob(job.id, `Branch step=${bs.id} source=${bs.source} → ${nextId || '(no match)'}`, 'info');
+      if (!nextId) break; // no matching condition — stop
+      currentId = nextId;
+      continue;
     }
 
-    const content = payload?.choices?.[0]?.message?.content || '';
-    stepResults[step.id] = { message: content, model: payload?.model || model, raw: payload };
+    // ── LLM step (always, with B7 agent override) ───────────────────────────
+    if (step.kind === 'llm') {
+      const ls = step as LlmStep;
+      const model = typeof ls.model === 'string' ? ls.model : (typeof input.model === 'string' ? input.model : DEFAULT_MODEL);
+      const temperature = typeof ls.temperature === 'number' ? ls.temperature : (typeof input.temperature === 'number' ? input.temperature : 0.2);
+
+      // B7: use step-level agent_id for attribution; fall back to job agent
+      const agentId = ls.agent_id || job.agent_id || '';
+
+      // Template context: {{input.fieldKey}} resolves from fields; {{steps.stepId.message}} from prior results.
+      const ctx = {
+        input: fields,
+        steps: Object.fromEntries(Object.entries(stepResults).map(([id, r]) => [id, { message: r.message, model: r.model }])),
+      };
+
+      const rawMessages = Array.isArray(ls.messages) ? ls.messages : [];
+      const messages = rawMessages.map((m) => {
+        const role = typeof m?.role === 'string' ? m.role : 'user';
+        const contentRaw = typeof m?.content === 'string' ? m.content : '';
+        return { role, content: renderTemplate(contentRaw, ctx) };
+      });
+
+      if (messages.length === 0) {
+        throw new Error(`Workflow step ${ls.id} has no messages`);
+      }
+
+      await logJob(job.id, `Workflow step=${ls.id} model=${model} agent=${agentId}`, 'info');
+
+      const response = await fetch(`${GATEWAY_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${API_KEY}`,
+          'x-rasi-agent-id': agentId,
+        },
+        body: JSON.stringify({ model, messages, temperature, stream: false, agent_id: agentId || undefined }),
+      });
+
+      const payload = await response.json().catch(() => ({} as any));
+      if (!response.ok) {
+        const msg = payload?.error?.message || payload?.error || `Gateway error ${response.status}`;
+        throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+      }
+
+      const content = payload?.choices?.[0]?.message?.content || '';
+      stepResults[ls.id] = { message: content, model: payload?.model || model, raw: payload };
+      lastLlmId = ls.id;
+
+      // Advance: go to explicitly configured next, or next in array order.
+      const idx = steps.indexOf(step);
+      const nextInOrder = idx >= 0 && idx < steps.length - 1 ? steps[idx + 1].id : null;
+      currentId = (ls as any).next || nextInOrder;
+      continue;
+    }
+
+    // Unknown step kind — skip.
+    await logJob(job.id, `Unknown step kind "${(step as any).kind}", skipping`, 'warn');
+    const idx = steps.indexOf(step);
+    currentId = idx >= 0 && idx < steps.length - 1 ? steps[idx + 1].id : null;
   }
 
-  const finalStepId = typeof wf.final_step === 'string' ? wf.final_step : steps[steps.length - 1].id;
-  const final = stepResults[finalStepId] || stepResults[steps[steps.length - 1].id];
+  // Final step: explicitly configured, last executed LLM step, or last LLM step in array.
+  const finalStepId = typeof wf.final_step === 'string'
+    ? wf.final_step
+    : (lastLlmId || steps.filter((s) => s.kind === 'llm').at(-1)?.id || steps[steps.length - 1].id);
+  const final = stepResults[finalStepId] || Object.values(stepResults).at(-1);
 
   return {
-    workflow: {
-      version: wf.version || 1,
-      final_step: finalStepId,
-    },
+    workflow: { version: wf.version || 2, final_step: finalStepId },
     steps: Object.entries(stepResults).map(([id, r]) => ({ id, model: r.model, message: r.message })),
     final: {
       step_id: finalStepId,
@@ -530,6 +633,28 @@ async function executeJob(job: JobRow) {
   await completeJob(job.id, { status: 'failed', error: `Unsupported job type: ${job.type}` });
 }
 
+/**
+ * Calls the control-plane scheduler tick endpoint, which finds all playbook
+ * schedules whose next_run_at has elapsed and creates queued jobs for them.
+ * The runtime then picks those jobs up through the normal poll loop.
+ */
+async function tickSchedules(): Promise<void> {
+  const jwt = signRuntimeJwt();
+  const response = await fetch(`${CONTROL_PLANE_URL}/api/runtimes/schedules/tick`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+    body: JSON.stringify({}),
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`Scheduler tick failed (${response.status}): ${text}`);
+  }
+  const payload = await response.json().catch(() => ({} as any));
+  if (payload?.jobs_created > 0) {
+    console.log(`[scheduler] created ${payload.jobs_created} job(s) from due schedules`);
+  }
+}
+
 async function loopPoll() {
   for (;;) {
     const jobs = await pollJobs();
@@ -560,6 +685,13 @@ async function main() {
   setInterval(() => {
     void heartbeat().catch((err) => console.error(`[runtime] heartbeat error: ${err?.message || String(err)}`));
   }, HEARTBEAT_INTERVAL_MS);
+
+  // Scheduler: fire immediately, then on the configured interval.
+  const runSchedulerTick = () => {
+    void tickSchedules().catch((err) => console.error(`[scheduler] tick error: ${err?.message || String(err)}`));
+  };
+  runSchedulerTick();
+  setInterval(runSchedulerTick, SCHEDULER_INTERVAL_MS);
 
   await heartbeat();
   await loopPoll();

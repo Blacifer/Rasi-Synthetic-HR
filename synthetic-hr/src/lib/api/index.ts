@@ -43,7 +43,12 @@ export type {
   AgentJob,
   AgentJobApproval,
   PlaybookSettingRow,
+  PlaybookSchedule,
+  PlaybookTrigger,
+  CustomPlaybook,
+  PlaybookComment,
   ActionPolicyRow,
+  RoutingRule,
 } from './platform';
 export type { MarketplaceApp, AppBundle } from './marketplace';
 

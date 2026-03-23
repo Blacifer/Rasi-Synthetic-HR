@@ -2,9 +2,11 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { requirePermission } from '../middleware/rbac';
 import { logger } from '../lib/logger';
-import { SupabaseRestError, eq, supabaseRestAsService, supabaseRestAsUser } from '../lib/supabase-rest';
+import { SupabaseRestError, eq, lte, supabaseRestAsService, supabaseRestAsUser } from '../lib/supabase-rest';
 import { encryptSecret, decryptSecret } from '../lib/integrations/encryption';
 import { generateOpaqueToken, hashToken, requireRuntimeAuth, signRuntimeJwt, type RuntimeAuthContext } from '../lib/runtime-auth';
+import { firePlaybookTriggers } from '../lib/trigger-evaluator';
+import { notifyJobCompletedAsync } from '../lib/notification-service';
 import { runtimeSchemas, validateRequestBody } from '../schemas/validation';
 
 const router = Router();
@@ -505,7 +507,34 @@ router.post('/jobs/:id/complete', requireRuntimeAuth(), async (req: Request, res
     })) as any[];
 
     if (!patched?.length) return res.status(404).json({ success: false, error: 'Job not found for this runtime' });
-    return res.json({ success: true, data: patched[0] });
+
+    const completedJob = patched[0];
+
+    // Fire job.completed triggers when a playbook job succeeds.
+    if (data.status === 'succeeded' && completedJob?.playbook_id) {
+      firePlaybookTriggers(ctx.organization_id, 'job.completed', {
+        job_id: completedJob.id,
+        playbook_id: completedJob.playbook_id,
+        agent_id: completedJob.agent_id,
+        output: data.output || {},
+      });
+    }
+
+    // Notify submitter on completion (webhook + Slack DM) for playbook jobs.
+    if ((data.status === 'succeeded' || data.status === 'failed') && completedJob?.playbook_id) {
+      notifyJobCompletedAsync({
+        organizationId: ctx.organization_id,
+        jobId: completedJob.id,
+        playbookId: completedJob.playbook_id,
+        agentId: completedJob.agent_id || null,
+        status: data.status,
+        output: data.output || null,
+        error: data.error || null,
+        createdBy: completedJob.created_by || null,
+      });
+    }
+
+    return res.json({ success: true, data: completedJob });
   } catch (err: any) {
     return safeError(res, err);
   }
@@ -1250,6 +1279,188 @@ router.post('/actions/execute-external', requireRuntimeAuth(), async (req: Reque
       return res.status(422).json({ success: false, error: result.error, action_run: run });
     }
     return res.json({ success: true, data: result.output, action_run: run });
+  } catch (err: any) {
+    return safeError(res, err);
+  }
+});
+
+// =========================
+// Scheduler tick (runtime auth)
+// =========================
+
+/**
+ * Parse a single cron field into the set of matching integers.
+ * Handles: * , - / (standard 5-field cron syntax).
+ */
+function parseCronField(field: string, min: number, max: number): Set<number> {
+  const result = new Set<number>();
+  for (const part of field.split(',')) {
+    if (part === '*') {
+      for (let i = min; i <= max; i++) result.add(i);
+    } else if (part.includes('/')) {
+      const [rangeStr, stepStr] = part.split('/');
+      const step = Math.max(1, parseInt(stepStr, 10));
+      let lo = min;
+      let hi = max;
+      if (rangeStr !== '*') {
+        if (rangeStr.includes('-')) {
+          [lo, hi] = rangeStr.split('-').map(Number);
+        } else {
+          lo = hi = parseInt(rangeStr, 10);
+        }
+      }
+      for (let i = lo; i <= hi; i += step) result.add(i);
+    } else if (part.includes('-')) {
+      const [lo, hi] = part.split('-').map(Number);
+      for (let i = lo; i <= hi; i++) result.add(i);
+    } else {
+      const n = parseInt(part, 10);
+      if (!isNaN(n)) result.add(n);
+    }
+  }
+  return result;
+}
+
+/**
+ * Compute the next UTC datetime after `after` that matches a 5-field cron expression.
+ * Fields: minute hour dom month dow (0-indexed for dow: 0=Sun, 6=Sat).
+ * Returns null if no match found within 1 year.
+ */
+function nextCronRun(cronExpr: string, after: Date): Date | null {
+  const parts = cronExpr.trim().split(/\s+/);
+  if (parts.length !== 5) return null;
+
+  const [mf, hf, domf, monthf, dowf] = parts;
+  const minutes = parseCronField(mf, 0, 59);
+  const hours   = parseCronField(hf, 0, 23);
+  const doms    = parseCronField(domf, 1, 31);
+  const months  = parseCronField(monthf, 1, 12);
+  const dows    = parseCronField(dowf, 0, 6);
+
+  // Start scanning from the next whole minute after `after`.
+  const cursor = new Date(after.getTime());
+  cursor.setUTCSeconds(0, 0);
+  cursor.setUTCMinutes(cursor.getUTCMinutes() + 1);
+
+  const limit = new Date(after.getTime() + 366 * 24 * 60 * 60 * 1000);
+
+  while (cursor < limit) {
+    if (
+      months.has(cursor.getUTCMonth() + 1) &&
+      doms.has(cursor.getUTCDate()) &&
+      dows.has(cursor.getUTCDay()) &&
+      hours.has(cursor.getUTCHours()) &&
+      minutes.has(cursor.getUTCMinutes())
+    ) {
+      return new Date(cursor);
+    }
+    cursor.setUTCMinutes(cursor.getUTCMinutes() + 1);
+  }
+
+  return null;
+}
+
+/**
+ * POST /runtimes/schedules/tick
+ *
+ * Called by the runtime worker on a regular interval (e.g. every 60 s).
+ * Finds all enabled playbook schedules whose next_run_at has passed,
+ * creates a queued agent_job for each, then advances the schedule timestamps.
+ */
+router.post('/schedules/tick', requireRuntimeAuth(), async (req: Request, res: Response) => {
+  try {
+    const ctx = (req as any).runtime as RuntimeAuthContext;
+    const now = new Date();
+    const nowIsoStr = now.toISOString();
+
+    // Find due schedules for this org.
+    const schedQ = new URLSearchParams();
+    schedQ.set('organization_id', eq(ctx.organization_id));
+    schedQ.set('enabled', eq('true'));
+    schedQ.set('next_run_at', lte(nowIsoStr));
+    schedQ.set('order', 'next_run_at.asc');
+    schedQ.set('limit', '20');
+
+    const dueSchedules = (await supabaseRestAsService('playbook_schedules', schedQ)) as Array<{
+      id: string;
+      organization_id: string;
+      playbook_id: string;
+      agent_id: string;
+      input_template: any;
+      cron_expression: string;
+      enabled: boolean;
+      created_by: string | null;
+    }>;
+
+    if (!dueSchedules || dueSchedules.length === 0) {
+      return res.json({ success: true, jobs_created: 0 });
+    }
+
+    const createdJobIds: string[] = [];
+
+    for (const schedule of dueSchedules) {
+      try {
+        // Create the agent job.
+        const jobBody: Record<string, any> = {
+          organization_id: schedule.organization_id,
+          agent_id: schedule.agent_id,
+          runtime_instance_id: ctx.runtime_id,
+          type: 'workflow_run',
+          status: 'queued',
+          input: schedule.input_template && Object.keys(schedule.input_template).length > 0
+            ? schedule.input_template
+            : { workflow: { steps: [], final_step: '' } },
+          playbook_id: schedule.playbook_id || null,
+          created_by: schedule.created_by || null,
+          created_at: nowIsoStr,
+          updated_at: nowIsoStr,
+        };
+
+        const created = (await supabaseRestAsService('agent_jobs', '', {
+          method: 'POST',
+          body: jobBody,
+        })) as any[];
+
+        const job = created?.[0];
+        if (job?.id) {
+          createdJobIds.push(job.id);
+
+          // Also create a pre-approved approval record so audit trail is preserved.
+          await supabaseRestAsService('agent_job_approvals', '', {
+            method: 'POST',
+            body: {
+              organization_id: schedule.organization_id,
+              job_id: job.id,
+              status: 'approved',
+              decided_by: null,
+              decision_note: 'Auto-approved: scheduled run',
+              created_at: nowIsoStr,
+              updated_at: nowIsoStr,
+            },
+          }).catch(() => void 0); // non-fatal
+        }
+
+        // Advance the schedule timestamps.
+        const nextRun = nextCronRun(schedule.cron_expression, now);
+        const schedUpdateQ = new URLSearchParams();
+        schedUpdateQ.set('id', eq(schedule.id));
+        await supabaseRestAsService('playbook_schedules', schedUpdateQ, {
+          method: 'PATCH',
+          body: {
+            last_run_at: nowIsoStr,
+            next_run_at: nextRun ? nextRun.toISOString() : null,
+            updated_at: nowIsoStr,
+          },
+        }).catch((e: any) => {
+          logger.warn(`[schedules/tick] failed to update schedule ${schedule.id}: ${e?.message}`);
+        });
+      } catch (jobErr: any) {
+        // Don't abort the whole tick if one schedule fails.
+        logger.error(`[schedules/tick] failed to create job for schedule ${schedule.id}: ${jobErr?.message}`);
+      }
+    }
+
+    return res.json({ success: true, jobs_created: createdJobIds.length, job_ids: createdJobIds });
   } catch (err: any) {
     return safeError(res, err);
   }

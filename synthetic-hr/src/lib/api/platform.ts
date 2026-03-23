@@ -353,10 +353,13 @@ export const runtimesApi = {
 };
 
 export const jobsApi = {
-  async list(params?: { agent_id?: string; status?: string; limit?: number }): Promise<ApiResponse<AgentJob[]>> {
+  async list(params?: { agent_id?: string; status?: string; type?: string; batch_id?: string; playbook_id?: string; limit?: number }): Promise<ApiResponse<AgentJob[]>> {
     const query = new URLSearchParams();
     if (params?.agent_id) query.set('agent_id', params.agent_id);
     if (params?.status) query.set('status', params.status);
+    if (params?.type) query.set('type', params.type);
+    if (params?.batch_id) query.set('batch_id', params.batch_id);
+    if (params?.playbook_id) query.set('playbook_id', params.playbook_id);
     if (typeof params?.limit === 'number') query.set('limit', String(params.limit));
     const suffix = query.toString() ? `?${query.toString()}` : '';
     return authenticatedFetch(`/jobs${suffix}`, { method: 'GET' });
@@ -366,8 +369,15 @@ export const jobsApi = {
     return authenticatedFetch(`/jobs/${jobId}`, { method: 'GET' });
   },
 
-  async create(payload: { agent_id: string; type: 'chat_turn' | 'workflow_run' | 'connector_action'; input?: any }): Promise<ApiResponse<{ job: AgentJob; approval: AgentJobApproval | null }>> {
+  async create(payload: { agent_id: string; type: 'chat_turn' | 'workflow_run' | 'connector_action'; input?: any; playbook_id?: string; batch_id?: string; parent_job_id?: string }): Promise<ApiResponse<{ job: AgentJob; approval: AgentJobApproval | null }>> {
     return authenticatedFetch('/jobs', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async bulk(payload: { agent_id: string; type: string; playbook_id?: string; rows: any[] }): Promise<ApiResponse<{ batch_id: string; jobs: AgentJob[]; count: number }>> {
+    return authenticatedFetch('/jobs/bulk', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -377,6 +387,31 @@ export const jobsApi = {
     return authenticatedFetch(`/jobs/${jobId}/decision`, {
       method: 'POST',
       body: JSON.stringify({ decision }),
+    });
+  },
+
+  async share(jobId: string, ttlDays = 7): Promise<ApiResponse<{ token: string; expires_at: string; url_path: string }>> {
+    return authenticatedFetch(`/jobs/${jobId}/share`, {
+      method: 'POST',
+      body: JSON.stringify({ ttl_days: ttlDays }),
+    });
+  },
+
+  async feedback(jobId: string, feedback: 1 | -1 | 0): Promise<ApiResponse<{ id: string; feedback: number }>> {
+    return authenticatedFetch(`/jobs/${jobId}/feedback`, {
+      method: 'POST',
+      body: JSON.stringify({ feedback }),
+    });
+  },
+
+  async listComments(jobId: string): Promise<ApiResponse<PlaybookComment[]>> {
+    return authenticatedFetch(`/jobs/${jobId}/comments`, { method: 'GET' });
+  },
+
+  async addComment(jobId: string, content: string): Promise<ApiResponse<PlaybookComment>> {
+    return authenticatedFetch(`/jobs/${jobId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
     });
   },
 };
@@ -421,17 +456,142 @@ export type PlaybookSettingRow = {
   updated_at: string;
 };
 
+export type PlaybookSchedule = {
+  id: string;
+  organization_id: string;
+  playbook_id: string;
+  agent_id: string;
+  input_template: Record<string, any>;
+  cron_expression: string;
+  timezone: string;
+  enabled: boolean;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlaybookTrigger = {
+  id: string;
+  organization_id: string;
+  name: string;
+  playbook_id: string;
+  agent_id: string;
+  event_type: string;
+  event_filter: Record<string, any>;
+  field_mappings: Record<string, string>;
+  enabled: boolean;
+  fire_count: number;
+  last_fired_at: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type CustomPlaybook = {
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  output_description: string | null;
+  field_extractor_prompt: string | null;
+  category: string;
+  icon_name: string | null;
+  fields: Array<{ key: string; label: string; placeholder?: string; kind: 'text' | 'textarea' }>;
+  workflow: any;
+  version: number;
+  version_history: any[];
+  test_cases: any[];
+  api_enabled: boolean;
+  api_slug: string | null;
+  enabled: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlaybookComment = {
+  id: string;
+  job_id: string;
+  user_id: string | null;
+  content: string;
+  created_at: string;
+};
+
 export const playbooksApi = {
   async listSettings(): Promise<ApiResponse<PlaybookSettingRow[]>> {
     return authenticatedFetch('/playbooks/settings', { method: 'GET' });
   },
 
-  async updateSetting(playbookId: string, payload: { enabled?: boolean; overrides?: Record<string, any> }): Promise<ApiResponse<PlaybookSettingRow>> {
+  async updateSetting(playbookId: string, payload: { enabled?: boolean; overrides?: Record<string, any>; api_enabled?: boolean; api_slug?: string | null }): Promise<ApiResponse<PlaybookSettingRow>> {
     return authenticatedFetch(`/playbooks/settings/${encodeURIComponent(playbookId)}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });
   },
+
+  async generateInputs(playbookId: string, payload: { context: string; field_extractor_prompt?: string; fields?: Array<{ key: string }> }): Promise<ApiResponse<{ fields: Record<string, string> }>> {
+    return authenticatedFetch(`/playbooks/${encodeURIComponent(playbookId)}/generate-inputs`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  // Schedules
+  async listSchedules(): Promise<ApiResponse<PlaybookSchedule[]>> {
+    return authenticatedFetch('/playbooks/schedules', { method: 'GET' });
+  },
+  async createSchedule(payload: Omit<PlaybookSchedule, 'id' | 'organization_id' | 'fire_count' | 'last_run_at' | 'next_run_at' | 'created_by' | 'created_at' | 'updated_at'>): Promise<ApiResponse<PlaybookSchedule>> {
+    return authenticatedFetch('/playbooks/schedules', { method: 'POST', body: JSON.stringify(payload) });
+  },
+  async updateSchedule(id: string, payload: Partial<PlaybookSchedule>): Promise<ApiResponse<PlaybookSchedule>> {
+    return authenticatedFetch(`/playbooks/schedules/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+  },
+  async deleteSchedule(id: string): Promise<ApiResponse<void>> {
+    return authenticatedFetch(`/playbooks/schedules/${id}`, { method: 'DELETE' });
+  },
+
+  // Triggers
+  async listTriggers(): Promise<ApiResponse<PlaybookTrigger[]>> {
+    return authenticatedFetch('/playbooks/triggers', { method: 'GET' });
+  },
+  async createTrigger(payload: Pick<PlaybookTrigger, 'name' | 'playbook_id' | 'agent_id' | 'event_type' | 'event_filter' | 'field_mappings' | 'enabled'>): Promise<ApiResponse<PlaybookTrigger>> {
+    return authenticatedFetch('/playbooks/triggers', { method: 'POST', body: JSON.stringify(payload) });
+  },
+  async updateTrigger(id: string, payload: Partial<PlaybookTrigger>): Promise<ApiResponse<PlaybookTrigger>> {
+    return authenticatedFetch(`/playbooks/triggers/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+  },
+  async deleteTrigger(id: string): Promise<ApiResponse<void>> {
+    return authenticatedFetch(`/playbooks/triggers/${id}`, { method: 'DELETE' });
+  },
+
+  // Custom playbooks
+  async listCustom(): Promise<ApiResponse<CustomPlaybook[]>> {
+    return authenticatedFetch('/playbooks/custom', { method: 'GET' });
+  },
+  async createCustom(payload: Partial<CustomPlaybook>): Promise<ApiResponse<CustomPlaybook>> {
+    return authenticatedFetch('/playbooks/custom', { method: 'POST', body: JSON.stringify(payload) });
+  },
+  async updateCustom(id: string, payload: Partial<CustomPlaybook>): Promise<ApiResponse<CustomPlaybook>> {
+    return authenticatedFetch(`/playbooks/custom/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+  },
+  async deleteCustom(id: string): Promise<ApiResponse<void>> {
+    return authenticatedFetch(`/playbooks/custom/${id}`, { method: 'DELETE' });
+  },
+
+  async getAnalytics(days = 30): Promise<ApiResponse<{
+    totals: { runs: number; succeeded: number; cost_usd: number; days: number };
+    by_playbook: Array<{ playbook_id: string; runs: number; succeeded: number; failed: number; thumbsUp: number; thumbsDown: number; totalCostUsd: number; avg_cost_usd: number; success_rate: number }>;
+    daily_series: Array<{ date: string; runs: number }>;
+  }>> {
+    return authenticatedFetch(`/playbooks/analytics?days=${days}`, { method: 'GET' });
+  },
+};
+
+export type RoutingRule = {
+  condition?: string | null;
+  required_role: 'viewer' | 'manager' | 'admin' | 'super_admin';
+  required_user_id?: string | null;
 };
 
 export type ActionPolicyRow = {
@@ -443,6 +603,7 @@ export type ActionPolicyRow = {
   require_approval: boolean;
   required_role: 'viewer' | 'manager' | 'admin' | 'super_admin';
   webhook_allowlist: string[];
+  routing_rules: RoutingRule[];
   notes?: string | null;
   updated_by: string | null;
   updated_at: string;
@@ -465,6 +626,7 @@ export const actionPoliciesApi = {
     require_approval?: boolean;
     required_role?: 'viewer' | 'manager' | 'admin' | 'super_admin';
     webhook_allowlist?: string[];
+    routing_rules?: RoutingRule[];
     notes?: string;
   }): Promise<ApiResponse<ActionPolicyRow>> {
     return authenticatedFetch('/action-policies', {

@@ -1,11 +1,12 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { requirePermission } from '../middleware/rbac';
-import { eq, supabaseRestAsUser } from '../lib/supabase-rest';
+import { eq, supabaseRestAsUser, supabaseRestAsService } from '../lib/supabase-rest'; // supabaseRestAsService used for routing rule policy lookup
 import { logger } from '../lib/logger';
 import { auditLog } from '../lib/audit-logger';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
 import { errorResponse, getOrgId, getUserJwt, safeLimit } from '../lib/route-helpers';
+import { notifyApprovalAssignedAsync } from '../lib/notification-service';
 
 const router = Router();
 
@@ -18,6 +19,68 @@ const ROLE_ORDER: Record<string, number> = {
 
 function canReview(userRole: string, requiredRole: string): boolean {
   return (ROLE_ORDER[userRole] ?? -1) >= (ROLE_ORDER[requiredRole] ?? 999);
+}
+
+// ─── Routing rule helpers ──────────────────────────────────────────────────
+
+type RoutingRule = {
+  condition?: string | null;
+  required_role: string;
+  required_user_id?: string | null;
+};
+
+/**
+ * Evaluate a simple condition string against action_payload.
+ * Supported formats:
+ *   amount > 5000
+ *   status == pending
+ *   description contains urgent
+ *   (null/empty → always matches)
+ */
+function evaluateCondition(condition: string | null | undefined, payload: Record<string, any>): boolean {
+  if (!condition) return true;
+  const trimmed = condition.trim();
+  if (!trimmed) return true;
+
+  // Parse: <field> <operator> <value>
+  const match = trimmed.match(/^(\w[\w.]*)\s*(>=|<=|===|!==|==|!=|>|<|contains)\s*(.+)$/);
+  if (!match) return true; // Unknown format → allow (fail open)
+
+  const [, fieldPath, operator, rawValue] = match;
+
+  // Resolve field (supports dot notation one level deep)
+  const fieldValue = fieldPath.split('.').reduce((obj: any, key: string) => obj?.[key], payload);
+  const strValue = rawValue.trim().replace(/^['"]|['"]$/g, ''); // strip quotes
+  const numValue = parseFloat(strValue);
+
+  switch (operator) {
+    case '>':   return parseFloat(String(fieldValue)) > numValue;
+    case '<':   return parseFloat(String(fieldValue)) < numValue;
+    case '>=':  return parseFloat(String(fieldValue)) >= numValue;
+    case '<=':  return parseFloat(String(fieldValue)) <= numValue;
+    case '===':
+    case '==':  return String(fieldValue).toLowerCase() === strValue.toLowerCase();
+    case '!==':
+    case '!=':  return String(fieldValue).toLowerCase() !== strValue.toLowerCase();
+    case 'contains': return String(fieldValue ?? '').toLowerCase().includes(strValue.toLowerCase());
+    default:    return true;
+  }
+}
+
+function applyRoutingRules(
+  rules: RoutingRule[],
+  payload: Record<string, any>,
+  defaultRole: string,
+): { required_role: string; assigned_to: string | null } {
+  for (const rule of rules) {
+    if (evaluateCondition(rule.condition, payload)) {
+      return {
+        required_role: rule.required_role || defaultRole,
+        assigned_to: rule.required_user_id || null,
+      };
+    }
+  }
+  return { required_role: defaultRole, assigned_to: null };
 }
 
 const listSchema = z.object({
@@ -38,6 +101,8 @@ const createSchema = z.object({
   requested_by: z.string().max(255).optional().default('agent'),
   required_role: z.enum(['viewer', 'manager', 'admin', 'super_admin']).optional().default('manager'),
   expires_in_hours: z.number().min(1).max(168).optional().default(24),
+  // Optionally override assigned approver (routing rules auto-set this)
+  assigned_to: z.string().uuid().optional().nullable(),
 });
 
 const reviewSchema = z.object({
@@ -82,8 +147,35 @@ router.post('/', requirePermission('policies.manage'), async (req: Request, res:
     const {
       agent_id, conversation_id, action_policy_id,
       service, action, action_payload, requested_by,
-      required_role, expires_in_hours,
+      required_role: baseRole, expires_in_hours,
     } = parsed.data;
+
+    // Apply routing rules from the linked action policy (if any).
+    let effectiveRole = baseRole;
+    let assignedTo: string | null = parsed.data.assigned_to || null;
+
+    if (action_policy_id) {
+      try {
+        const policyQ = new URLSearchParams();
+        policyQ.set('id', eq(action_policy_id));
+        policyQ.set('organization_id', eq(orgId));
+        policyQ.set('select', 'required_role,routing_rules');
+        policyQ.set('limit', '1');
+        const policies = (await supabaseRestAsService('action_policies', policyQ)) as Array<{ required_role: string; routing_rules: RoutingRule[] }>;
+        const policy = policies?.[0];
+        if (policy) {
+          const resolved = applyRoutingRules(
+            policy.routing_rules || [],
+            (action_payload as Record<string, any>) || {},
+            policy.required_role || baseRole,
+          );
+          effectiveRole = resolved.required_role as typeof baseRole;
+          if (!assignedTo) assignedTo = resolved.assigned_to;
+        }
+      } catch (err: any) {
+        logger.warn('[approvals] Failed to evaluate routing rules', { action_policy_id, error: err?.message });
+      }
+    }
 
     const expiresAt = new Date(Date.now() + expires_in_hours * 3600 * 1000).toISOString();
     const now = new Date().toISOString();
@@ -100,7 +192,8 @@ router.post('/', requirePermission('policies.manage'), async (req: Request, res:
         action_payload: action_payload || {},
         requested_by,
         status: 'pending',
-        required_role,
+        required_role: effectiveRole,
+        ...(assignedTo ? { assigned_to: assignedTo } : {}),
         expires_at: expiresAt,
         created_at: now,
         updated_at: now,
@@ -110,7 +203,7 @@ router.post('/', requirePermission('policies.manage'), async (req: Request, res:
     const row = created?.[0];
     if (!row) return res.status(500).json({ success: false, error: 'Failed to create approval request' });
 
-    logger.info('Approval request created', { approval_id: row.id, service, action, org_id: orgId });
+    logger.info('Approval request created', { approval_id: row.id, service, action, org_id: orgId, assigned_to: assignedTo });
 
     auditLog.log({
       user_id: userId || 'system',
@@ -120,8 +213,13 @@ router.post('/', requirePermission('policies.manage'), async (req: Request, res:
       organization_id: orgId,
       ip_address: req.ip || (req.socket as any)?.remoteAddress,
       user_agent: req.get('user-agent') || undefined,
-      metadata: { service, action, requested_by, required_role },
+      metadata: { service, action, requested_by, required_role: effectiveRole, assigned_to: assignedTo },
     });
+
+    // Notify assigned approver via Slack if routing rules specified one.
+    if (assignedTo) {
+      notifyApprovalAssignedAsync({ organizationId: orgId, assignedToUserId: assignedTo, service, action, referenceId: row.id });
+    }
 
     fireAndForgetWebhookEvent(orgId, 'approval.requested' as any, {
       id: `evt_approval_${row.id}`,
@@ -134,7 +232,8 @@ router.post('/', requirePermission('policies.manage'), async (req: Request, res:
         service,
         action,
         requested_by,
-        required_role,
+        required_role: effectiveRole,
+        assigned_to: assignedTo,
         expires_at: expiresAt,
       },
     });
@@ -168,6 +267,9 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
 
     if (!row) return res.status(404).json({ success: false, error: 'Approval request not found' });
     if (row.status !== 'pending') return res.status(409).json({ success: false, error: `Cannot approve a request with status "${row.status}"` });
+    if (row.assigned_to && row.assigned_to !== userId) {
+      return res.status(403).json({ success: false, error: 'This approval is assigned to a specific reviewer — only they can approve it' });
+    }
     if (new Date(row.expires_at) < new Date()) {
       const expQ = new URLSearchParams();
       expQ.set('id', eq(id));
@@ -253,6 +355,9 @@ router.post('/:id/deny', requirePermission('policies.manage'), async (req: Reque
 
     if (!row) return res.status(404).json({ success: false, error: 'Approval request not found' });
     if (row.status !== 'pending') return res.status(409).json({ success: false, error: `Cannot deny a request with status "${row.status}"` });
+    if (row.assigned_to && row.assigned_to !== userId) {
+      return res.status(403).json({ success: false, error: 'This approval is assigned to a specific reviewer — only they can deny it' });
+    }
     if (!canReview(userRole, row.required_role)) {
       return res.status(403).json({ success: false, error: `Denying this request requires role "${row.required_role}" or higher` });
     }

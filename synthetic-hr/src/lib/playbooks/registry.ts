@@ -42,6 +42,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'hr',
     title: 'Job Description Generator',
     description: 'Create a structured JD with responsibilities, must-haves, nice-to-haves, and interview signals.',
+    outputDescription: 'A reviewed, bias-checked job description covering summary, responsibilities, must-have skills, nice-to-haves, interview signals, compensation note, and EEO line.',
+    fieldExtractorPrompt: 'Extract job description details from the text below. Return a JSON object with these keys: role_title (job title), level (seniority like L4/Senior), location (city or remote), must_have (comma-separated must-have skills), nice_to_have (comma-separated nice-to-have skills), context (team/product/domain context). If a field is not mentioned, return an empty string for it.',
     icon: FileText,
     recommendedAgentType: 'hr',
     fields: [
@@ -99,6 +101,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'hr',
     title: 'Resume Screening Summary',
     description: 'Summarize a resume against a JD and produce a decision-ready shortlist note.',
+    outputDescription: 'A shortlist note with fit score (0-10), top strengths, gaps/risks, interview focus areas, and a Shortlist/Hold/Reject recommendation with rationale.',
+    fieldExtractorPrompt: 'Extract the job description and resume from the text below. Return a JSON object with: job_description (the full job description text) and resume_text (the full resume text). If only one is provided, set the other to empty string.',
     icon: UserCheck,
     recommendedAgentType: 'hr',
     fields: [
@@ -129,6 +133,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'hr',
     title: 'Interview Kit Builder',
     description: 'Generate interview questions and a scorecard aligned to the role.',
+    outputDescription: '12 competency-based interview questions plus a 0-4 scoring rubric scorecard ready to use in interviews.',
+    fieldExtractorPrompt: 'Extract the role title and job description from the text below. Return a JSON object with: role_title (job title) and job_description (the full JD text). If not present, return empty strings.',
     icon: Users,
     recommendedAgentType: 'hr',
     fields: [
@@ -174,6 +180,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'support',
     title: 'Ticket Triage + Priority',
     description: 'Classify a ticket, assign priority, and suggest next action and routing.',
+    outputDescription: 'A triage result with category, severity, priority, customer impact, routing team, tags, clarifying questions to ask, and suggested next steps.',
+    fieldExtractorPrompt: 'Extract the support ticket text and product context from the text below. Return a JSON object with: ticket_text (the customer message/ticket content) and product_context (any product, SLA, or team context mentioned). If not present, return empty strings.',
     icon: Ticket,
     recommendedAgentType: 'support',
     fields: [
@@ -211,6 +219,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'support',
     title: 'First Response Draft',
     description: 'Draft a helpful first reply plus clarifying questions and SLA-safe phrasing.',
+    outputDescription: 'An email-ready first reply, a list of clarifying questions to ask the customer, and internal notes for the support team.',
+    fieldExtractorPrompt: 'Extract the customer support ticket and tone preference from the text below. Return a JSON object with: ticket_text (the customer message) and tone (tone preference like friendly/formal/concise, or empty string if not specified).',
     icon: MessageSquareText,
     recommendedAgentType: 'support',
     fields: [
@@ -238,6 +248,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'support',
     title: 'Escalation Summary (L2/Engineering)',
     description: 'Summarize issue, reproduction, suspected component, and data needed for escalation.',
+    outputDescription: 'An escalation brief covering impact, reproduction steps, expected vs actual, environment, logs needed, suspected component, and next debugging steps.',
+    fieldExtractorPrompt: 'Extract the ticket/issue text and observations from the text below. Return a JSON object with: ticket_text (the customer description and support notes) and observations (what was tried, logs, environment details).',
     icon: Bug,
     recommendedAgentType: 'support',
     fields: [
@@ -275,6 +287,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'support',
     title: 'Knowledge Base Article Draft',
     description: 'Turn a resolved issue into a customer-ready KB article and internal runbook snippet.',
+    outputDescription: 'A help center article with summary, symptoms, cause, resolution steps, prevention tips, FAQ, and internal runbook notes.',
+    fieldExtractorPrompt: 'Extract the issue description and resolution from the text below. Return a JSON object with: issue (description of what went wrong) and resolution (what fixed it). If not clear, return empty strings.',
     icon: BookOpen,
     recommendedAgentType: 'support',
     fields: [
@@ -316,6 +330,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'sales',
     title: 'Lead Qualification (ICP Fit)',
     description: 'Score a lead against ICP and suggest next step and discovery questions.',
+    outputDescription: 'An ICP fit score (0-10), fit rationale, risks, a clear next step recommendation, and 8 tailored discovery questions.',
+    fieldExtractorPrompt: 'Extract lead details and ICP definition from the text below. Return a JSON object with: lead_details (company, role, use-case, signals) and icp (ideal customer profile description). If not present, return empty strings.',
     icon: Target,
     recommendedAgentType: 'sales',
     fields: [
@@ -353,6 +369,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'sales',
     title: 'Outreach Sequence (3 emails)',
     description: 'Draft a 3-touch email sequence with personalization slots and subject lines.',
+    outputDescription: 'Three cold emails (subject line + body + personalization slots) spaced for a multi-touch outreach sequence.',
+    fieldExtractorPrompt: 'Extract lead details, value proposition, and tone from the text below. Return a JSON object with: lead_details (company, person, role, context), value_prop (what you sell and why it matters), and tone (e.g. consultative, direct). Empty string for anything not mentioned.',
     icon: Mail,
     recommendedAgentType: 'sales',
     fields: [
@@ -391,6 +409,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'sales',
     title: 'Call Notes → CRM Fields',
     description: 'Turn meeting notes into structured CRM fields and next steps.',
+    outputDescription: 'CRM-ready fields: summary, pain, current solution, stakeholders, budget, timeline, next steps, and risks — ready to paste into your CRM.',
+    fieldExtractorPrompt: 'Extract meeting/call notes and any CRM field preferences from the text below. Return a JSON object with: notes (the full meeting notes) and crm_fields (any specific fields mentioned like budget, timeline, stakeholders — or empty string). Return empty string for anything not mentioned.',
     icon: PhoneCall,
     recommendedAgentType: 'sales',
     fields: [
@@ -428,6 +448,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'sales',
     title: 'Discount/Exception Memo (Approval)',
     description: 'Generate a discount justification memo for approval workflows.',
+    outputDescription: 'A concise approval memo covering the ask, business justification, risks, alternatives considered, guardrails, and a recommendation.',
+    fieldExtractorPrompt: 'Extract deal context and the exception request from the text below. Return a JSON object with: deal_context (deal size, stage, competition, risk) and request (discount percentage, terms, or special asks). Empty string for anything not mentioned.',
     icon: HandCoins,
     recommendedAgentType: 'sales',
     fields: [
@@ -459,6 +481,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'it',
     title: 'Access Request Evaluator',
     description: 'Recommend least-privilege access, approvals needed, and risks.',
+    outputDescription: 'A governance recommendation with proposed access level, time-bound duration, required approvals, risk flags, and audit notes.',
+    fieldExtractorPrompt: 'Extract the access request details and policy constraints from the text below. Return a JSON object with: request (who needs access, what system, why, for how long) and policy (access policy, compliance requirements). Empty string for anything not mentioned.',
     icon: KeyRound,
     recommendedAgentType: 'it',
     fields: [
@@ -496,6 +520,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'it',
     title: 'Onboarding Checklist (IT)',
     description: 'Generate a role-based IT onboarding checklist with owners.',
+    outputDescription: 'A Day 0/Day 1/Week 1 IT onboarding checklist with each task, its owner (IT/Manager/Security), and dependencies.',
+    fieldExtractorPrompt: 'Extract the employee role and access needs from the text below. Return a JSON object with: role (employee job title) and access_needs (systems and tools they need access to). Empty string for anything not mentioned.',
     icon: UserPlus,
     recommendedAgentType: 'it',
     fields: [
@@ -523,6 +549,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'it',
     title: 'Offboarding Checklist (IT)',
     description: 'Generate a safe offboarding checklist including access removal and data handover.',
+    outputDescription: 'A security-first offboarding plan covering access removal, device collection, data transfer, shared accounts, monitoring, and a confirmation checklist.',
+    fieldExtractorPrompt: 'Extract employee context and last working day from the text below. Return a JSON object with: employee_context (role, systems, repos, devices they have access to) and last_day (last working day date in YYYY-MM-DD format or empty string).',
     icon: UserMinus,
     recommendedAgentType: 'it',
     fields: [
@@ -560,6 +588,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'it',
     title: 'Incident Timeline Summary',
     description: 'Summarize an incident into an executive-ready timeline + follow-ups.',
+    outputDescription: 'A postmortem-lite summary with incident overview, impact, timeline with timestamps, root cause, fix applied, and follow-up action items with owners.',
+    fieldExtractorPrompt: 'Extract raw incident notes and impact information from the text below. Return a JSON object with: raw_notes (timeline notes, messages, log excerpts) and impact (users affected, downtime duration, scope — or empty string if not mentioned).',
     icon: Siren,
     recommendedAgentType: 'it',
     fields: [
@@ -599,6 +629,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'it',
     title: 'Create Access Ticket (Connector Action)',
     description: 'Creates an access request ticket in your internal tools (requires connector implementation).',
+    outputDescription: 'Creates an IT access request record in your internal systems. Requires approval before execution.',
+    fieldExtractorPrompt: 'Extract the access request details from the text below. Return a JSON object with: request (who needs access, what system, why, how long). Empty string if not mentioned.',
     icon: ClipboardList,
     recommendedAgentType: 'it',
     fields: [
@@ -624,6 +656,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'support',
     title: 'Create Support Ticket (Connector Action)',
     description: 'Creates a support ticket inside the app from a customer message (requires approval).',
+    outputDescription: 'Creates a support ticket record in the system. Requires approval before the ticket is actually created.',
+    fieldExtractorPrompt: 'Extract support ticket details from the text below. Return a JSON object with: title (short ticket title), ticket_text (customer message), priority (low/medium/high/urgent or empty), customer_email (email if mentioned or empty).',
     icon: LifeBuoy,
     recommendedAgentType: 'support',
     fields: [
@@ -654,6 +688,8 @@ export const PLAYBOOKS: Playbook[] = [
     pack: 'sales',
     title: 'Create Sales Lead (Connector Action)',
     description: 'Creates a lead inside the app CRM-lite (requires approval).',
+    outputDescription: 'Creates a sales lead record in the CRM. Requires approval before the lead is actually created.',
+    fieldExtractorPrompt: 'Extract lead information from the text below. Return a JSON object with: company_name (company name), contact_name (person name or empty), contact_email (email or empty), notes (context, source, needs or empty).',
     icon: ShieldCheck,
     recommendedAgentType: 'sales',
     fields: [

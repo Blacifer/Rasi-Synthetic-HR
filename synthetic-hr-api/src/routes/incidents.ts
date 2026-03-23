@@ -6,6 +6,7 @@ import { logger } from '../lib/logger';
 import { validateRequestBody, incidentSchemas } from '../schemas/validation';
 import { auditLog } from '../lib/audit-logger';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
+import { firePlaybookTriggers } from '../lib/trigger-evaluator';
 import { incidentDetection } from '../services/incident-detection';
 import { errorResponse, getOrgId, getUserJwt, safeLimit } from '../lib/route-helpers';
 
@@ -136,6 +137,17 @@ router.post('/incidents', requirePermission('incidents.create'), async (req: Req
         title,
         description,
       },
+    });
+
+    // Evaluate playbook triggers for incident.created event.
+    firePlaybookTriggers(orgId, 'incident.created', {
+      incident_id: data?.[0]?.id,
+      agent_id,
+      conversation_id,
+      severity: severity || 'medium',
+      incident_type,
+      title,
+      description,
     });
 
     res.status(201).json({ success: true, data });

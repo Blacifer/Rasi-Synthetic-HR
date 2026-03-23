@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Shield, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { api, type ActionPolicyRow } from '../../lib/api-client';
+import { Shield, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { api, type ActionPolicyRow, type RoutingRule } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 
 type Editor = {
@@ -10,8 +10,11 @@ type Editor = {
   require_approval: boolean;
   required_role: 'viewer' | 'manager' | 'admin' | 'super_admin';
   webhook_allowlist_text: string;
+  routing_rules: RoutingRule[];
   notes: string;
 };
+
+const EMPTY_RULE: RoutingRule = { condition: '', required_role: 'manager', required_user_id: null };
 
 const DEFAULT_ACTIONS: Array<{ service: string; action: string; hint: string }> = [
   { service: 'internal', action: 'support.ticket.create', hint: 'Create support ticket' },
@@ -47,6 +50,7 @@ export default function ActionPoliciesPage() {
     require_approval: true,
     required_role: 'manager',
     webhook_allowlist_text: '',
+    routing_rules: [],
     notes: '',
   });
 
@@ -80,6 +84,7 @@ export default function ActionPoliciesPage() {
       require_approval: Boolean(selected.require_approval),
       required_role: selected.required_role || 'manager',
       webhook_allowlist_text: allowlistToText(selected.webhook_allowlist),
+      routing_rules: Array.isArray(selected.routing_rules) ? selected.routing_rules : [],
       notes: selected.notes || '',
     });
   }, [selected]);
@@ -94,6 +99,7 @@ export default function ActionPoliciesPage() {
         require_approval: editor.require_approval,
         required_role: editor.required_role,
         webhook_allowlist: editor.service === 'webhook' ? textToAllowlist(editor.webhook_allowlist_text) : [],
+        routing_rules: editor.routing_rules.filter((r) => r.required_role),
         notes: editor.notes.trim() || undefined,
       };
       const res = await api.actionPolicies.upsert(payload);
@@ -131,6 +137,7 @@ export default function ActionPoliciesPage() {
       service,
       action,
       webhook_allowlist_text: service === 'webhook' ? prev.webhook_allowlist_text : '',
+      routing_rules: [],
     }));
   };
 
@@ -168,6 +175,7 @@ export default function ActionPoliciesPage() {
                   require_approval: true,
                   required_role: 'manager',
                   webhook_allowlist_text: '',
+                  routing_rules: [],
                   notes: '',
                 });
               }}
@@ -319,6 +327,85 @@ export default function ActionPoliciesPage() {
                 placeholder="Why this policy exists, expected usage, owners…"
               />
             </div>
+
+            {editor.require_approval ? (
+              <div className="md:col-span-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs text-slate-400">Routing Rules</label>
+                    <p className="text-xs text-slate-500 mt-0.5">Override required_role (and optionally assign a specific approver) based on action payload conditions. Rules are evaluated top-to-bottom; first match wins.</p>
+                  </div>
+                  <button
+                    onClick={() => setEditor((p) => ({ ...p, routing_rules: [...p.routing_rules, { ...EMPTY_RULE }] }))}
+                    className="px-2 py-1 rounded-md bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700 text-xs text-slate-300 inline-flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" /> Add Rule
+                  </button>
+                </div>
+
+                {editor.routing_rules.length === 0 ? (
+                  <div className="text-xs text-slate-500 italic">No routing rules — default role applies to all approvals.</div>
+                ) : editor.routing_rules.map((rule, i) => (
+                  <div key={i} className="flex flex-col gap-2 p-3 bg-slate-900/40 border border-slate-700/60 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500 w-5 shrink-0">#{i + 1}</span>
+                      <input
+                        value={rule.condition || ''}
+                        onChange={(e) => setEditor((p) => ({
+                          ...p,
+                          routing_rules: p.routing_rules.map((r, j) => j === i ? { ...r, condition: e.target.value } : r),
+                        }))}
+                        className="flex-1 bg-slate-900/50 border border-slate-700 rounded px-2 py-1.5 text-slate-200 text-xs font-mono"
+                        placeholder='Condition, e.g. amount > 5000 (leave empty to always match)'
+                      />
+                      <button
+                        onClick={() => setEditor((p) => ({ ...p, routing_rules: p.routing_rules.filter((_, j) => j !== i) }))}
+                        className="p-1 text-slate-500 hover:text-red-400 rounded"
+                        title="Remove rule"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="flex gap-2 pl-7">
+                      <div className="flex-1">
+                        <label className="text-xs text-slate-500">Required Role</label>
+                        <select
+                          value={rule.required_role}
+                          onChange={(e) => setEditor((p) => ({
+                            ...p,
+                            routing_rules: p.routing_rules.map((r, j) => j === i ? { ...r, required_role: e.target.value as RoutingRule['required_role'] } : r),
+                          }))}
+                          className="mt-0.5 w-full bg-slate-900/50 border border-slate-700 rounded px-2 py-1.5 text-slate-200 text-xs"
+                        >
+                          <option value="viewer">viewer</option>
+                          <option value="manager">manager</option>
+                          <option value="admin">admin</option>
+                          <option value="super_admin">super_admin</option>
+                        </select>
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-xs text-slate-500">Assign to User ID <span className="text-slate-600">(optional UUID)</span></label>
+                        <input
+                          value={rule.required_user_id || ''}
+                          onChange={(e) => setEditor((p) => ({
+                            ...p,
+                            routing_rules: p.routing_rules.map((r, j) => j === i ? { ...r, required_user_id: e.target.value || null } : r),
+                          }))}
+                          className="mt-0.5 w-full bg-slate-900/50 border border-slate-700 rounded px-2 py-1.5 text-slate-200 text-xs font-mono"
+                          placeholder="Paste user UUID from Team settings…"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {editor.routing_rules.length > 0 ? (
+                  <p className="text-xs text-slate-500">
+                    Condition format: <code className="text-slate-400">field {'>'} value</code>, <code className="text-slate-400">field == value</code>, <code className="text-slate-400">field contains text</code>. Fields reference <code className="text-slate-400">action_payload</code>.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="flex justify-end">

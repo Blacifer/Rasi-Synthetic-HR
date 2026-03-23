@@ -32,6 +32,12 @@ const listSchema = z.object({
   limit: z.coerce.number().min(1).max(200).optional(),
 });
 
+const routingRuleSchema = z.object({
+  condition: z.string().max(500).nullable().optional(),
+  required_role: z.enum(['viewer', 'manager', 'admin', 'super_admin']),
+  required_user_id: z.string().uuid().nullable().optional(),
+});
+
 const upsertSchema = z.object({
   service: z.string().min(1).max(50),
   action: z.string().min(1).max(200),
@@ -39,6 +45,7 @@ const upsertSchema = z.object({
   require_approval: z.boolean().optional(),
   required_role: z.enum(['viewer', 'manager', 'admin', 'super_admin']).optional(),
   webhook_allowlist: z.array(z.string()).optional(),
+  routing_rules: z.array(routingRuleSchema).max(20).optional(),
   notes: z.string().max(5000).optional(),
 });
 
@@ -89,6 +96,7 @@ router.put('/', requirePermission('policies.manage'), async (req: Request, res: 
       ...(parsed.data.required_role ? { required_role: parsed.data.required_role } : {}),
       ...(parsed.data.webhook_allowlist ? { webhook_allowlist: parsed.data.webhook_allowlist } : {}),
       ...(typeof parsed.data.notes === 'string' ? { notes: parsed.data.notes } : {}),
+      ...(parsed.data.routing_rules !== undefined ? { routing_rules: parsed.data.routing_rules } : {}),
       updated_by: userId,
       updated_at: now,
     };
@@ -129,6 +137,7 @@ router.put('/', requirePermission('policies.manage'), async (req: Request, res: 
         required_role: parsed.data.required_role || 'manager',
         webhook_allowlist: parsed.data.webhook_allowlist || [],
         notes: typeof parsed.data.notes === 'string' ? parsed.data.notes : null,
+        routing_rules: parsed.data.routing_rules || [],
         updated_by: userId,
         updated_at: now,
       },

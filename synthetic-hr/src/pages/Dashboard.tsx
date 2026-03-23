@@ -5,7 +5,7 @@ import {
   Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
   DollarSign, Database, Key, Settings, X, Play, Link2,
   TrendingUp, Sparkles, ChevronLeft, MessageSquare, AlertTriangle, PlugZap, Bot, Briefcase,
-  Headset, Building2, Wrench, HandCoins, Gavel, Fingerprint, CheckSquare,
+  Headset, Building2, Wrench, HandCoins, Gavel, Fingerprint, CheckSquare, ClipboardList,
 } from 'lucide-react';
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
 import { useApp } from '../context/AppContext';
@@ -1025,6 +1025,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
             {[
               { id: 'developer', icon: PlugZap, label: 'Developer' },
               { id: 'playbooks', icon: FileText, label: 'Playbooks' },
+              { id: 'jobs', icon: ClipboardList, label: 'Run History' },
               { id: 'blackbox', icon: Database, label: 'Black Box' },
             ].map((item) => (
               <button
