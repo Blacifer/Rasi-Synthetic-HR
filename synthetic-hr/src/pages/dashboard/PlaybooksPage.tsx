@@ -59,7 +59,7 @@ function renderMarkdown(text: string): JSX.Element {
         items.push(<li key={i} className="ml-4 text-slate-200">{renderInline(lines[i].slice(2))}</li>);
         i++;
       }
-      elements.push(<ul key={`ul-${i}`} className="list-disc list-inside space-y-0.5 my-2">{items}</ul>);
+      elements.push(<ul key={`ul-${i}`} className="list-disc list-inside space-y-1 my-3 text-slate-200">{items}</ul>);
       continue;
     } else if (/^\d+\.\s/.test(line)) {
       const items: JSX.Element[] = [];
@@ -67,7 +67,7 @@ function renderMarkdown(text: string): JSX.Element {
         items.push(<li key={i} className="ml-4 text-slate-200">{renderInline(lines[i].replace(/^\d+\.\s/, ''))}</li>);
         i++;
       }
-      elements.push(<ol key={`ol-${i}`} className="list-decimal list-inside space-y-0.5 my-2">{items}</ol>);
+      elements.push(<ol key={`ol-${i}`} className="list-decimal list-inside space-y-1 my-3 text-slate-200">{items}</ol>);
       continue;
     } else if (line.startsWith('```')) {
       i++;
@@ -77,19 +77,19 @@ function renderMarkdown(text: string): JSX.Element {
         i++;
       }
       elements.push(
-        <pre key={i} className="bg-slate-900/60 border border-slate-700 rounded-lg p-3 overflow-x-auto text-xs text-slate-200 my-2">
+        <pre key={i} className="bg-slate-900/60 border border-slate-700 rounded-lg p-3 overflow-x-auto text-sm text-slate-200 my-3">
           <code>{codeLines.join('\n')}</code>
         </pre>
       );
     } else if (line.trim() === '') {
-      if (elements.length > 0) elements.push(<div key={i} className="h-1" />);
+      if (elements.length > 0) elements.push(<div key={i} className="h-2" />);
     } else {
       elements.push(<p key={i} className="text-slate-200 leading-relaxed">{renderInline(line)}</p>);
     }
     i++;
   }
 
-  return <div className="space-y-1 text-sm">{elements}</div>;
+  return <div className="space-y-2 text-sm leading-relaxed text-slate-200">{elements}</div>;
 }
 
 function renderInline(text: string): (string | JSX.Element)[] {
@@ -1500,9 +1500,21 @@ export default function PlaybooksPage({
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
+    recognition.lang = 'en-US';
     recognition.onresult = (event: any) => {
       const transcript = Array.from(event.results).map((r: any) => r[0].transcript).join('');
       setGenerateContext(transcript);
+    };
+    recognition.onerror = (event: any) => {
+      setIsListening(false);
+      const messages: Record<string, string> = {
+        'not-allowed': 'Microphone access denied — please allow microphone in browser settings',
+        'no-speech': 'No speech detected — try speaking again',
+        'network': 'Voice recognition needs an internet connection',
+        'audio-capture': 'No microphone found',
+        'aborted': 'Voice input cancelled',
+      };
+      toast.error(messages[event.error] || `Voice error: ${event.error}`);
     };
     recognition.onend = () => setIsListening(false);
     recognition.start();
@@ -1519,14 +1531,47 @@ export default function PlaybooksPage({
     navigator.clipboard.writeText(resultText).then(() => toast.success('Copied to clipboard'));
   };
 
-  const downloadResult = () => {
-    const blob = new Blob([resultText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${selectedPlaybook?.id || 'playbook'}-result.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const markdownToHtmlString = (md: string): string => {
+    return md
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/`(.+?)`/g, '<code>$1</code>')
+      .replace(/^```[\w]*\n([\s\S]*?)```$/gm, '<pre><code>$1</code></pre>')
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
+      .replace(/\n{2,}/g, '</p><p>')
+      .replace(/^(?!<[h|u|p|l|p])/gm, '')
+      .trim();
+  };
+
+  const downloadResult = (format: 'txt' | 'html' = 'html') => {
+    const title = selectedPlaybook?.title || 'Playbook Result';
+    const slug = selectedPlaybook?.id || 'playbook';
+    if (format === 'txt') {
+      const clean = resultText
+        .replace(/^#{1,3} /gm, '')
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/\*(.+?)\*/g, '$1')
+        .replace(/`(.+?)`/g, '$1')
+        .replace(/^- /gm, '• ');
+      const blob = new Blob([clean], { type: 'text/plain; charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${slug}-result.txt`; a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      const body = markdownToHtmlString(resultText);
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:800px;margin:40px auto;padding:0 24px;line-height:1.75;color:#e2e8f0;background:#0f172a}h1,h2,h3{color:#f1f5f9;border-bottom:1px solid #334155;padding-bottom:6px;margin-top:28px}h1{font-size:1.6em}h2{font-size:1.3em}h3{font-size:1.1em}pre{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px;overflow-x:auto;font-size:.9em}code{background:#1e293b;color:#67e8f9;padding:2px 5px;border-radius:4px;font-size:.9em}ul,ol{padding-left:24px}li{margin:5px 0}strong{color:#f1f5f9}p{margin:12px 0}</style></head><body><h1>${title}</h1>${body}</body></html>`;
+      const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${slug}-result.html`; a.click();
+      URL.revokeObjectURL(url);
+    }
   };
 
   const shareResult = async () => {
@@ -1992,11 +2037,17 @@ export default function PlaybooksPage({
                     <textarea
                       value={generateContext}
                       onChange={(e) => setGenerateContext(e.target.value)}
+                      onKeyDown={(e) => {
+                        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                          e.preventDefault();
+                          runGenerate();
+                        }
+                      }}
                       placeholder="Paste a job posting, resume, ticket, or type a rough description… AI will fill the form for you."
                       rows={5}
-                      className="w-full bg-slate-900/50 border border-violet-500/20 rounded-lg px-3 py-2 text-slate-200 text-sm resize-none"
+                      className="w-full bg-slate-900/50 border border-violet-500/20 rounded-lg px-3 py-2 text-slate-200 text-sm resize-none focus:outline-none focus:border-violet-500/50"
                     />
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
                       <button
                         onClick={runGenerate}
                         disabled={!generateContext.trim() || generating}
@@ -2007,6 +2058,7 @@ export default function PlaybooksPage({
                       <button onClick={() => { setShowGenerate(false); setGenerateContext(''); }} className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm border border-slate-700">
                         Cancel
                       </button>
+                      <span className="text-xs text-slate-500 ml-auto">Ctrl+Enter to submit</span>
                     </div>
                   </div>
                 )}
@@ -2147,8 +2199,11 @@ export default function PlaybooksPage({
                         <button onClick={copyResult} className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white" title="Copy">
                           <Copy className="w-4 h-4" />
                         </button>
-                        <button onClick={downloadResult} className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white" title="Download">
+                        <button onClick={() => downloadResult('html')} className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white" title="Download as HTML">
                           <Download className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => downloadResult('txt')} className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white text-xs font-mono" title="Download as plain text">
+                          .txt
                         </button>
                         <button onClick={shareResult} className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white" title="Share">
                           <Share2 className="w-4 h-4" />

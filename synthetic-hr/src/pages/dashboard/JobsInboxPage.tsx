@@ -41,7 +41,7 @@ function renderMarkdown(text: string): JSX.Element {
         items.push(<li key={i} className="ml-4 text-slate-200">{renderInline(lines[i].slice(2))}</li>);
         i++;
       }
-      elements.push(<ul key={`ul-${i}`} className="list-disc list-inside space-y-0.5 my-2">{items}</ul>);
+      elements.push(<ul key={`ul-${i}`} className="list-disc list-inside space-y-1 my-3 text-slate-200">{items}</ul>);
       continue;
     } else if (/^\d+\.\s/.test(line)) {
       const items: JSX.Element[] = [];
@@ -49,7 +49,7 @@ function renderMarkdown(text: string): JSX.Element {
         items.push(<li key={i} className="ml-4 text-slate-200">{renderInline(lines[i].replace(/^\d+\.\s/, ''))}</li>);
         i++;
       }
-      elements.push(<ol key={`ol-${i}`} className="list-decimal list-inside space-y-0.5 my-2">{items}</ol>);
+      elements.push(<ol key={`ol-${i}`} className="list-decimal list-inside space-y-1 my-3 text-slate-200">{items}</ol>);
       continue;
     } else if (line.startsWith('```')) {
       i++;
@@ -59,19 +59,19 @@ function renderMarkdown(text: string): JSX.Element {
         i++;
       }
       elements.push(
-        <pre key={i} className="bg-slate-900/60 border border-slate-700 rounded-lg p-3 overflow-x-auto text-xs text-slate-200 my-2">
+        <pre key={i} className="bg-slate-900/60 border border-slate-700 rounded-lg p-3 overflow-x-auto text-sm text-slate-200 my-3">
           <code>{codeLines.join('\n')}</code>
         </pre>
       );
     } else if (line.trim() === '') {
-      if (elements.length > 0) elements.push(<div key={i} className="h-1" />);
+      if (elements.length > 0) elements.push(<div key={i} className="h-2" />);
     } else {
       elements.push(<p key={i} className="text-slate-200 leading-relaxed">{renderInline(line)}</p>);
     }
     i++;
   }
 
-  return <div className="space-y-1 text-sm">{elements}</div>;
+  return <div className="space-y-2 text-sm leading-relaxed text-slate-200">{elements}</div>;
 }
 
 function renderInline(text: string): (string | JSX.Element)[] {
@@ -243,14 +243,42 @@ function JobDetail({
   const isPending = status === 'pending_approval';
   const isConnector = job.type === 'connector_action';
 
-  const download = () => {
-    const blob = new Blob([resultText], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `run-${job.id.slice(0, 8)}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const download = (format: 'txt' | 'html' = 'html') => {
+    const slug = `run-${job.id.slice(0, 8)}`;
+    const title = (job as any).playbook_id
+      ? String((job as any).playbook_id).replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+      : 'Run Result';
+    if (format === 'txt') {
+      const clean = resultText
+        .replace(/^#{1,3} /gm, '')
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/\*(.+?)\*/g, '$1')
+        .replace(/`(.+?)`/g, '$1')
+        .replace(/^- /gm, '• ');
+      const blob = new Blob([clean], { type: 'text/plain; charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${slug}.txt`; a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      const body = resultText
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code>$1</code>')
+        .replace(/^- (.+)$/gm, '<li>$1</li>')
+        .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
+        .replace(/\n{2,}/g, '</p><p>').trim();
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:800px;margin:40px auto;padding:0 24px;line-height:1.75;color:#e2e8f0;background:#0f172a}h1,h2,h3{color:#f1f5f9;border-bottom:1px solid #334155;padding-bottom:6px;margin-top:28px}h1{font-size:1.6em}h2{font-size:1.3em}h3{font-size:1.1em}pre{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px;overflow-x:auto}code{background:#1e293b;color:#67e8f9;padding:2px 5px;border-radius:4px}ul,ol{padding-left:24px}li{margin:5px 0}strong{color:#f1f5f9}p{margin:12px 0}</style></head><body><h1>${title}</h1>${body}</body></html>`;
+      const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${slug}.html`; a.click();
+      URL.revokeObjectURL(url);
+    }
   };
 
   return (
@@ -299,11 +327,18 @@ function JobDetail({
           {status === 'succeeded' && !isConnector && resultText ? (
             <>
               <button
-                onClick={download}
-                title="Download as .md"
+                onClick={() => download('html')}
+                title="Download as HTML"
                 className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
               >
                 <Download className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => download('txt')}
+                title="Download as plain text"
+                className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-mono"
+              >
+                .txt
               </button>
               <button
                 onClick={() => onRerun(job)}
