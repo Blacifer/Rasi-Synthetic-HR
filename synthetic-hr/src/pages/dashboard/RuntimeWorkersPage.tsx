@@ -4,7 +4,7 @@ import {
   AlertTriangle, Clock, Wifi, WifiOff, Activity, ChevronDown,
   ChevronRight, Terminal, X, RotateCcw,
 } from 'lucide-react';
-import { api } from '../../lib/api';
+import { api } from '../../lib/api-client';
 import type { RuntimeInstance } from '../../lib/api/platform';
 import { toast } from '../../lib/toast';
 

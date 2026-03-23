@@ -11,7 +11,7 @@
  */
 
 import { logger } from './logger';
-import { decryptSecret } from './crypto';
+import { decryptSecret } from './integrations/encryption';
 
 const SLACK_API = 'https://slack.com/api';
 const DEFAULT_CHANNEL = process.env.SLACK_ALERTS_CHANNEL || '#general';
@@ -36,7 +36,7 @@ async function getSlackToken(orgId: string): Promise<{ token: string; channel: s
     `${supabaseUrl}/rest/v1/integrations?organization_id=eq.${orgId}&service_type=eq.slack&status=eq.connected&select=id&limit=1`,
     { headers }
   );
-  const intRows: any[] = await intRes.json().catch(() => []);
+  const intRows: any[] = await intRes.json().catch(() => []) as any[];
   if (!Array.isArray(intRows) || intRows.length === 0) return null;
   const integrationId = intRows[0].id;
 
@@ -45,7 +45,7 @@ async function getSlackToken(orgId: string): Promise<{ token: string; channel: s
     `${supabaseUrl}/rest/v1/integration_credentials?integration_id=eq.${integrationId}&key=in.(access_token,alert_channel_id)&select=key,value`,
     { headers }
   );
-  const credRows: any[] = await credRes.json().catch(() => []);
+  const credRows: any[] = await credRes.json().catch(() => []) as any[];
   if (!Array.isArray(credRows)) return null;
 
   const tokenRow = credRows.find((r) => r.key === 'access_token');
