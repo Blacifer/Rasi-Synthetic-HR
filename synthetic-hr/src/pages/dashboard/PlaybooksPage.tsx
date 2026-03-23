@@ -1510,7 +1510,7 @@ export default function PlaybooksPage({
       const messages: Record<string, string> = {
         'not-allowed': 'Microphone access denied — please allow microphone in browser settings',
         'no-speech': 'No speech detected — try speaking again',
-        'network': "Voice recognition failed — Chrome couldn't reach Google's speech servers. Try disabling VPN or use a different browser.",
+        'network': "Voice recognition failed — your browser couldn't reach the speech recognition service. Try refreshing the page or use the text input instead.",
         'audio-capture': 'No microphone found',
         'aborted': 'Voice input cancelled',
       };
