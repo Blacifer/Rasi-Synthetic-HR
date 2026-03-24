@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Brain, AlertCircle, ArrowRight, Loader2, CheckCircle, Eye, EyeOff, Check, Clock } from 'lucide-react';
+import { Brain, AlertCircle, ArrowRight, Loader2, CheckCircle, Eye, EyeOff, Check, Clock, ShieldCheck } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { authHelpers } from '../lib/supabase-client';
+import { authHelpers, supabase } from '../lib/supabase-client';
 
 function GoogleIcon() {
   return (
@@ -57,7 +57,11 @@ export default function LoginPage({ onSignUp, onBack }: LoginPageProps) {
   const [resetSent, setResetSent] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<'google' | 'microsoft' | null>(null);
-  const { signIn, signInWithOAuth } = useApp();
+  const [showMfaStep, setShowMfaStep] = useState(false);
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [mfaError, setMfaError] = useState('');
+  const { signIn, signInWithOAuth, completeMfaLogin } = useApp();
 
   const isLockedOut = lockoutSeconds > 0;
 
@@ -116,9 +120,41 @@ export default function LoginPage({ onSignUp, onBack }: LoginPageProps) {
         localStorage.removeItem('synthetic_hr_remember_me');
       }
       setFailedAttempts(0);
+      if (result.requiresMfa) {
+        setShowMfaStep(true);
+      }
     }
 
     setLoading(false);
+  };
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaCode.trim()) { setMfaError('Please enter the 6-digit code from your authenticator app.'); return; }
+    setMfaLoading(true);
+    setMfaError('');
+    try {
+      const { data: factorsData, error: factorsError } = await supabase.auth.mfa.listFactors();
+      if (factorsError || !factorsData?.totp?.length) {
+        setMfaError('Could not find your authenticator. Please contact support.');
+        setMfaLoading(false);
+        return;
+      }
+      const factorId = factorsData.totp[0].id;
+      const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: mfaCode.trim() });
+      if (verifyError) {
+        setMfaError('Invalid code. Please check your authenticator app and try again.');
+        setMfaLoading(false);
+        return;
+      }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        completeMfaLogin(user.id, user.email || '', user.user_metadata?.organization_name || 'My Organization');
+      }
+    } catch (err: any) {
+      setMfaError('Verification failed. Please try again.');
+    }
+    setMfaLoading(false);
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -140,6 +176,70 @@ export default function LoginPage({ onSignUp, onBack }: LoginPageProps) {
     }
     setResetLoading(false);
   };
+
+  // ── MFA challenge view ───────────────────────────────────────────────────
+  if (showMfaStep) {
+    return (
+      <div className="min-h-screen app-bg flex items-center justify-center p-6 text-slate-50">
+        <div className="w-full max-w-md">
+          <div className="card-surface p-8">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
+                <ShieldCheck className="w-7 h-7 text-cyan-400" />
+              </div>
+              <div>
+                <span className="text-xl font-bold text-white">Two-Factor Auth</span>
+                <span className="text-xs text-blue-300 block -mt-1">RASI Synthetic HR</span>
+              </div>
+            </div>
+
+            <h1 className="text-2xl font-bold text-white mb-2">Enter verification code</h1>
+            <p className="text-slate-400 mb-6">Open your authenticator app and enter the 6-digit code.</p>
+
+            {mfaError && (
+              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-start gap-2 text-red-400">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span className="text-sm">{mfaError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleMfaSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm text-slate-300 mb-2">6-digit code</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                  className="input-field text-center text-2xl tracking-widest"
+                  placeholder="000000"
+                  autoFocus
+                  autoComplete="one-time-code"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={mfaLoading || mfaCode.length !== 6}
+                className="btn-primary w-full disabled:opacity-50 disabled:pointer-events-none"
+              >
+                {mfaLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</> : 'Verify'}
+              </button>
+            </form>
+
+            <button
+              type="button"
+              onClick={() => { setShowMfaStep(false); setMfaCode(''); setMfaError(''); }}
+              className="mt-4 w-full text-sm text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              ← Back to sign in
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Forgot password view ─────────────────────────────────────────────────
   if (showForgotPassword) {

@@ -10,9 +10,10 @@ export interface AppContextType {
   user: AuthUser | null;
   loading: boolean;
   signUp: (email: string, password: string, orgName: string) => Promise<{ error: string | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: string | null; requiresMfa?: boolean }>;
   signInWithOAuth: (provider: 'google' | 'azure') => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  completeMfaLogin: (userId: string, email: string, orgName: string) => void;
 }
 
 export const AppContext = createContext<AppContextType | null>(null);

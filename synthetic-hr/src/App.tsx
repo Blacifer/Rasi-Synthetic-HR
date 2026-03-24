@@ -1,7 +1,7 @@
 import { useState, useEffect, lazy, Suspense, useCallback } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AppContext, type AuthUser } from './context/AppContext';
-import { authHelpers } from './lib/supabase-client';
+import { authHelpers, supabase } from './lib/supabase-client';
 import { getFrontendConfig } from './lib/config';
 import { STORAGE_KEYS } from './lib/utils';
 
@@ -201,6 +201,18 @@ function App() {
       }
 
       if (result.user) {
+        // Check if MFA verification is required before granting dashboard access
+        try {
+          const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+          if (aalData?.nextLevel === 'aal2' && aalData?.currentLevel !== 'aal2') {
+            // User has MFA enrolled — do not set user or navigate; let LoginPage handle OTP
+            await claimInviteIfPending(result.session?.access_token);
+            return { error: null, requiresMfa: true };
+          }
+        } catch {
+          // If AAL check fails, proceed with normal login
+        }
+
         const userData: AuthUser = {
           id: result.user.id,
           email: result.user.email || '',
@@ -218,6 +230,15 @@ function App() {
       console.error('Signin error:', err);
       return { error: 'Unable to sign in. Please check your connection and try again.' };
     }
+  };
+
+  // Called from LoginPage after successful MFA verification
+  const completeMfaLogin = (userId: string, email: string, orgName: string) => {
+    const userData: AuthUser = { id: userId, email, organizationName: orgName || 'My Organization' };
+    setUser(userData);
+    localStorage.setItem('has_session', 'true');
+    const isAcceptInvite = location.pathname.startsWith('/accept-invite');
+    navigate(isAcceptInvite ? location.pathname : '/dashboard');
   };
 
   // OAuth sign-in handler (Google, Microsoft)
@@ -259,7 +280,7 @@ function App() {
   }
 
   return (
-    <AppContext.Provider value={{ user, loading: false, signUp, signIn, signInWithOAuth, signOut }}>
+    <AppContext.Provider value={{ user, loading: false, signUp, signIn, signInWithOAuth, signOut, completeMfaLogin }}>
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           <Route path="/" element={<LandingPage onSignUp={() => navigate('/signup')} onLogin={() => navigate('/login')} onDemo={demoEnabled ? enterDemoMode : undefined} />} />

@@ -253,6 +253,20 @@ const getAgentWorkspaceData = async (req: Request, orgId: string, id: string) =>
     }
   }
 
+  // Count conversations from the conversations table (not cost_tracking)
+  try {
+    const countQ = new URLSearchParams();
+    countQ.set('organization_id', eq(orgId));
+    countQ.set('agent_id', eq(id));
+    countQ.set('select', 'id');
+    countQ.set('limit', '10000');
+    const countRows = (await supabaseRestAsUser(getUserJwt(req), 'conversations', countQ)) as any[];
+    conversationCount = (countRows || []).length;
+    if (!Number.isFinite(conversationCount) || conversationCount < 0) conversationCount = 0;
+  } catch (err: any) {
+    logger.warn('Failed to count workspace conversations', { error: err?.message || err, org_id: orgId, agent_id: id });
+  }
+
   if (canReadCosts) {
     try {
       const allQ = new URLSearchParams();
@@ -271,11 +285,9 @@ const getAgentWorkspaceData = async (req: Request, orgId: string, id: string) =>
       trendQ.set('limit', '10000');
       const trendRows = (await supabaseRestAsUser(getUserJwt(req), 'cost_tracking', trendQ)) as any[];
 
-      conversationCount = (allCostRows || []).reduce((sum, row) => sum + Number(row?.request_count || 0), 0);
-      if (!Number.isFinite(conversationCount) || conversationCount < 0) conversationCount = 0;
-
       const totalCost = (allCostRows || []).reduce((sum, row) => sum + Number(row?.cost_usd || 0), 0);
       const totalTokens = (allCostRows || []).reduce((sum, row) => sum + Number(row?.total_tokens || 0), 0);
+      const totalRequests = (allCostRows || []).reduce((sum, row) => sum + Number(row?.request_count || 0), 0);
       const trendSeed = Object.fromEntries(buildDaySeries(7).map((date) => [date, { date, cost: 0, requests: 0 }]));
 
       for (const row of trendRows || []) {
@@ -286,8 +298,8 @@ const getAgentWorkspaceData = async (req: Request, orgId: string, id: string) =>
       }
 
       analytics = {
-        totalCost, totalTokens, totalRequests: conversationCount,
-        avgCostPerRequest: conversationCount > 0 ? totalCost / conversationCount : 0,
+        totalCost, totalTokens, totalRequests,
+        avgCostPerRequest: totalRequests > 0 ? totalCost / totalRequests : 0,
         dailyAverage: allCostRows?.length > 0 ? totalCost / allCostRows.length : 0,
         trend: Object.values(trendSeed),
       };
