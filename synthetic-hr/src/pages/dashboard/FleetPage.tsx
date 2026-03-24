@@ -2684,8 +2684,15 @@ export default function FleetPage({
                       </select>
                     ) : (
                       <div className="rounded-xl border border-slate-700 bg-slate-950/40 p-4 text-center">
-                        <p className="text-sm text-slate-400 mb-1">No runtime workers registered yet.</p>
-                        <p className="text-xs text-slate-500">Go to <span className="text-cyan-400 font-medium">Settings → Runtime Workers</span> to register one, then come back here to deploy.</p>
+                        <p className="text-sm text-slate-400 mb-3">No runtime workers registered yet.</p>
+                        <button
+                          type="button"
+                          onClick={() => { setDeployAgentId(null); onOpenOperationsPage?.('runtime-workers'); }}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-sm font-semibold hover:bg-cyan-500/25 transition-colors"
+                        >
+                          <Server className="w-3.5 h-3.5" />
+                          Go to Runtime Workers →
+                        </button>
                       </div>
                     )}
                   </div>
