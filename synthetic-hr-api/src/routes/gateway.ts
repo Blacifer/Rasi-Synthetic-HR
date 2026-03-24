@@ -113,7 +113,11 @@ const maybeCreateIncidentFromCompletion = async (params: {
 }) => {
   try {
     const scanResults = incidentDetection.fullScan(params.completion.content || '');
-    const highest = incidentDetection.getHighestSeverity(scanResults);
+    // Also scan the user's last message for data extraction attempts (fires even when agent refuses)
+    const userMsg = lastUserMessage(params.messages) || '';
+    const userScanResults = [incidentDetection.detectDataExtractionAttempt(userMsg)].filter(r => r.detected);
+    const allResults = [...scanResults, ...userScanResults];
+    const highest = incidentDetection.getHighestSeverity(allResults);
     if (!highest || (highest.severity !== 'critical' && highest.severity !== 'high')) return;
 
     const trigger = lastUserMessage(params.messages);
@@ -2548,7 +2552,7 @@ router.post('/agents/:agentId/chat', async (req: Request, res: Response) => {
 
   try {
     const { agentId } = req.params;
-    const { message } = req.body ?? {};
+    const { message, conversation_id: existingConversationId } = req.body ?? {};
 
     if (!message || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ success: false, error: 'message is required' });
@@ -2637,8 +2641,9 @@ router.post('/agents/:agentId/chat', async (req: Request, res: Response) => {
       };
     }
 
-    // Record conversation (fire and forget — non-blocking)
-    void (async () => {
+    // Resolve or create conversation (awaited so we can return conversation_id in response)
+    let conversationId: string | undefined = existingConversationId || undefined;
+    if (!conversationId) {
       try {
         const convRows = (await supabaseRest('conversations', '', {
           method: 'POST',
@@ -2648,25 +2653,33 @@ router.post('/agents/:agentId/chat', async (req: Request, res: Response) => {
             platform: 'api',
             status: 'active',
             started_at: new Date().toISOString(),
+            metadata: {
+              last_user_message: message.trim().slice(0, 200),
+              platform_label: 'Terminal API',
+            },
           },
         })) as any[];
-        const conversationId = convRows?.[0]?.id;
-        if (conversationId) {
-          await Promise.all([
-            supabaseRest('messages', '', {
-              method: 'POST',
-              body: { conversation_id: conversationId, role: 'user', content: message.trim(), created_at: new Date().toISOString() },
-            }),
-            supabaseRest('messages', '', {
-              method: 'POST',
-              body: { conversation_id: conversationId, role: 'assistant', content: completion.content, token_count: completion.totalTokens, cost_usd: completion.costUSD, created_at: new Date().toISOString() },
-            }),
-          ]);
-        }
+        conversationId = convRows?.[0]?.id;
       } catch (err: any) {
-        logger.error('Failed to record agent chat conversation', { error: err.message, agentId });
+        logger.error('Failed to create conversation for agent chat', { error: err.message, agentId });
       }
-    })();
+    }
+
+    // Save messages (fire and forget — non-blocking)
+    if (conversationId) {
+      void Promise.all([
+        supabaseRest('messages', '', {
+          method: 'POST',
+          body: { conversation_id: conversationId, role: 'user', content: message.trim(), created_at: new Date().toISOString() },
+        }),
+        supabaseRest('messages', '', {
+          method: 'POST',
+          body: { conversation_id: conversationId, role: 'assistant', content: completion.content, token_count: completion.totalTokens, cost_usd: completion.costUSD, created_at: new Date().toISOString() },
+        }),
+      ]).catch((err: any) => {
+        logger.error('Failed to save messages for agent chat', { error: err.message, agentId });
+      });
+    }
 
     // Incident detection (fire and forget)
     void maybeCreateIncidentFromCompletion({
@@ -2678,6 +2691,11 @@ router.post('/agents/:agentId/chat', async (req: Request, res: Response) => {
       requestId: req.requestId,
     }).catch((err: any) => {
       logger.error('Failed to run incident detection on agent chat', { err: err.message, agentId });
+    });
+
+    // Cost tracking (fire and forget)
+    void updateAgentBudgetAndLogCost(req, agentId, modelConfig.id, modelConfig.provider, completion).catch((err: any) => {
+      logger.error('Failed to log cost for agent chat', { err: err.message, agentId });
     });
 
     logger.info('Agent chat completed', {
@@ -2692,6 +2710,7 @@ router.post('/agents/:agentId/chat', async (req: Request, res: Response) => {
       success: true,
       reply: completion.content,
       agent_id: agentId,
+      conversation_id: conversationId ?? null,
       usage: {
         input_tokens: completion.inputTokens,
         output_tokens: completion.outputTokens,

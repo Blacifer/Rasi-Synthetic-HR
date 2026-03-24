@@ -8,7 +8,8 @@ export type IncidentType =
   | 'legal_advice'
   | 'infinite_loop'
   | 'angry_user'
-  | 'toxic_output';
+  | 'toxic_output'
+  | 'data_extraction_attempt';
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
 
@@ -155,6 +156,24 @@ const TOXIC_MEDIUM: RegExp[] = [
   /\b(?:racist|sexist|homophobic|transphobic|antisemitic)\s+(?:remark|comment|joke|statement|language)\b/i,
   /\bdiscriminate\s+(?:against|based\s+on)\b/i,
   /\bsexual\s+(?:harassment|assault|abuse)\b/i,
+];
+
+// ---------------------------------------------------------------------------
+// Data extraction attempts — user requesting sensitive data from an agent
+// ---------------------------------------------------------------------------
+const DATA_EXTRACTION_HIGH: RegExp[] = [
+  /\bgive\s+(?:me|us)\s+(?:the\s+)?(?:credit\s+card|card\s+(?:number|details|info)|payment\s+(?:details|info))\b/i,
+  /\bshare\s+(?:the\s+)?(?:credit\s+card|payment|billing)\s+(?:details|information|data|number)\b/i,
+  /\bprovide\s+(?:the\s+)?(?:card\s+number|cvv|expiry|billing\s+address)\b/i,
+  /\b(?:client|customer|user|employee)\s+(?:personal\s+)?(?:identification|credentials|passwords?|pin)\b/i,
+  /\bgive\s+(?:me|us)\s+(?:the\s+)?(?:password|api\s+key|secret\s+key|access\s+token|private\s+key)\b/i,
+  /\bshare\s+(?:the\s+)?(?:ssn|social\s+security|passport\s+(?:number|details)|aadhaar|pan\s+(?:number|card))\b/i,
+  /\bsend\s+(?:me\s+)?(?:the\s+)?(?:database|internal|confidential|private)\s+(?:data|information|records)\b/i,
+];
+
+const DATA_EXTRACTION_MEDIUM: RegExp[] = [
+  /\bwhat\s+(?:are\s+)?(?:the\s+)?(?:client|customer)\s+(?:personal\s+)?(?:details|information|data)\b/i,
+  /\bcan\s+you\s+(?:give|share|tell|show)\s+(?:me|us)\s+(?:the\s+)?(?:personal|private|confidential)\b/i,
 ];
 
 // ---------------------------------------------------------------------------
@@ -379,6 +398,29 @@ export class IncidentDetectionService {
     };
   }
 
+  detectDataExtractionAttempt(content: string): DetectionResult {
+    const { highCount, medCount, matched } = countHighMedium(
+      content,
+      DATA_EXTRACTION_HIGH,
+      DATA_EXTRACTION_MEDIUM
+    );
+
+    if (highCount === 0 && medCount === 0) {
+      return { detected: false, type: null, severity: 'low', confidence: 0, details: 'No data extraction attempt' };
+    }
+
+    const confidence = Math.min(0.65 + highCount * 0.15 + medCount * 0.08, 0.95);
+    const severity: Severity = highCount >= 1 ? 'high' : 'medium';
+
+    return {
+      detected: true,
+      type: 'data_extraction_attempt',
+      severity,
+      confidence,
+      details: `Data extraction attempt: ${matched.join('; ')}`,
+    };
+  }
+
   // Full scan — runs all detectors
   fullScan(content: string): DetectionResult[] {
     return [
@@ -388,6 +430,7 @@ export class IncidentDetectionService {
       this.detectAngryUser(content),
       this.detectToxicity(content),
       this.detectHallucination(content),
+      this.detectDataExtractionAttempt(content),
     ].filter(r => r.detected);
   }
 
