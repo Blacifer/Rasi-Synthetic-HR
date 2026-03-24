@@ -297,13 +297,15 @@ const hasData = agents.length > 0;
     })
     .reduce((sum, entry) => sum + entry.requests, 0);
 
+  // Telemetry returns USD; fallbacks are already INR — convert before mixing
+  const USD_TO_INR = 94;
   const last24hIncidents = telemetry?.movement.incidentsCurrent24h ?? fallbackLast24hIncidents.length;
   const previous24hIncidents = telemetry?.movement.incidentsPrevious24h ?? fallbackPrevious24hIncidents.length;
-  const last24hSpend = telemetry?.movement.spendCurrentDay ?? fallbackLast24hSpend;
-  const previous24hSpend = telemetry?.movement.spendPreviousDay ?? fallbackPrevious24hSpend;
+  const last24hSpend = telemetry != null ? telemetry.movement.spendCurrentDay * USD_TO_INR : fallbackLast24hSpend;
+  const previous24hSpend = telemetry != null ? telemetry.movement.spendPreviousDay * USD_TO_INR : fallbackPrevious24hSpend;
   const last24hConversations = telemetry?.movement.requestsCurrentDay ?? fallbackLast24hConversations;
   const previous24hConversations = telemetry?.movement.requestsPreviousDay ?? fallbackPrevious24hConversations;
-  const costTrend = telemetry?.trends.cost.map((entry) => entry.value)
+  const costTrend = telemetry?.trends.cost.map((entry) => entry.value * USD_TO_INR)
     ?? [...costData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(-7).map((entry) => entry.cost);
   const incidentTrend = telemetry?.trends.incidents.map((entry) => entry.value)
     ?? [...incidents].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).slice(-7).map(() => 1);
