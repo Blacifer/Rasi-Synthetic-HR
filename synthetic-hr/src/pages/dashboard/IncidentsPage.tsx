@@ -4,12 +4,14 @@ import type { AIAgent, Incident, IncidentSeverity, IncidentType } from '../../ty
 import { toast } from '../../lib/toast';
 import { loadFromStorage, saveToStorage } from '../../utils/storage';
 import { api } from '../../lib/api-client';
+import { SkeletonIncidentRow } from '../../components/Skeleton';
 
 type IncidentsPageProps = {
   incidents: Incident[];
   setIncidents: (incidents: Incident[]) => void;
   agents: AIAgent[];
   onNavigate?: (page: string) => void;
+  isLoading?: boolean;
 };
 
 type IncidentPriority = 'P1' | 'P2' | 'P3' | 'P4';
@@ -129,7 +131,7 @@ function defaultMetaForIncident(incident: Incident): IncidentUiMeta {
   };
 }
 
-export default function IncidentsPage({ incidents, setIncidents, agents, onNavigate }: IncidentsPageProps) {
+export default function IncidentsPage({ incidents, setIncidents, agents, onNavigate, isLoading = false }: IncidentsPageProps) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | Incident['status']>('all');
   const [filterSeverity, setFilterSeverity] = useState<'all' | IncidentSeverity>('all');
@@ -616,7 +618,11 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
           </div>
 
           <div className="mt-5">
-            {incidents.length === 0 ? (
+            {isLoading && incidents.length === 0 ? (
+              <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => <SkeletonIncidentRow key={i} />)}
+              </div>
+            ) : incidents.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-700 p-8 text-center text-sm text-slate-400">
                 No incidents have been recorded yet. Live incidents and manual detector tests will appear here.
               </div>
@@ -660,7 +666,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                       }}
                       role="button"
                       tabIndex={0}
-                      className={`block w-full rounded-2xl border p-4 text-left transition cursor-pointer ${isSelected ? 'border-cyan-400/50 bg-cyan-500/[0.08]' : 'border-slate-700 bg-slate-950/70 hover:border-slate-500'}`}
+                      className={`block w-full rounded-2xl border p-4 text-left transition cursor-pointer backdrop-blur-sm ${isSelected ? 'border-cyan-400/50 bg-cyan-500/[0.08]' : 'border-slate-700/60 bg-slate-900/60 shadow-[0_4px_16px_rgba(0,0,0,0.2)] hover:border-slate-500/70'}`}
                     >
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0">

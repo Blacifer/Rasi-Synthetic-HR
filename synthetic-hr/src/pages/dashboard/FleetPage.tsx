@@ -12,6 +12,7 @@ import { validateAgentForm } from '../../lib/validation';
 import { api } from '../../lib/api-client';
 import { getFrontendConfig } from '../../lib/config';
 import { packDisplayBadge, type IntegrationPackId } from '../../lib/integration-packs';
+import { SkeletonAgentCard } from '../../components/Skeleton';
 
 interface FleetPageProps {
   agents: AIAgent[];
@@ -20,6 +21,7 @@ interface FleetPageProps {
   onSelectAgent?: (agentId: string | null) => void;
   onPublishAgent?: (agent: AIAgent, packId?: IntegrationPackId | null) => void;
   onOpenOperationsPage?: (page: string, options?: { agentId?: string }) => void;
+  isLoading?: boolean;
 }
 
 type WorkspaceTab = 'overview' | 'deployment' | 'conversations' | 'integrations' | 'policies' | 'analytics' | 'controls' | 'settings';
@@ -45,6 +47,7 @@ export default function FleetPage({
   onSelectAgent,
   onPublishAgent,
   onOpenOperationsPage,
+  isLoading = false,
 }: FleetPageProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   type PolicyRec = { service: string; action: string; require_approval: boolean; required_role: 'manager' | 'admin'; reason: string; notes: string };
@@ -1014,7 +1017,11 @@ export default function FleetPage({
         </div>
       )}
 
-      {agents.length === 0 ? (
+      {isLoading && agents.length === 0 ? (
+        <div className="grid gap-4">
+          {Array.from({ length: 5 }).map((_, i) => <SkeletonAgentCard key={i} />)}
+        </div>
+      ) : agents.length === 0 ? (
         <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-12 text-center">
           <Users className="w-12 h-12 text-slate-500 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-white">No governed agents yet</h2>
@@ -1032,9 +1039,9 @@ export default function FleetPage({
             return (
               <div
                 key={agent.id}
-                className={`relative bg-slate-800/30 border rounded-2xl overflow-hidden transition-all ${highlightedAgentId === agent.id
+                className={`relative border rounded-2xl overflow-hidden transition-all backdrop-blur-sm ${highlightedAgentId === agent.id
                   ? 'border-cyan-400/60 ring-1 ring-cyan-400/40 bg-cyan-500/5'
-                  : 'border-slate-700'
+                  : 'border-slate-700/60 bg-slate-900/60 shadow-[0_4px_16px_rgba(0,0,0,0.2)]'
                   }`}
               >
                 {/* Main card row */}

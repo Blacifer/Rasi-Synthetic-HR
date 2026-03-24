@@ -228,21 +228,21 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr_0.8fr]">
-        <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-5">
+        <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 backdrop-blur-sm p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">Observed By RASI</p>
           <p className="mt-3 text-2xl font-bold text-white">{formatInr(totalCost)}</p>
           <p className="mt-2 text-sm leading-6 text-cyan-100/80">
             Live provider spend captured from your organization&apos;s RASI-observed traffic. If an agent calls OpenAI, Anthropic, or another provider directly outside RASI, that spend will not appear here.
           </p>
         </div>
-        <div className="rounded-2xl border border-slate-700/60 bg-slate-800/40 p-5">
+        <div className="rounded-2xl border border-slate-700/60 bg-slate-800/40 backdrop-blur-sm p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">SyntheticHR Platform Fee</p>
           <p className="mt-3 text-2xl font-bold text-white">Quoted separately</p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
             Governance, incidents, black box, and operations fees are not mixed into provider runtime cost on this page.
           </p>
         </div>
-        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5">
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 backdrop-blur-sm p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">Coverage Status</p>
           <p className="mt-3 text-2xl font-bold text-white">{filteredCostData.length > 0 ? 'Tracked through RASI' : 'Waiting for traffic'}</p>
           <p className="mt-2 text-sm leading-6 text-emerald-100/80">
