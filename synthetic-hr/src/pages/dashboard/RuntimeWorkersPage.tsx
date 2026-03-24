@@ -66,12 +66,14 @@ function EnrollmentModal({ token, expires, name, runtimeId, onClose }: Enrollmen
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const quickstart = `export SYNTHETICHR_CONTROL_PLANE_URL="${CONTROL_PLANE_URL}"
-export SYNTHETICHR_RUNTIME_ID="${runtimeId}"
-export SYNTHETICHR_ENROLLMENT_TOKEN="${token}"
-export SYNTHETICHR_API_KEY="sk_..."   # Settings → API Keys
-
-docker compose -f deploy/compose/runtime.yml up`;
+  const quickstart = `docker run -d \\
+  -e SYNTHETICHR_CONTROL_PLANE_URL="${CONTROL_PLANE_URL}" \\
+  -e SYNTHETICHR_RUNTIME_ID="${runtimeId}" \\
+  -e SYNTHETICHR_ENROLLMENT_TOKEN="${token}" \\
+  -e SYNTHETICHR_API_KEY="sk_..." \\
+  --restart unless-stopped \\
+  --name rasi-runtime \\
+  ghcr.io/blacifer/rasi-runtime:latest`;
 
   const copyQuickstart = async () => {
     await navigator.clipboard.writeText(quickstart);
@@ -123,7 +125,7 @@ docker compose -f deploy/compose/runtime.yml up`;
             </button>
           </div>
           <pre className="text-xs text-slate-400 font-mono whitespace-pre-wrap break-all leading-5">{quickstart}</pre>
-          <p className="text-[11px] text-slate-500">Replace <span className="text-amber-400 font-mono">sk_...</span> with an API key from Settings → API Keys.</p>
+          <p className="text-[11px] text-slate-500">Replace <span className="text-amber-400 font-mono">sk_...</span> with an API key from Settings → API Keys. Runs on any server with Docker installed.</p>
         </div>
 
         <div className="flex justify-end">
