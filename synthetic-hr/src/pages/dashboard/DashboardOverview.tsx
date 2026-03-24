@@ -18,6 +18,7 @@ import {
 import type { AIAgent, Incident, CostData } from '../../types';
 import OperationalMetrics from '../../components/OperationalMetrics';
 import { api } from '../../lib/api-client';
+import { useCountUp } from '../../hooks/useCountUp';
 
 interface DashboardOverviewProps {
   agents: AIAgent[];
@@ -314,16 +315,22 @@ const hasData = agents.length > 0;
       openIncidents.length > 0 ? 'warn' :
         'good';
 
+  // Animated counters — re-trigger on each data refresh
+  const animatedIncidents = useCountUp(openIncidents.length);
+  const animatedAgents = useCountUp(activeAgents.length);
+  const animatedTotalAgents = useCountUp(agents.length);
+  const animatedRisk = useCountUp(avgRiskScore);
+
   const nowCards = [
     {
       label: 'Open incidents',
-      value: `${openIncidents.length}`,
+      value: `${animatedIncidents}`,
       note: severeIncidents.length > 0 ? `${severeIncidents.length} high severity` : 'Queue under control',
       tone: severeIncidents.length > 0 ? 'text-rose-300' : 'text-white',
     },
     {
       label: 'Governed agents',
-      value: `${activeAgents.length}/${agents.length}`,
+      value: `${animatedAgents}/${animatedTotalAgents}`,
       note: terminatedAgents.length > 0 ? `${terminatedAgents.length} terminated` : 'Fleet mostly active',
       tone: 'text-slate-100',
     },
@@ -335,7 +342,7 @@ const hasData = agents.length > 0;
     },
     {
       label: 'Average risk',
-      value: `${avgRiskScore}/100`,
+      value: `${animatedRisk}/100`,
       note: avgRiskScore >= 70 ? 'Elevated governance risk' : avgRiskScore >= 40 ? 'Monitor risk posture' : 'Risk posture stable',
       tone: avgRiskScore >= 70 ? 'text-rose-300' : avgRiskScore >= 40 ? 'text-amber-300' : 'text-violet-300',
     },
@@ -406,8 +413,35 @@ const hasData = agents.length > 0;
       : null,
   ].filter(Boolean) as Array<{ id: string; title: string; description: string; tone: 'warn' | 'risk' | 'info'; action: () => void }>;
 
+  const healthLabel = heroTone === 'risk' ? 'INCIDENT ACTIVE' : heroTone === 'warn' ? 'MONITORING' : 'SYSTEM HEALTHY';
+  const healthClasses = heroTone === 'risk'
+    ? 'border-rose-500/30 bg-rose-500/[0.07] text-rose-300'
+    : heroTone === 'warn'
+      ? 'border-amber-500/30 bg-amber-500/[0.07] text-amber-300'
+      : 'border-emerald-500/30 bg-emerald-500/[0.07] text-emerald-300';
+  const dotClasses = heroTone === 'risk' ? 'bg-rose-400' : heroTone === 'warn' ? 'bg-amber-400' : 'bg-emerald-400';
+
   return (
     <div className="space-y-8">
+      {/* System Health Banner */}
+      <div className={`flex items-center justify-between rounded-2xl border px-4 py-2.5 text-xs font-semibold ${healthClasses}`}>
+        <div className="flex items-center gap-2.5">
+          <span className={`w-2 h-2 rounded-full animate-pulse ${dotClasses}`} />
+          <span className="font-mono tracking-[0.16em]">{healthLabel}</span>
+          <span className="opacity-40">·</span>
+          <span className="font-normal opacity-70">{agents.length} agent{agents.length !== 1 ? 's' : ''} governed</span>
+          {openIncidents.length > 0 && (
+            <>
+              <span className="opacity-40">·</span>
+              <span className="font-normal opacity-70">{openIncidents.length} open incident{openIncidents.length !== 1 ? 's' : ''}</span>
+            </>
+          )}
+        </div>
+        <span className="font-mono text-[10px] opacity-50 hidden sm:block">
+          {telemetry?.generatedAt ? `refreshed ${formatRelative(telemetry.generatedAt)}` : 'live'}
+        </span>
+      </div>
+
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.06),transparent_28%),linear-gradient(135deg,rgba(2,6,23,0.90),rgba(2,6,23,0.98))] p-6 shadow-[0_18px_60px_rgba(2,6,23,0.26)]">
         <div className="grid gap-6 xl:grid-cols-2">
           <div>
@@ -457,9 +491,9 @@ const hasData = agents.length > 0;
 
           <div className="grid grid-cols-2 gap-3">
             {nowCards.map((card) => (
-              <div key={card.label} className="rounded-2xl border border-slate-800/90 bg-[linear-gradient(180deg,rgba(2,6,23,0.28),rgba(2,6,23,0.62))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{card.label}</p>
-                <p className={`mt-3 text-3xl font-bold tabular-nums ${card.tone}`}>{card.value}</p>
+              <div key={card.label} className="rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-4 shadow-[0_8px_24px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-semibold">{card.label}</p>
+                <p className={`mt-3 text-3xl font-bold font-mono tabular-nums ${card.tone}`}>{card.value}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-400">{card.note}</p>
               </div>
             ))}
@@ -467,11 +501,11 @@ const hasData = agents.length > 0;
         </div>
         <div className="mt-6 grid grid-cols-1 gap-3 border-t border-slate-800/80 pt-5 md:grid-cols-2 xl:grid-cols-4">
           {movementCards.map((card) => (
-            <div key={card.label} className="rounded-2xl border border-slate-800/90 bg-slate-950/45 p-4">
+            <div key={card.label} className="rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-4 shadow-[0_8px_24px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.04)]">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{card.label}</p>
-                  <p className="mt-2 text-2xl font-bold tabular-nums text-white">{card.value}</p>
+                  <p className="mt-2 text-2xl font-bold font-mono tabular-nums text-white">{card.value}</p>
                   <p className={`mt-1 text-xs ${card.tone === 'risk' ? 'text-rose-300' : card.tone === 'warn' ? 'text-amber-300' : card.tone === 'good' ? 'text-emerald-300' : 'text-slate-200'}`}>
                     {card.delta}
                   </p>

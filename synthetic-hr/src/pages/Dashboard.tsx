@@ -5,7 +5,7 @@ import {
   Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
   DollarSign, Database, Key, Settings, X, Play, Link2,
   TrendingUp, Sparkles, ChevronLeft, MessageSquare, AlertTriangle, PlugZap, Bot, Briefcase,
-  Headset, Building2, Wrench, HandCoins, Gavel, Fingerprint, CheckSquare, ClipboardList, ScrollText, Server, Shield,
+  Headset, Building2, Wrench, HandCoins, Gavel, Fingerprint, CheckSquare, ClipboardList, ScrollText, Server, Shield, Search,
 } from 'lucide-react';
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
 import { useApp } from '../context/AppContext';
@@ -13,6 +13,7 @@ import { api } from '../lib/api-client';
 import { useAgents, useIncidents, useCostData, queryKeys } from '../hooks/useData';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { cn } from '../lib/utils';
+import { CommandPalette } from '../components/CommandPalette';
 import { guessPackForIntegration, type IntegrationPackId } from '../lib/integration-packs';
 
 const DashboardOverview = lazy(() => import('./dashboard/DashboardOverview'));
@@ -861,6 +862,9 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
 
   return (
     <div className="min-h-screen app-bg flex text-slate-50">
+      {/* Command Palette — Cmd+K */}
+      <CommandPalette onNavigate={navigateTo} agents={agents} />
+
       {/* Demo Mode Banner */}
       {isDemoMode && (
         <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-cyan-500/90 to-blue-600/90 backdrop-blur-md text-white px-4 py-2.5 flex items-center justify-between shadow-lg">
@@ -892,7 +896,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
       <div className={`flex flex-1 w-full min-h-screen ${isDemoMode ? 'pt-[46px]' : ''} ${error ? 'pt-12' : ''}`}>
         {/* Sidebar */}
         <aside className="w-64 sidebar-surface p-4 flex flex-col min-h-screen">
-          <div className="flex items-center gap-3 mb-8 px-2">
+          <div className="flex items-center gap-3 mb-6 px-2">
             <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
               <Brain className="w-6 h-6 text-white" />
             </div>
@@ -901,6 +905,19 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
               <span className="text-xs text-blue-300 block">Synthetic HR</span>
             </div>
           </div>
+
+          {/* Cmd+K search trigger */}
+          <button
+            onClick={() => {
+              const e = new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true });
+              window.dispatchEvent(e);
+            }}
+            className="flex items-center gap-2 w-full mb-4 px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700/50 text-slate-500 text-xs hover:border-slate-600 hover:text-slate-400 transition-colors"
+          >
+            <Search className="w-3.5 h-3.5" />
+            <span className="flex-1 text-left">Search...</span>
+            <kbd className="font-mono text-[10px] bg-slate-700/60 border border-slate-600/50 rounded px-1">⌘K</kbd>
+          </button>
 
           <nav className="flex-1 space-y-1" role="navigation" aria-label="Main navigation">
             {/* ── Workspace ── */}

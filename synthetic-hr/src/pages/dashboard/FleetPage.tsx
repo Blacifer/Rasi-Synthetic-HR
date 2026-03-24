@@ -1043,10 +1043,13 @@ export default function FleetPage({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-1.5 flex-wrap">
                         <h3 className="text-base font-semibold text-white">{agent.name}</h3>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${agent.status === 'active' ? 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/20' :
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${agent.status === 'active' ? 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/20' :
                           agent.status === 'paused' ? 'bg-amber-400/10 text-amber-400 border border-amber-400/20' :
                             'bg-red-400/10 text-red-400 border border-red-400/20'
-                          }`}>{agent.status}</span>
+                          }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${agent.status === 'active' ? 'bg-emerald-400 animate-pulse shadow-[0_0_6px_theme(colors.emerald.400)]' : agent.status === 'paused' ? 'bg-amber-400 animate-pulse' : 'bg-red-400'}`} />
+                          {agent.status}
+                        </span>
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${agent.risk_level === 'low' ? 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/20' :
                           agent.risk_level === 'medium' ? 'bg-amber-400/10 text-amber-400 border border-amber-400/20' :
                             'bg-red-400/10 text-red-400 border border-red-400/20'

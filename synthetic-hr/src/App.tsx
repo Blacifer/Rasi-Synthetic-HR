@@ -14,6 +14,7 @@ const AcceptInvitePage = lazy(() => import('./pages/AcceptInvitePage'));
 const OAuthCallbackPage = lazy(() => import('./pages/OAuthCallbackPage'));
 const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'));
 const SharePage = lazy(() => import('./pages/Share'));
+const PricingPage = lazy(() => import('./pages/PricingPage'));
 
 // Loading spinner component
 function LoadingSpinner() {
@@ -275,6 +276,7 @@ function App() {
           <Route path="/oauth/popup" element={<OAuthCallbackPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/share/:token" element={<SharePage />} />
+          <Route path="/pricing" element={<PricingPage />} />
           <Route path="/dashboard/*" element={
             user
               ? <Dashboard isDemoMode={isDemoMode} onSignUp={isDemoMode ? () => navigate('/signup') : undefined} />

@@ -141,6 +141,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
   const [showSimulationTools, setShowSimulationTools] = useState(() => (SIMULATIONS_ENABLED ? loadFromStorage<boolean>(INCIDENT_SIMULATION_TOOLS_KEY, false) : false));
   const [includeSimulated, setIncludeSimulated] = useState(() => (SIMULATIONS_ENABLED ? loadFromStorage<boolean>(INCIDENT_SIMULATION_VISIBILITY_KEY, false) : false));
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  const [barAnimated, setBarAnimated] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   // incidentMeta is derived from DB-backed incident fields (owner/priority/source/notes/next_action
   // added by migration_014). No localStorage needed.
@@ -219,6 +220,14 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
       setSelectedIncidentId(filteredIncidents[0]?.id || null);
     }
   }, [filteredIncidents, incidents, selectedIncidentId]);
+
+  // Reset bar animation whenever a new incident is selected
+  useEffect(() => {
+    setBarAnimated(false);
+    if (!selectedIncidentId) return;
+    const t = setTimeout(() => setBarAnimated(true), 60);
+    return () => clearTimeout(t);
+  }, [selectedIncidentId]);
 
   const selectedIncident = incidents.find((incident) => incident.id === selectedIncidentId) || null;
   const selectedMeta = selectedIncident ? (incidentMeta[selectedIncident.id] || defaultMetaForIncident(selectedIncident)) : null;
@@ -781,8 +790,8 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                       <div className="mt-1 flex items-center gap-2">
                         <div className="h-2 flex-1 rounded-full bg-slate-800">
                           <div
-                            className={`h-2 rounded-full ${selectedIncident.confidence >= 0.8 ? 'bg-rose-500' : selectedIncident.confidence >= 0.5 ? 'bg-amber-500' : 'bg-slate-500'}`}
-                            style={{ width: `${Math.round(selectedIncident.confidence * 100)}%` }}
+                            className={`h-2 rounded-full transition-all duration-700 ease-out ${selectedIncident.confidence >= 0.8 ? 'bg-rose-500' : selectedIncident.confidence >= 0.5 ? 'bg-amber-500' : 'bg-slate-500'}`}
+                            style={{ width: barAnimated ? `${Math.round(selectedIncident.confidence * 100)}%` : '0%' }}
                           />
                         </div>
                         <span className="text-xs font-semibold text-white">{Math.round(selectedIncident.confidence * 100)}%</span>

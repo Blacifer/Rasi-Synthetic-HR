@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { requirePermission } from '../middleware/rbac';
-import { supabaseRestAsUser, eq, gte } from '../lib/supabase-rest';
+import { supabaseRestAsUser, supabaseRestAsService, eq, gte } from '../lib/supabase-rest';
 import { logger } from '../lib/logger';
 import { errorResponse, getOrgId, getUserJwt, clampDays, buildDaySeries, toIsoDay } from '../lib/route-helpers';
 
@@ -281,6 +281,47 @@ router.get('/models', async (req: Request, res: Response) => {
   } catch (error: any) {
     logger.error('Model catalog fetch error', { error: error.message });
     return res.json({ success: true, data: modelsCache.data });
+  }
+});
+
+const PLAN_QUOTAS: Record<string, number> = {
+  free: 10_000,
+  audit: 50_000,
+  retainer: 200_000,
+  enterprise: -1,
+};
+
+const PLAN_DISPLAY: Record<string, string> = {
+  free: 'Free',
+  audit: 'The Audit',
+  retainer: 'The Retainer',
+  enterprise: 'Enterprise',
+};
+
+// GET /api/usage — current plan + gateway usage for this month
+router.get('/usage', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const month = new Date().toISOString().slice(0, 7);
+
+    const orgRows = await supabaseRestAsService('organizations', `id=eq.${orgId}&select=plan,name`);
+    const org = Array.isArray(orgRows) ? orgRows[0] : null;
+    const planKey = String(org?.plan || 'free').toLowerCase();
+    const quota = PLAN_QUOTAS[planKey] ?? PLAN_QUOTAS.free;
+    const planName = PLAN_DISPLAY[planKey] ?? planKey;
+
+    const usageRows = await supabaseRestAsService('gateway_usage', `org_id=eq.${orgId}&month=eq.${month}`);
+    const usage = Array.isArray(usageRows) ? usageRows[0] : null;
+    const used: number = usage?.request_count ?? 0;
+
+    return res.json({
+      success: true,
+      data: { used, quota, plan: planName, planKey, month },
+    });
+  } catch (error: any) {
+    errorResponse(res, error);
   }
 });
 
