@@ -176,14 +176,14 @@ export interface AgentWorkspaceData {
 export type IncidentSeverity = 'low' | 'medium' | 'high' | 'critical';
 export type IncidentStatus = 'open' | 'investigating' | 'resolved' | 'false_positive';
 export type IncidentType =
-  | 'prompt_injection'
-  | 'pii_extraction'
-  | 'policy_override'
-  | 'toxicity'
+  | 'pii_leak'
   | 'hallucination'
-  | 'escalation'
-  | 'legal_risk'
-  | 'other'; // Kept 'other' for frontend fallback, though backend strictly expects the 7 above
+  | 'refund_abuse'
+  | 'legal_advice'
+  | 'infinite_loop'
+  | 'angry_user'
+  | 'toxic_output'
+  | 'data_extraction_attempt';
 
 export interface Incident {
   id: string;

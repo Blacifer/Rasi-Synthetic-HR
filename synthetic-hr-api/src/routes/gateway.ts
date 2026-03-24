@@ -2670,11 +2670,11 @@ router.post('/agents/:agentId/chat', async (req: Request, res: Response) => {
       void Promise.all([
         supabaseRest('messages', '', {
           method: 'POST',
-          body: { conversation_id: conversationId, role: 'user', content: message.trim(), created_at: new Date().toISOString() },
+          body: { conversation_id: conversationId, role: 'user', content: message.trim(), token_count: completion.inputTokens, created_at: new Date().toISOString() },
         }),
         supabaseRest('messages', '', {
           method: 'POST',
-          body: { conversation_id: conversationId, role: 'assistant', content: completion.content, token_count: completion.totalTokens, cost_usd: completion.costUSD, created_at: new Date().toISOString() },
+          body: { conversation_id: conversationId, role: 'assistant', content: completion.content, token_count: completion.outputTokens, cost_usd: completion.costUSD, created_at: new Date().toISOString() },
         }),
       ]).catch((err: any) => {
         logger.error('Failed to save messages for agent chat', { error: err.message, agentId });
