@@ -159,8 +159,8 @@ function RegisterModal({ onClose, onCreated }: RegisterModalProps) {
     const res = await api.runtimes.create({ name: name.trim(), mode });
     setSaving(false);
     if (!res.success || !res.data) { toast.error(res.error || 'Failed to register worker'); return; }
-    const d = res.data as any;
-    onCreated(d.enrollment_token, d.enrollment_expires_at, name.trim(), d.data?.id || '');
+    const r = res as any;
+    onCreated(r.enrollment_token, r.enrollment_expires_at, name.trim(), res.data?.id || '');
   };
 
   return (

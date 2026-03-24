@@ -2651,12 +2651,12 @@ export default function FleetPage({
                 </div>
               )}
 
-              {/* ── Advanced (original runtime enrollment flow) ── */}
+              {/* ── Advanced (self-host / VPC) ── */}
               {deployMethod === 'advanced' && (
                 <div className="p-6 space-y-4 overflow-y-auto">
                   <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-3 flex items-start gap-2 mb-2">
                     <Info className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
-                    <p className="text-xs text-slate-400">For self-hosting on your own server or VPC. Most users should use Website, API, or Terminal instead.</p>
+                    <p className="text-xs text-slate-400">For self-hosting on your own server or VPC. Register a runtime worker first in <span className="text-cyan-400 font-medium">Settings → Runtime Workers</span>, then select it below to deploy your agent.</p>
                   </div>
 
                   <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 flex items-start justify-between gap-4">
@@ -2676,57 +2676,23 @@ export default function FleetPage({
                   <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
                     <div className="flex items-center gap-2 mb-4">
                       <span className="flex items-center justify-center w-6 h-6 rounded-full bg-cyan-500/15 border border-cyan-500/25 text-xs font-bold text-cyan-300">1</span>
-                      <p className="text-sm font-semibold text-white">Select or create a runtime</p>
+                      <p className="text-sm font-semibold text-white">Select a runtime worker</p>
                     </div>
-                    {runtimes.length > 0 && (
-                      <div className="flex gap-2 mb-3">
-                        <select value={selectedRuntimeId} onChange={(e) => setSelectedRuntimeId(e.target.value)} className="flex-1 px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm outline-none focus:border-cyan-500" disabled={runtimesLoading}>
-                          {runtimes.map((r) => (<option key={r.id} value={r.id}>{r.name} • {r.mode} • {r.status}</option>))}
-                        </select>
-                        <button type="button" onClick={() => void deleteRuntime(selectedRuntimeId)} className="px-3 py-2.5 rounded-xl border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 transition-colors" title="Delete runtime"><Trash2 className="w-4 h-4" /></button>
+                    {runtimes.length > 0 ? (
+                      <select value={selectedRuntimeId} onChange={(e) => setSelectedRuntimeId(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm outline-none focus:border-cyan-500">
+                        {runtimes.map((r) => (<option key={r.id} value={r.id}>{r.name} • {r.mode} • {r.status}</option>))}
+                      </select>
+                    ) : (
+                      <div className="rounded-xl border border-slate-700 bg-slate-950/40 p-4 text-center">
+                        <p className="text-sm text-slate-400 mb-1">No runtime workers registered yet.</p>
+                        <p className="text-xs text-slate-500">Go to <span className="text-cyan-400 font-medium">Settings → Runtime Workers</span> to register one, then come back here to deploy.</p>
                       </div>
                     )}
-                    <div className="flex gap-2">
-                      <input type="text" value={newRuntimeName} onChange={(e) => setNewRuntimeName(e.target.value)} placeholder={runtimes.length > 0 ? 'New runtime name…' : 'Runtime name (e.g. Production VPC)'} className="flex-1 px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm outline-none focus:border-cyan-500 placeholder:text-slate-600" />
-                      <button type="button" onClick={() => void createRuntime(agentName)} disabled={runtimesLoading} className="px-4 py-2.5 rounded-xl bg-white text-slate-950 font-semibold text-sm hover:bg-slate-100 disabled:opacity-60 whitespace-nowrap transition-colors">
-                        {runtimesLoading ? 'Creating…' : '+ Create runtime'}
-                      </button>
-                    </div>
-                    <p className="mt-2 text-xs text-slate-500">Runtimes run in your VPC/on-prem and pull approved jobs from RASI.</p>
                   </div>
-
-                  {createdEnrollment && (
-                    <div className="rounded-2xl border border-cyan-500/20 bg-slate-900/40 p-5">
-                      <div className="flex items-center gap-2 mb-4">
-                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-xs font-bold text-emerald-300">2</span>
-                        <p className="text-sm font-semibold text-white">Enroll the runtime</p>
-                        <span className="ml-auto text-xs text-slate-500">Expires: {new Date(createdEnrollment.expiresAt).toLocaleString()}</span>
-                      </div>
-                      <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 flex items-start gap-2 mb-4">
-                        <Clock3 className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
-                        <p className="text-xs text-amber-300">You have 30 minutes to enroll using this token. Once enrolled, your runtime works permanently — the timer only applies to this setup step.</p>
-                      </div>
-                      <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-3 mb-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-xs text-slate-400">Enrollment token <span className="text-amber-400">(shown once)</span></p>
-                          <button type="button" onClick={() => void navigator.clipboard.writeText(createdEnrollment.token).then(() => toast.success('Token copied')).catch(() => toast.error('Copy failed'))} className="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-900/60 text-white text-xs font-medium hover:bg-slate-800 transition-colors">Copy</button>
-                        </div>
-                        <code className="block break-all font-mono text-xs text-cyan-200 leading-relaxed">{createdEnrollment.token}</code>
-                      </div>
-                      <div className="rounded-xl border border-slate-700 bg-slate-950/40 p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-xs text-slate-400">Quick start (Docker)</p>
-                          <button type="button" onClick={() => { const cmd = `docker run -d \\\n  -e SYNTHETICHR_CONTROL_PLANE_URL="${controlPlaneBaseUrl}" \\\n  -e SYNTHETICHR_RUNTIME_ID="${createdEnrollment.runtimeId}" \\\n  -e SYNTHETICHR_ENROLLMENT_TOKEN="${createdEnrollment.token}" \\\n  -e SYNTHETICHR_API_KEY="sk_..." \\\n  --restart unless-stopped \\\n  --name rasi-runtime \\\n  ghcr.io/blacifer/rasi-runtime:latest`; void navigator.clipboard.writeText(cmd).then(() => toast.success('Command copied')).catch(() => toast.error('Copy failed')); }} className="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-900/60 text-white text-xs font-medium hover:bg-slate-800 transition-colors">Copy</button>
-                        </div>
-                        <pre className="text-xs text-slate-200 overflow-x-auto leading-relaxed"><code>{`docker run -d \\\n  -e SYNTHETICHR_CONTROL_PLANE_URL="${controlPlaneBaseUrl}" \\\n  -e SYNTHETICHR_RUNTIME_ID="${createdEnrollment.runtimeId}" \\\n  -e SYNTHETICHR_ENROLLMENT_TOKEN="${createdEnrollment.token}" \\\n  -e SYNTHETICHR_API_KEY="sk_..." \\\n  --restart unless-stopped \\\n  --name rasi-runtime \\\n  ghcr.io/blacifer/rasi-runtime:latest`}</code></pre>
-                        <p className="mt-2 text-[11px] text-slate-500">Replace <span className="font-mono text-amber-400">sk_...</span> with an API key from Settings → API Keys. Works on AWS, GCP, Azure, DigitalOcean, Hetzner — any server with Docker.</p>
-                      </div>
-                    </div>
-                  )}
 
                   <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
                     <div className="flex items-center gap-2 mb-4">
-                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-500/15 border border-blue-500/25 text-xs font-bold text-blue-300">3</span>
+                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-500/15 border border-blue-500/25 text-xs font-bold text-blue-300">2</span>
                       <p className="text-sm font-semibold text-white">Deploy agent to runtime</p>
                     </div>
                     <button type="button" onClick={() => void deployToRuntime()} disabled={deploymentLoading || !selectedRuntimeId} className="w-full px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold text-sm hover:from-blue-600 hover:to-cyan-500 disabled:opacity-40 transition-all">
