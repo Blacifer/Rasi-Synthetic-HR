@@ -28,8 +28,9 @@ echo "  Type your message and press Enter. Press Ctrl+C to quit."
 echo ""
 
 while true; do
-  printf "You: "
-  IFS= read -r msg || break
+  IFS= read -rp "You: " msg </dev/tty || break
+  # Strip control characters (e.g. Ctrl+R, Ctrl+C sequences that slip through)
+  msg="${msg//[$'\001'-$'\037']}"
   [[ -z "$msg" ]] && continue
 
   response=$(
