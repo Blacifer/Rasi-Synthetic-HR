@@ -248,7 +248,7 @@ export const useCostData = (period: '7d' | '30d' | '90d' | 'all' = '30d', option
           : { totalCost: 0, totalTokens: 0, totalRequests: 0 },
       };
     },
-    staleTime: 5 * 60_000, // costs change infrequently — 5 min stale time
+    staleTime: 60_000, // 1 min stale time so new gateway requests appear quickly
   });
 
   return {
