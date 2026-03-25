@@ -4,8 +4,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
   DollarSign, Database, Key, Settings, X, Play, Link2,
-  TrendingUp, Sparkles, ChevronLeft, MessageSquare, AlertTriangle, PlugZap, Bot, Briefcase,
-  Headset, Building2, Wrench, HandCoins, Gavel, Fingerprint, CheckSquare, ClipboardList, ScrollText, Server, Shield, Search,
+  TrendingUp, Sparkles, ChevronLeft, ChevronDown, MessageSquare, AlertTriangle, PlugZap, Bot, Briefcase,
+  Headset, Building2, Wrench, HandCoins, Gavel, Fingerprint, CheckSquare, ClipboardList, ScrollText, Server, Shield, Search, Sun, Moon,
 } from 'lucide-react';
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
 import { useApp } from '../context/AppContext';
@@ -288,6 +288,79 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
   const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
   const [role, setRole] = useState<string>('super_admin');
   const [coverageStatus, setCoverageStatus] = useState<CoverageNotificationPayload | null>(null);
+
+  // Dark/Light mode toggle
+  const themePrefKey = 'synthetic_hr_theme';
+  const [isLightMode, setIsLightMode] = useState(() =>
+    typeof window !== 'undefined' && localStorage.getItem(themePrefKey) === 'light'
+  );
+  useEffect(() => {
+    document.documentElement.classList.toggle('light', isLightMode);
+    localStorage.setItem(themePrefKey, isLightMode ? 'light' : 'dark');
+  }, [isLightMode]);
+
+  // Sidebar expansion state
+  const MORE_PAGES = useMemo(() => new Set([
+    'templates', 'agent-library', 'approvals', 'action-policies', 'audit-log',
+    'model-comparison', 'api-access',
+    'recruitment', 'support-hub', 'sales-hub', 'it-hub', 'identity-hub', 'finance-hub', 'compliance-hub',
+  ]), []);
+  const ADVANCED_PAGES = useMemo(() => new Set([
+    'developer', 'playbooks', 'jobs', 'blackbox', 'runtime-workers',
+  ]), []);
+  const [sidebarMoreOpen, setSidebarMoreOpen] = useState(() =>
+    MORE_PAGES.has(location.pathname.replace(/^\/dashboard\/?/, '').split('/')[0] || '')
+  );
+  const [sidebarAdvancedOpen, setSidebarAdvancedOpen] = useState(() =>
+    ADVANCED_PAGES.has(location.pathname.replace(/^\/dashboard\/?/, '').split('/')[0] || '')
+  );
+  useEffect(() => {
+    if (MORE_PAGES.has(currentPage)) setSidebarMoreOpen(true);
+    if (ADVANCED_PAGES.has(currentPage)) setSidebarAdvancedOpen(true);
+  }, [currentPage, MORE_PAGES, ADVANCED_PAGES]);
+
+  // Setup progress bar
+  const setupBarDismissKey = `synthetic_hr_setup_bar_dismissed:${user?.organizationName || 'workspace'}`;
+  const [setupBarDismissed, setSetupBarDismissed] = useState(() =>
+    typeof window !== 'undefined' ? Boolean(localStorage.getItem(setupBarDismissKey)) : false
+  );
+  const dismissSetupBar = useCallback(() => {
+    localStorage.setItem(setupBarDismissKey, '1');
+    setSetupBarDismissed(true);
+  }, [setupBarDismissKey]);
+
+  // "What changed since you left" banner — shown on first load after 24h+ absence
+  const lastVisitKey = `synthetic_hr_last_visit:${user?.organizationName || 'workspace'}`;
+  const [whatsNewDismissed, setWhatsNewDismissed] = useState(false);
+  const [whatsNewData, setWhatsNewData] = useState<{
+    newIncidents: number;
+    openIncidents: number;
+    agentCount: number;
+    prevAgentCount: number;
+    hoursAway: number;
+  } | null>(null);
+
+  // Record visit + compute delta on first data load
+  useEffect(() => {
+    if (loading || isDemoMode) return;
+    const now = Date.now();
+    const lastVisitStr = localStorage.getItem(lastVisitKey);
+    const lastVisit = lastVisitStr ? parseInt(lastVisitStr, 10) : 0;
+    const hoursAway = lastVisit ? (now - lastVisit) / 3600000 : 0;
+
+    if (hoursAway > 24 && lastVisit) {
+      // Count incidents created since last visit
+      const newIncidents = incidents.filter((i: Incident) => new Date(i.created_at).getTime() > lastVisit).length;
+      const openIncidents = incidents.filter((i: Incident) => i.status === 'open').length;
+      const prevAgentCount = parseInt(localStorage.getItem(`${lastVisitKey}:agents`) || '0', 10);
+      setWhatsNewData({ newIncidents, openIncidents, agentCount: agents.length, prevAgentCount, hoursAway: Math.round(hoursAway) });
+    }
+
+    // Update last visit timestamp
+    localStorage.setItem(lastVisitKey, String(now));
+    localStorage.setItem(`${lastVisitKey}:agents`, String(agents.length));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   // Memorable moments
   const orgScope = user?.organizationName || 'workspace';
@@ -968,68 +1041,27 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
           </button>
 
           <nav className="flex-1 space-y-1" role="navigation" aria-label="Main navigation">
-            {/* ── Workspace ── */}
-            {[
-              { id: 'getting-started', icon: Sparkles, label: 'Getting Started', badge: needsOnboarding ? 'Recommended' : null },
-              { id: 'overview', icon: BarChart3, label: 'Overview' },
-            ].map((item) => (
+            {/* ── Core 7 (always visible) ── */}
+            {needsOnboarding && (
               <button
-                key={item.id}
-                onClick={() => navigateTo(item.id)}
-                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
-                aria-current={currentPage === item.id ? 'page' : undefined}
-                aria-label={item.label}
+                onClick={() => navigateTo('getting-started')}
+                className={cn('nav-item', currentPage === 'getting-started' && 'nav-item-active')}
+                aria-current={currentPage === 'getting-started' ? 'page' : undefined}
               >
-                <item.icon className="w-5 h-5" aria-hidden="true" />
-                <span className="flex-1 min-w-0 text-left">{item.label}</span>
-                {item.badge ? (
-                  <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/25 font-semibold">
-                    {item.badge}
-                  </span>
-                ) : null}
+                <Sparkles className="w-5 h-5" aria-hidden="true" />
+                <span className="flex-1 min-w-0 text-left">Getting Started</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/25 font-semibold">New</span>
               </button>
-            ))}
-
-            {/* ── Agents ── */}
-            <div className="px-2 pt-4 pb-1.5">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-medium">Agents</div>
-            </div>
-            {[
-              { id: 'fleet', icon: Users, label: 'Fleet' },
-              { id: 'templates', icon: Zap, label: 'Templates' },
-              { id: 'agent-library', icon: Bot, label: 'Agent Library' },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => navigateTo(item.id)}
-                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
-                aria-current={currentPage === item.id ? 'page' : undefined}
-                aria-label={item.label}
-              >
-                <item.icon className="w-5 h-5" aria-hidden="true" />
-                <span className="flex-1 min-w-0 text-left">{item.label}</span>
-              </button>
-            ))}
-
-            {/* ── Apps & Data ── */}
-            <div className="px-2 pt-4 pb-1.5">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-medium">Apps & Data</div>
-            </div>
-            <button
-              onClick={() => navigateTo('connectors')}
-              className={cn('nav-item', currentPage === 'connectors' && 'nav-item-active')}
-              aria-current={currentPage === 'connectors' ? 'page' : undefined}
-              aria-label="Connectors"
-            >
-              <Link2 className="w-5 h-5 shrink-0" aria-hidden="true" />
-              <span className="flex-1 min-w-0 text-left">Connectors</span>
-            </button>
-
-            {/* ── Work Hubs ── */}
-            <div className="px-2 pt-4 pb-1.5">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-medium">Work Hubs</div>
-            </div>
-            {hubNavItems.map((item) => (
+            )}
+            {([
+              { id: 'overview', icon: BarChart3, label: 'Overview', badge: null as number | null },
+              { id: 'fleet', icon: Users, label: 'Fleet', badge: null },
+              { id: 'incidents', icon: AlertTriangle, label: 'Incidents', badge: incidents.filter(i => i.status !== 'resolved' && i.status !== 'false_positive').length || null },
+              { id: 'conversations', icon: MessageSquare, label: 'Conversations', badge: null },
+              { id: 'costs', icon: DollarSign, label: 'Costs', badge: null },
+              { id: 'connectors', icon: Link2, label: 'Connectors', badge: null },
+              { id: 'settings', icon: Settings, label: 'Settings', badge: null },
+            ] as const).map((item) => (
               <button
                 key={item.id}
                 onClick={() => navigateTo(item.id)}
@@ -1039,76 +1071,102 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
               >
                 <item.icon className="w-5 h-5 shrink-0" aria-hidden="true" />
                 <span className="flex-1 min-w-0 text-left">{item.label}</span>
+                {item.badge ? (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/25 font-semibold tabular-nums">
+                    {item.badge}
+                  </span>
+                ) : null}
               </button>
             ))}
 
-            {/* ── Monitor ── */}
-            <div className="px-2 pt-4 pb-1.5">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-medium">Monitor</div>
-            </div>
-            {[
-              { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
-              { id: 'incidents', icon: AlertTriangle, label: 'Incidents' },
-              { id: 'approvals', icon: CheckSquare, label: 'Approvals' },
-              { id: 'action-policies', icon: Shield, label: 'Action Policies' },
-              { id: 'costs', icon: DollarSign, label: 'Costs' },
-              { id: 'model-comparison', icon: TrendingUp, label: 'Models' },
-              { id: 'audit-log', icon: ScrollText, label: 'Audit Log' },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => navigateTo(item.id)}
-                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
-                aria-current={currentPage === item.id ? 'page' : undefined}
-                aria-label={item.label}
-              >
-                <item.icon className="w-5 h-5" aria-hidden="true" />
-                <span className="flex-1 min-w-0 text-left">{item.label}</span>
-              </button>
-            ))}
+            {/* ── More (expandable) ── */}
+            <button
+              onClick={() => setSidebarMoreOpen(v => !v)}
+              className="nav-item mt-1"
+              aria-expanded={sidebarMoreOpen}
+            >
+              <span className="flex-1 min-w-0 text-left text-xs font-semibold uppercase tracking-[0.16em]">More</span>
+              <ChevronDown className={cn('w-4 h-4 shrink-0 transition-transform duration-200', sidebarMoreOpen && 'rotate-180')} />
+            </button>
 
-            {/* ── Configure ── */}
-            <div className="px-2 pt-4 pb-1.5">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-medium">Configure</div>
-            </div>
-            {[
-              { id: 'api-access', icon: Key, label: 'API Access' },
-              { id: 'settings', icon: Settings, label: 'Settings' },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => navigateTo(item.id)}
-                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
-                aria-current={currentPage === item.id ? 'page' : undefined}
-                aria-label={item.label}
-              >
-                <item.icon className="w-5 h-5" aria-hidden="true" />
-                <span className="flex-1 min-w-0 text-left">{item.label}</span>
-              </button>
-            ))}
+            {sidebarMoreOpen && (
+              <div className="space-y-1 pl-1 border-l border-white/[0.06] ml-2">
+                {/* Agents */}
+                <p className="px-2 pt-3 pb-1 text-[10px] uppercase tracking-[0.18em] text-slate-600 font-medium">Agents</p>
+                {[
+                  { id: 'templates', icon: Zap, label: 'Templates' },
+                  { id: 'agent-library', icon: Bot, label: 'Agent Library' },
+                ].map((item) => (
+                  <button key={item.id} onClick={() => navigateTo(item.id)}
+                    className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
+                    aria-current={currentPage === item.id ? 'page' : undefined}>
+                    <item.icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <span className="flex-1 min-w-0 text-left">{item.label}</span>
+                  </button>
+                ))}
 
-            {/* ── Advanced Tools ── */}
-            <div className="px-2 pt-4 pb-1.5">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-medium">Advanced Tools</div>
-            </div>
-            {[
-              { id: 'developer', icon: PlugZap, label: 'Developer' },
-              { id: 'playbooks', icon: FileText, label: 'Playbooks' },
-              { id: 'jobs', icon: ClipboardList, label: 'Run History' },
-              { id: 'blackbox', icon: Database, label: 'Black Box' },
-              { id: 'runtime-workers', icon: Server, label: 'Runtime Workers' },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => navigateTo(item.id)}
-                className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
-                aria-current={currentPage === item.id ? 'page' : undefined}
-                aria-label={item.label}
-              >
-                <item.icon className="w-5 h-5" aria-hidden="true" />
-                <span className="flex-1 min-w-0 text-left">{item.label}</span>
-              </button>
-            ))}
+                {/* Monitor+ */}
+                <p className="px-2 pt-3 pb-1 text-[10px] uppercase tracking-[0.18em] text-slate-600 font-medium">Monitor</p>
+                {[
+                  { id: 'approvals', icon: CheckSquare, label: 'Approvals' },
+                  { id: 'action-policies', icon: Shield, label: 'Action Policies' },
+                  { id: 'model-comparison', icon: TrendingUp, label: 'Models' },
+                  { id: 'audit-log', icon: ScrollText, label: 'Audit Log' },
+                  { id: 'api-access', icon: Key, label: 'API Access' },
+                ].map((item) => (
+                  <button key={item.id} onClick={() => navigateTo(item.id)}
+                    className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
+                    aria-current={currentPage === item.id ? 'page' : undefined}>
+                    <item.icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <span className="flex-1 min-w-0 text-left">{item.label}</span>
+                  </button>
+                ))}
+
+                {/* Work Hubs */}
+                {hubNavItems.length > 0 && (
+                  <>
+                    <p className="px-2 pt-3 pb-1 text-[10px] uppercase tracking-[0.18em] text-slate-600 font-medium">Work Hubs</p>
+                    {hubNavItems.map((item) => (
+                      <button key={item.id} onClick={() => navigateTo(item.id)}
+                        className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
+                        aria-current={currentPage === item.id ? 'page' : undefined}>
+                        <item.icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                        <span className="flex-1 min-w-0 text-left">{item.label}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ── Advanced (expandable) ── */}
+            <button
+              onClick={() => setSidebarAdvancedOpen(v => !v)}
+              className="nav-item mt-1"
+              aria-expanded={sidebarAdvancedOpen}
+            >
+              <span className="flex-1 min-w-0 text-left text-xs font-semibold uppercase tracking-[0.16em]">Advanced</span>
+              <ChevronDown className={cn('w-4 h-4 shrink-0 transition-transform duration-200', sidebarAdvancedOpen && 'rotate-180')} />
+            </button>
+
+            {sidebarAdvancedOpen && (
+              <div className="space-y-1 pl-1 border-l border-white/[0.06] ml-2">
+                {[
+                  { id: 'developer', icon: PlugZap, label: 'Developer' },
+                  { id: 'playbooks', icon: FileText, label: 'Playbooks' },
+                  { id: 'jobs', icon: ClipboardList, label: 'Run History' },
+                  { id: 'blackbox', icon: Database, label: 'Black Box' },
+                  { id: 'runtime-workers', icon: Server, label: 'Runtime Workers' },
+                ].map((item) => (
+                  <button key={item.id} onClick={() => navigateTo(item.id)}
+                    className={cn('nav-item', currentPage === item.id && 'nav-item-active')}
+                    aria-current={currentPage === item.id ? 'page' : undefined}>
+                    <item.icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <span className="flex-1 min-w-0 text-left">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </nav>
 
           <div className="pt-4 border-t border-white/10">
@@ -1139,6 +1197,14 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                 <p className="text-sm font-medium text-white truncate">{user?.organizationName}</p>
                 <p className="text-xs text-slate-400 truncate">{user?.email}</p>
               </div>
+              {/* Theme toggle */}
+              <button
+                onClick={() => setIsLightMode((v: boolean) => !v)}
+                className="p-2 text-slate-400 hover:text-white transition-colors"
+                title={isLightMode ? 'Switch to dark mode' : 'Switch to light mode'}
+              >
+                {isLightMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+              </button>
               {/* Notification Bell */}
               <button
                 onClick={() => setShowNotificationPanel(!showNotificationPanel)}
@@ -1331,7 +1397,75 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 p-8 overflow-auto">
+        <main className="flex-1 overflow-auto">
+          {/* Setup progress bar — slim sticky bar shown during onboarding */}
+          {needsOnboarding && !setupBarDismissed && !isDemoMode && (() => {
+            const steps = [
+              true,                                                                                          // workspace ready
+              (coverageStatus?.apiKeys?.total ?? 0) > 0,                                                   // api key created
+              agents.length > 0,                                                                             // agent created
+              integrationRows.some(r => r.status === 'connected' || r.lifecycleStatus === 'connected'),    // app connected
+              coverageStatus?.telemetry?.gatewayObserved === true,                                         // test request sent
+              coverageStatus?.telemetry?.gatewayObserved === true,                                         // coverage verified
+            ];
+            const done = steps.filter(Boolean).length;
+            const total = steps.length;
+            const pct = Math.round((done / total) * 100);
+            return (
+              <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-blue-500/15 bg-slate-950/90 px-6 py-2.5 backdrop-blur-sm">
+                <span className="text-xs font-semibold text-blue-300 shrink-0">Setup {done}/{total}</span>
+                <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden max-w-xs">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-500"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <button
+                  onClick={() => navigateTo('getting-started')}
+                  className="text-xs text-slate-300 hover:text-white transition-colors shrink-0"
+                >
+                  Continue setup →
+                </button>
+                <button onClick={dismissSetupBar} className="text-slate-500 hover:text-slate-300 transition-colors shrink-0 ml-1" aria-label="Dismiss">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            );
+          })()}
+          {/* "What changed since you left" banner */}
+          {whatsNewData && !whatsNewDismissed && (
+            <div className="flex items-start gap-4 border-b border-white/[0.06] bg-slate-900/60 px-6 py-3">
+              <div className="mt-0.5 shrink-0 text-slate-400">
+                <Bell className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-xs font-semibold text-slate-200">
+                  Welcome back — you were away {whatsNewData.hoursAway >= 48
+                    ? `${Math.round(whatsNewData.hoursAway / 24)} days`
+                    : `${whatsNewData.hoursAway}h`}.
+                </span>
+                <span className="ml-3 text-xs text-slate-400">
+                  {whatsNewData.newIncidents > 0 && (
+                    <span className="mr-3 text-rose-300">{whatsNewData.newIncidents} new incident{whatsNewData.newIncidents !== 1 ? 's' : ''}</span>
+                  )}
+                  {whatsNewData.openIncidents > 0 && (
+                    <span className="mr-3">{whatsNewData.openIncidents} open</span>
+                  )}
+                  {whatsNewData.agentCount !== whatsNewData.prevAgentCount && whatsNewData.prevAgentCount > 0 && (
+                    <span className="mr-3 text-emerald-300">
+                      {whatsNewData.agentCount > whatsNewData.prevAgentCount
+                        ? `+${whatsNewData.agentCount - whatsNewData.prevAgentCount} agent${whatsNewData.agentCount - whatsNewData.prevAgentCount !== 1 ? 's' : ''}`
+                        : `${whatsNewData.agentCount - whatsNewData.prevAgentCount} agent${Math.abs(whatsNewData.agentCount - whatsNewData.prevAgentCount) !== 1 ? 's' : ''}`}
+                    </span>
+                  )}
+                </span>
+              </div>
+              <button onClick={() => setWhatsNewDismissed(true)} className="text-slate-600 hover:text-slate-400 transition-colors shrink-0">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+          <div className="p-8">
           {loading ? (
             <DashboardSectionLoading />
           ) : (
@@ -1578,6 +1712,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
               </ErrorBoundary>
 	            </Suspense>
 	          )}
+          </div>
 	        </main>
       </div>
     </div>

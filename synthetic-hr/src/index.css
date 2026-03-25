@@ -19,6 +19,53 @@
     --radius: 1rem;
   }
 
+  /* Light mode overrides */
+  html.light {
+    --color-primary: #f1f5f9;
+    --color-secondary: #e2e8f0;
+    --color-text-primary: #0f172a;
+    --color-text-secondary: #475569;
+    --color-border: #cbd5e1;
+  }
+
+  html.light body {
+    background-color: #f1f5f9;
+    color: #0f172a;
+  }
+
+  html.light .app-bg {
+    background-color: #f8fafc;
+    background-image:
+      radial-gradient(900px circle at 15% 10%, rgba(59, 130, 246, 0.08), transparent 45%),
+      radial-gradient(700px circle at 85% 0%, rgba(34, 211, 238, 0.06), transparent 40%);
+  }
+
+  html.light .card-surface {
+    background: rgba(255, 255, 255, 0.85);
+    border-color: rgba(0, 0, 0, 0.08);
+  }
+
+  html.light .sidebar-surface {
+    background: rgba(255, 255, 255, 0.9);
+    border-right-color: rgba(0, 0, 0, 0.08);
+  }
+
+  html.light .nav-item {
+    color: #475569;
+  }
+
+  html.light .nav-item:hover {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.08);
+    color: #0f172a;
+  }
+
+  html.light .nav-item-active {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.2);
+    color: #1d4ed8;
+  }
+
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--color-border) transparent;

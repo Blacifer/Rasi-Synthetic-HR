@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Activity,
   ArrowRight,
@@ -15,8 +15,10 @@ import {
   X,
   XCircle,
   Zap,
+  UserCheck,
 } from 'lucide-react';
 import type { AIAgent, Incident, CostData } from '../../types';
+import type { AuditLogEntry } from '../../lib/api/governance';
 import OperationalMetrics from '../../components/OperationalMetrics';
 import { api } from '../../lib/api-client';
 import { useCountUp } from '../../hooks/useCountUp';
@@ -206,8 +208,17 @@ export default function DashboardOverview({
     setRefreshing(false);
   }, []);
 
+  // Team Activity Feed — recent audit log entries
+  const [teamActivity, setTeamActivity] = useState<AuditLogEntry[]>([]);
+  const loadTeamActivity = useCallback(async () => {
+    try {
+      const res = await api.auditLogs.list({ limit: 8 });
+      if (res.success && Array.isArray(res.data)) setTeamActivity(res.data);
+    } catch { /* silently ignore */ }
+  }, []);
+
   // Initial load
-  useEffect(() => { void loadOverviewState(); }, [loadOverviewState]);
+  useEffect(() => { void loadOverviewState(); void loadTeamActivity(); }, [loadOverviewState, loadTeamActivity]);
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -495,6 +506,91 @@ const hasData = agents.length > 0;
         </div>
       )}
 
+      {/* Today's Focus — 2-3 action cards scoped to today */}
+      {(() => {
+        const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
+        const todayMs = todayMidnight.getTime();
+        const todayNewIncidents = incidents.filter((i) => new Date(i.created_at).getTime() >= todayMs);
+        const todayOpen = incidents.filter((i) => ['open', 'investigating'].includes((i.status || '').toLowerCase()));
+        const todayCritical = todayOpen.filter((i) => ['high', 'critical'].includes((i.severity || '').toLowerCase()));
+        const todayNearBudget = agents.filter((a) => {
+          const limit = Number(a.budget_limit || 0); const spend = Number(a.current_spend || 0);
+          return limit > 0 && spend / limit >= 0.75;
+        });
+
+        const focusItems = [
+          todayCritical.length > 0 && {
+            id: 'critical',
+            icon: <ShieldAlert className="h-4 w-4 text-rose-400" />,
+            label: `${todayCritical.length} critical incident${todayCritical.length !== 1 ? 's' : ''} need attention`,
+            sub: todayCritical[0]?.title || 'Review now',
+            tone: 'rose' as const,
+            action: () => onNavigate?.('incidents'),
+            cta: 'Investigate →',
+          },
+          todayNewIncidents.length > 0 && todayCritical.length === 0 && {
+            id: 'new-incidents',
+            icon: <Siren className="h-4 w-4 text-amber-400" />,
+            label: `${todayNewIncidents.length} new incident${todayNewIncidents.length !== 1 ? 's' : ''} today`,
+            sub: `${todayOpen.length} still open`,
+            tone: 'amber' as const,
+            action: () => onNavigate?.('incidents'),
+            cta: 'Review →',
+          },
+          todayNearBudget.length > 0 && {
+            id: 'budget',
+            icon: <Zap className="h-4 w-4 text-amber-400" />,
+            label: `${todayNearBudget.length} agent${todayNearBudget.length !== 1 ? 's' : ''} near budget limit`,
+            sub: todayNearBudget[0]?.name || '',
+            tone: 'amber' as const,
+            action: () => onNavigate?.('fleet'),
+            cta: 'Adjust →',
+          },
+          todayCritical.length === 0 && todayNewIncidents.length === 0 && todayNearBudget.length === 0 && {
+            id: 'all-good',
+            icon: <CheckCircle2 className="h-4 w-4 text-emerald-400" />,
+            label: 'No urgent items today',
+            sub: 'Fleet and incidents look healthy',
+            tone: 'emerald' as const,
+            action: null,
+            cta: null,
+          },
+        ].filter(Boolean) as Array<{ id: string; icon: ReactNode; label: string; sub: string; tone: 'rose' | 'amber' | 'emerald'; action: (() => void) | null; cta: string | null }>;
+
+        const toneMap = {
+          rose: 'border-rose-500/20 bg-rose-500/[0.06]',
+          amber: 'border-amber-500/20 bg-amber-500/[0.06]',
+          emerald: 'border-emerald-500/20 bg-emerald-500/[0.06]',
+        };
+
+        return (
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Today&apos;s Focus · {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {focusItems.slice(0, 3).map((item) => (
+                <div key={item.id} className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${toneMap[item.tone]}`}>
+                  {item.icon}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-200 leading-tight">{item.label}</p>
+                    {item.sub && <p className="text-xs text-slate-500 truncate mt-0.5">{item.sub}</p>}
+                  </div>
+                  {item.action && item.cta && (
+                    <button
+                      onClick={item.action}
+                      className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-200 border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-colors whitespace-nowrap"
+                    >
+                      {item.cta}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* System Health Banner */}
       <div className={`flex items-center justify-between rounded-2xl border px-4 py-2.5 text-xs font-semibold ${healthClasses}`}>
         <div className="flex items-center gap-2.5">
@@ -715,6 +811,76 @@ const hasData = agents.length > 0;
           </div>
         </section>
       </div>
+
+      {/* "You Saved This Much" milestone card — shown when there are governed conversations */}
+      {totalConversations > 0 && (() => {
+        const MINS_PER_CONV = 5;         // avg manual handling time
+        const LABOR_RATE_PER_HOUR = 500; // ₹/hr blended support cost
+        const hoursSaved = Math.round(totalConversations * MINS_PER_CONV / 60);
+        const moneySaved = Math.round(hoursSaved * LABOR_RATE_PER_HOUR);
+        const netSaving = moneySaved - Math.round(totalCost);
+        return (
+          <section className="relative overflow-hidden rounded-[28px] border border-emerald-500/20 bg-[radial-gradient(ellipse_at_top_left,rgba(16,185,129,0.12),transparent_55%),radial-gradient(ellipse_at_bottom_right,rgba(6,182,212,0.08),transparent_50%)] bg-slate-900/60 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-400">Automation savings</p>
+                <h2 className="mt-1 text-2xl font-bold text-white">
+                  Your agents handled {totalConversations.toLocaleString()} conversation{totalConversations !== 1 ? 's' : ''}
+                </h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  That&apos;s an estimated {hoursSaved.toLocaleString()} hours of manual support work saved.
+                </p>
+              </div>
+              <div className="flex gap-4 shrink-0">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-emerald-300">₹{moneySaved.toLocaleString()}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">labor saved</p>
+                </div>
+                <div className="w-px bg-white/10" />
+                <div className="text-center">
+                  <p className={`text-2xl font-bold ${netSaving >= 0 ? 'text-emerald-300' : 'text-amber-300'}`}>
+                    {netSaving >= 0 ? '+' : ''}₹{Math.abs(netSaving).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">net benefit</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        );
+      })()}
+
+      {/* Team Activity Feed */}
+      {teamActivity.length > 0 && (
+        <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+          <div className="flex items-center gap-2 mb-4">
+            <UserCheck className="h-4 w-4 text-blue-300 shrink-0" />
+            <h2 className="text-base font-semibold text-white">Team Activity</h2>
+            <span className="ml-auto text-xs text-slate-500">Last {teamActivity.length} actions</span>
+          </div>
+          <div className="space-y-2">
+            {teamActivity.map((entry: AuditLogEntry) => {
+              const actor = entry.users?.email
+                ? entry.users.email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+                : 'System';
+              const action = entry.action.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+              const resource = entry.resource_type.replace(/_/g, ' ');
+              return (
+                <div key={entry.id} className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-2.5">
+                  <div className="h-7 w-7 shrink-0 rounded-full bg-slate-700 flex items-center justify-center text-[11px] font-bold text-slate-300">
+                    {actor.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-slate-200">{actor}</span>
+                    <span className="text-sm text-slate-500"> · {action} </span>
+                    <span className="text-sm text-slate-400">{resource}</span>
+                  </div>
+                  <span className="shrink-0 text-xs text-slate-600">{formatRelative(entry.created_at)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* App Health widget */}
       {telemetry && telemetry.integrations.total > 0 ? (

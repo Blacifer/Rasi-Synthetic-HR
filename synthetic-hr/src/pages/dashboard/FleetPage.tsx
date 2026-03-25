@@ -40,6 +40,17 @@ type WorkspaceState = {
   analyticsError: string | null;
 };
 
+function InfoTip({ text }: { text: string }) {
+  return (
+    <span className="group relative inline-flex items-center">
+      <span className="ml-1 inline-flex h-3.5 w-3.5 cursor-default items-center justify-center rounded-full border border-slate-600 text-[9px] font-bold text-slate-500 hover:border-slate-400 hover:text-slate-300 transition-colors">?</span>
+      <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 w-48 -translate-x-1/2 rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs leading-relaxed text-slate-300 opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+        {text}
+      </span>
+    </span>
+  );
+}
+
 export default function FleetPage({
   agents,
   setAgents,
@@ -106,6 +117,7 @@ export default function FleetPage({
   const [suggestedApps, setSuggestedApps] = useState<any[]>([]);
   const [testJobBusy, setTestJobBusy] = useState(false);
   const pollRef = useRef<number | null>(null);
+  const [driftAlerts, setDriftAlerts] = useState<Record<string, { prevRisk: number; currentRisk: number; prevModel: string; currentModel: string; reason: string }>>({});
 
   const pollJob = (jobId: string) => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -121,6 +133,43 @@ export default function FleetPage({
   };
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  // Behavioral drift detection: compare current agent state against stored baseline
+  useEffect(() => {
+    if (isLoading || agents.length === 0) return;
+    const newAlerts: typeof driftAlerts = {};
+    for (const a of agents) {
+      const key = `rasi_drift_baseline_${a.id}`;
+      const stored = localStorage.getItem(key);
+      if (!stored) {
+        localStorage.setItem(key, JSON.stringify({ risk_score: a.risk_score, model_name: a.model_name }));
+        continue;
+      }
+      const baseline = JSON.parse(stored) as { risk_score: number; model_name: string };
+      const riskJump = a.risk_score - baseline.risk_score;
+      const modelChanged = baseline.model_name && a.model_name !== baseline.model_name;
+      if (riskJump >= 15 || modelChanged) {
+        const reasons: string[] = [];
+        if (riskJump >= 15) reasons.push(`risk score jumped +${riskJump} pts (${baseline.risk_score} → ${a.risk_score})`);
+        if (modelChanged) reasons.push(`model changed from ${baseline.model_name} to ${a.model_name}`);
+        newAlerts[a.id] = {
+          prevRisk: baseline.risk_score,
+          currentRisk: a.risk_score,
+          prevModel: baseline.model_name,
+          currentModel: a.model_name,
+          reason: reasons.join('; '),
+        };
+      }
+    }
+    setDriftAlerts(newAlerts);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, agents.length]);
+
+  const dismissDrift = (agentId: string) => {
+    const a = agents.find((ag) => ag.id === agentId);
+    if (a) localStorage.setItem(`rasi_drift_baseline_${agentId}`, JSON.stringify({ risk_score: a.risk_score, model_name: a.model_name }));
+    setDriftAlerts((prev: typeof driftAlerts) => { const next = { ...prev }; delete next[agentId]; return next; });
+  };
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   // Integration Assignment Panel
   const [showAddIntegration, setShowAddIntegration] = useState(false);
@@ -948,6 +997,31 @@ export default function FleetPage({
     .toString()
     .replace(/\/api\/?$/, '');
 
+  const exportCSV = () => {
+    const headers = ['ID', 'Name', 'Type', 'Model', 'Status', 'Risk Score', 'Conversations', 'Budget Limit (INR)', 'Current Spend (INR)', 'Created At'].join(',');
+    const rows = filteredAgents.map((a) => [
+      a.id,
+      `"${a.name.replace(/"/g, '""')}"`,
+      a.agent_type,
+      a.model_name,
+      a.status,
+      a.risk_score ?? '',
+      a.conversations ?? 0,
+      a.budget_limit ?? '',
+      a.current_spend ?? '',
+      a.created_at ? new Date(a.created_at).toISOString() : '',
+    ].join(','));
+    const csvContent = [headers, ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', 'rasi_fleet.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Fleet data exported');
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -955,14 +1029,26 @@ export default function FleetPage({
           <h1 className="text-3xl font-bold text-white">Agent Fleet</h1>
           <p className="text-slate-400 mt-2">Track governed agents, runtime posture, and intervention controls.</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="btn-primary px-4 py-2 text-sm flex items-center gap-2"
-          aria-label="Add new AI agent"
-        >
-          <Plus className="w-4 h-4" />
-          Add Agent
-        </button>
+        <div className="flex items-center gap-2">
+          {filteredAgents.length > 0 && (
+            <button
+              onClick={exportCSV}
+              className="btn-secondary px-4 py-2 text-sm flex items-center gap-2"
+              aria-label="Export fleet data as CSV"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </button>
+          )}
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="btn-primary px-4 py-2 text-sm flex items-center gap-2"
+            aria-label="Add new AI agent"
+          >
+            <Plus className="w-4 h-4" />
+            Add Agent
+          </button>
+        </div>
       </div>
 
       {/* Search & Filter Bar */}
@@ -1232,6 +1318,32 @@ export default function FleetPage({
                     </div>
                   </div>
                 </div>
+
+                {/* Behavioral drift alert */}
+                {driftAlerts[agent.id] && (
+                  <div className="mx-5 mb-4 flex items-start gap-3 rounded-xl border border-amber-400/25 bg-amber-400/[0.06] px-4 py-3">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-amber-300">This agent has changed</p>
+                      <p className="text-xs text-amber-400/70 mt-0.5">{driftAlerts[agent.id].reason}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => openWorkspace(agent.id)}
+                        className="text-xs font-semibold text-amber-300 hover:text-amber-200 transition-colors"
+                      >
+                        Review →
+                      </button>
+                      <button
+                        onClick={() => dismissDrift(agent.id)}
+                        className="text-slate-500 hover:text-slate-300 transition-colors"
+                        title="Dismiss drift alert"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
 
               </div>
             );
@@ -2073,7 +2185,7 @@ export default function FleetPage({
                     <div className="mt-2 text-sm text-slate-400">Current lifecycle: {activeWorkspaceAgent.lifecycle_state}</div>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                    <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Risk score</div>
+                    <div className="flex items-center text-xs uppercase tracking-[0.16em] text-slate-500">Risk score<InfoTip text="Composite score (0–100) based on open incident count, severity, and policy violations. Higher = more governance attention needed." /></div>
                     <div className="mt-3 text-2xl font-semibold text-white">{activeWorkspaceAgent.risk_score}/100</div>
                     <div className="mt-2 text-sm text-slate-400">Risk level: {activeWorkspaceAgent.risk_level}</div>
                   </div>
@@ -2246,7 +2358,7 @@ export default function FleetPage({
                           <DollarSign className="w-4 h-4 text-emerald-400" /> Budget & Spend Controls
                         </h4>
                         <div>
-                          <label className="block text-xs text-slate-400 mb-1.5">Monthly Budget Cap (₹)</label>
+                          <label className="flex items-center text-xs text-slate-400 mb-1.5">Monthly Budget Cap (₹)<InfoTip text="When spend reaches this limit, the agent stops processing new requests until the next billing cycle or the cap is raised." /></label>
                           <div className="relative">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 text-sm font-bold">₹</span>
                             <input

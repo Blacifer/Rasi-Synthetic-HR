@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback, type MouseEvent, type ChangeEvent } from 'react';
 import { AlertTriangle, CheckCircle2, Search, ShieldAlert, Trash2, X } from 'lucide-react';
 import type { AIAgent, Incident, IncidentSeverity, IncidentType } from '../../types';
 import { toast } from '../../lib/toast';
@@ -412,6 +412,41 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
   const uniqueIncidentTypes = Array.from(new Set(incidents.map((incident) => incident.incident_type)));
   const allVisibleSelected = filteredIncidents.length > 0 && filteredIncidents.every((incident) => selectedIds.includes(incident.id));
   const orderedIncidents = [...filteredIncidents].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  // Keyboard shortcuts — J/K navigate, R resolve, A cycle owner, ? show help
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  const handleKeyboardShortcuts = useCallback((e: KeyboardEvent) => {
+    if ((e.target as HTMLElement).matches('input,textarea,select')) return;
+    if (e.key === '?') { setShowShortcutsHelp((v: boolean) => !v); return; }
+    if (!selectedIncidentId && e.key !== 'j') return;
+    const idx = orderedIncidents.findIndex(i => i.id === selectedIncidentId);
+    if (e.key === 'j') {
+      const next = orderedIncidents[idx + 1] ?? orderedIncidents[0];
+      if (next) setSelectedIncidentId(next.id);
+    } else if (e.key === 'k') {
+      const prev = orderedIncidents[idx - 1] ?? orderedIncidents[orderedIncidents.length - 1];
+      if (prev) setSelectedIncidentId(prev.id);
+    } else if (e.key === 'r' || e.key === 'R') {
+      const inc = orderedIncidents[idx];
+      if (inc && inc.status !== 'resolved') void updateIncidentStatus(inc.id, 'resolved');
+    } else if (e.key === 'a' || e.key === 'A') {
+      const inc = orderedIncidents[idx];
+      if (inc) {
+        const meta = incidentMeta[inc.id] || defaultMetaForIncident(inc);
+        const ownerIdx = OWNER_OPTIONS.indexOf(meta.owner);
+        const nextOwner = OWNER_OPTIONS[(ownerIdx + 1) % OWNER_OPTIONS.length];
+        updateMeta(inc.id, { owner: nextOwner });
+      }
+    } else if (e.key === 'Escape') {
+      setSelectedIncidentId(null);
+      setShowShortcutsHelp(false);
+    }
+  }, [orderedIncidents, selectedIncidentId, incidentMeta, updateIncidentStatus, updateMeta]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyboardShortcuts);
+    return () => window.removeEventListener('keydown', handleKeyboardShortcuts);
+  }, [handleKeyboardShortcuts]);
   const sourceOptionsForFilter = (SIMULATIONS_ENABLED && includeSimulated)
     ? SOURCE_OPTIONS
     : SOURCE_OPTIONS.filter((source) => source !== 'manual_test');
@@ -429,12 +464,31 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
 
   return (
     <div className="space-y-6">
+      {/* Keyboard shortcuts help overlay */}
+      {showShortcutsHelp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowShortcutsHelp(false)}>
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+            <h3 className="mb-4 text-sm font-bold uppercase tracking-[0.18em] text-slate-400">Keyboard Shortcuts</h3>
+            <div className="space-y-2">
+              {[['J', 'Next incident'], ['K', 'Previous incident'], ['R', 'Resolve selected'], ['A', 'Cycle owner/assign'], ['Esc', 'Close panel'], ['?', 'Toggle this help']].map(([key, desc]) => (
+                <div key={key} className="flex items-center justify-between">
+                  <span className="text-sm text-slate-300">{desc}</span>
+                  <kbd className="rounded-lg border border-white/15 bg-white/[0.06] px-2.5 py-1 font-mono text-xs text-slate-200">{key}</kbd>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-amber-200">
             <ShieldAlert className="h-3.5 w-3.5" /> Incident Queue
           </div>
-          <h1 className="mt-4 text-3xl font-bold tracking-tight text-white">Incident operations</h1>
+          <div className="mt-4 flex items-center gap-3">
+            <h1 className="text-3xl font-bold tracking-tight text-white">Incident operations</h1>
+            <button onClick={() => setShowShortcutsHelp(true)} className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-mono text-slate-500 hover:text-slate-300 transition-colors" title="Keyboard shortcuts">?</button>
+          </div>
           <p className="mt-2 max-w-3xl text-sm text-slate-400">Review incidents detected from live agent traffic and enforcement rules, then move each case through a clear workflow with ownership, priority, and resolution notes.</p>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 font-semibold text-emerald-200">Live incidents: {incidentSourceCounts.live}</span>
@@ -750,6 +804,18 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                               Resolve
                             </button>
                           )}
+                          <select
+                            value={meta.owner}
+                            onClick={(e: MouseEvent) => e.stopPropagation()}
+                            onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+                              e.stopPropagation();
+                              updateMeta(incident.id, { owner: e.target.value });
+                            }}
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 cursor-pointer"
+                            aria-label="Assign owner"
+                          >
+                            {OWNER_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                          </select>
                           <button
                             onClick={(event) => {
                               event.stopPropagation();
@@ -758,7 +824,6 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                             className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-rose-500/30 hover:text-rose-300"
                           >
                             <Trash2 className="h-4 w-4" />
-                            Delete
                           </button>
                         </div>
                       </div>
