@@ -75,12 +75,12 @@
   }
 
   .nav-item {
-    @apply w-full flex items-center gap-3 rounded-xl px-4 py-2.5 text-slate-300 transition-colors;
-    @apply border border-transparent hover:border-white/10 hover:bg-white/[0.04] hover:text-white;
+    @apply w-full flex items-center gap-3 rounded-xl px-4 py-2.5 text-slate-500 transition-colors;
+    @apply border border-transparent hover:border-white/10 hover:bg-white/[0.04] hover:text-slate-200;
   }
 
   .nav-item-active {
-    @apply bg-white/[0.06] border-white/10 text-white;
+    @apply bg-white/[0.06] border-white/10 text-white font-medium;
   }
 
   .input-field {

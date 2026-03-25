@@ -15,6 +15,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { cn } from '../lib/utils';
 import { CommandPalette } from '../components/CommandPalette';
 import { guessPackForIntegration, type IntegrationPackId } from '../lib/integration-packs';
+import { loadFromStorage, saveToStorage, STORAGE_KEYS } from '../utils/storage';
 
 const DashboardOverview = lazy(() => import('./dashboard/DashboardOverview'));
 const GettingStartedPage = lazy(() => import('./dashboard/GettingStartedPage'));
@@ -287,6 +288,53 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
   const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
   const [role, setRole] = useState<string>('super_admin');
   const [coverageStatus, setCoverageStatus] = useState<CoverageNotificationPayload | null>(null);
+
+  // Memorable moments
+  const orgScope = user?.organizationName || 'workspace';
+  const [agentAliveData, setAgentAliveData] = useState<{ agentName: string; agentId: string } | null>(null);
+  const [caughtSomethingData, setCaughtSomethingData] = useState<Incident | null>(null);
+
+  // "Your Agent is Alive" — fires once per agent that reaches its first real conversation
+  useEffect(() => {
+    if (!agents.length) return;
+    const seenKey = `${STORAGE_KEYS.AGENT_ALIVE_SEEN}:${orgScope}`;
+    const seenIds = loadFromStorage<string[]>(seenKey, []);
+    const firstLive = agents.find(
+      (a) => a.conversations > 0 && !seenIds.includes(a.id),
+    );
+    if (firstLive) {
+      setAgentAliveData({ agentName: firstLive.name, agentId: firstLive.id });
+    }
+  }, [agents, orgScope]);
+
+  const dismissAgentAlive = useCallback(() => {
+    if (!agentAliveData) return;
+    const seenKey = `${STORAGE_KEYS.AGENT_ALIVE_SEEN}:${orgScope}`;
+    const seenIds = loadFromStorage<string[]>(seenKey, []);
+    saveToStorage(seenKey, [...seenIds, agentAliveData.agentId]);
+    setAgentAliveData(null);
+  }, [agentAliveData, orgScope]);
+
+  // "We Caught Something" — fires once ever per org on first live-traffic incident
+  useEffect(() => {
+    if (!incidents.length) return;
+    const seenKey = `${STORAGE_KEYS.CAUGHT_SOMETHING_SEEN}:${orgScope}`;
+    const alreadySeen = loadFromStorage<boolean>(seenKey, false);
+    if (alreadySeen) return;
+    const firstReal = [...incidents]
+      .sort((a: Incident, b: Incident) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .find((inc) => inc.source === 'live_traffic');
+    if (firstReal) {
+      setCaughtSomethingData(firstReal);
+    }
+  }, [incidents, orgScope]);
+
+  const dismissCaughtSomething = useCallback((goToIncidents?: boolean) => {
+    const seenKey = `${STORAGE_KEYS.CAUGHT_SOMETHING_SEEN}:${orgScope}`;
+    saveToStorage(seenKey, true);
+    setCaughtSomethingData(null);
+    if (goToIncidents) navigate('/dashboard/incidents');
+  }, [orgScope, navigate]);
 
   const hasUserNavigatedRef = useRef(false);
   const hasAutoRedirectedRef = useRef(false);
@@ -1198,6 +1246,86 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* "Your Agent is Alive" overlay — fires once per agent on first real conversation */}
+        {agentAliveData && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+            <div className="relative mx-4 w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-8 text-center shadow-2xl">
+              {/* Pulsing alive dot */}
+              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10">
+                <span className="h-4 w-4 animate-pulse rounded-full bg-emerald-400" />
+              </div>
+              <h2 className="mb-2 text-2xl font-bold text-white">Your agent is alive</h2>
+              <p className="mb-1 text-sm text-slate-400">
+                <span className="font-semibold text-slate-200">{agentAliveData.agentName}</span> just received its first real conversation.
+              </p>
+              <p className="mb-8 text-xs text-slate-500">The governance clock is running — costs, incidents, and policies are now active.</p>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => { dismissAgentAlive(); navigateTo('conversations'); }}
+                  className="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                >
+                  View First Conversation
+                </button>
+                <button
+                  onClick={dismissAgentAlive}
+                  className="w-full rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-400 transition hover:bg-white/[0.04] hover:text-slate-200"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* "We Caught Something" overlay — fires once ever per org on first live-traffic incident */}
+        {caughtSomethingData && (
+          <div
+            className={`fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm ${
+              ['critical', 'high'].includes(caughtSomethingData.severity?.toLowerCase() ?? '')
+                ? 'bg-rose-950/80'
+                : 'bg-orange-950/80'
+            }`}
+            style={{ animation: 'overlayIn 150ms ease-out' }}
+          >
+            <div className="relative mx-4 w-full max-w-lg rounded-2xl border border-rose-500/20 bg-slate-900 p-8 shadow-2xl">
+              {/* Severity badge */}
+              <div className="mb-5 flex items-center gap-2">
+                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-rose-400" />
+                <span className="text-xs font-bold uppercase tracking-widest text-rose-400">
+                  {(caughtSomethingData.severity || 'high').toUpperCase()} · LIVE DETECTION
+                </span>
+              </div>
+              <h2 className="mb-2 text-3xl font-bold text-rose-100">We caught something.</h2>
+              <p className="mb-1 text-sm text-slate-300">
+                <span className="font-semibold text-white">
+                  {(caughtSomethingData.incident_type || 'Incident').replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                </span>{' '}
+                detected on{' '}
+                <span className="font-semibold text-white">{caughtSomethingData.agent_name || 'an agent'}</span>.
+              </p>
+              {caughtSomethingData.description && (
+                <div className="mt-4 rounded-xl border border-white/[0.06] bg-black/30 px-4 py-3">
+                  <p className="line-clamp-2 font-mono text-xs text-slate-400">{caughtSomethingData.description}</p>
+                </div>
+              )}
+              <div className="mt-8 flex flex-col gap-3">
+                <button
+                  onClick={() => dismissCaughtSomething(true)}
+                  className="w-full rounded-xl bg-rose-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-rose-500"
+                >
+                  Investigate Now →
+                </button>
+                <button
+                  onClick={() => dismissCaughtSomething(false)}
+                  className="w-full text-sm text-slate-500 transition hover:text-slate-300"
+                >
+                  Mark as false positive and dismiss
+                </button>
+              </div>
             </div>
           </div>
         )}

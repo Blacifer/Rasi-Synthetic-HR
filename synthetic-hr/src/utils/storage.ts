@@ -10,6 +10,10 @@ export const STORAGE_KEYS = {
   API_KEYS: 'synthetic_hr_api_keys',
   NOTIFICATIONS: 'synthetic_hr_notifications',
   RETENTION_DAYS: 'synthetic_hr_retention_days',
+  // Memorable moment tracking (org-scoped — append `:${orgName}` when using)
+  MORNING_BRIEFING_DATE: 'synthetic_hr_morning_briefing_date',
+  AGENT_ALIVE_SEEN: 'synthetic_hr_agent_alive_seen',
+  CAUGHT_SOMETHING_SEEN: 'synthetic_hr_caught_something_seen',
 } as const;
 
 /**

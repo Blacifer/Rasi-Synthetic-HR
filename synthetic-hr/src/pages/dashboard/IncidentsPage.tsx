@@ -654,6 +654,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                   const meta = incidentMeta[incident.id] || defaultMetaForIncident(incident);
                   const isSelected = incident.id === selectedIncidentId;
                   const isChecked = selectedIds.includes(incident.id);
+                  const severityAccent = incident.severity === 'critical' ? 'bg-rose-500' : incident.severity === 'high' ? 'bg-orange-500' : incident.severity === 'medium' ? 'bg-amber-400' : 'bg-slate-600';
                   return (
                     <div
                       key={incident.id}
@@ -666,8 +667,9 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                       }}
                       role="button"
                       tabIndex={0}
-                      className={`block w-full rounded-2xl border p-4 text-left transition cursor-pointer backdrop-blur-sm ${isSelected ? 'border-cyan-400/50 bg-cyan-500/[0.08]' : 'border-slate-700/60 bg-slate-900/60 shadow-[0_4px_16px_rgba(0,0,0,0.2)] hover:border-slate-500/70'}`}
+                      className={`relative overflow-hidden block w-full rounded-2xl border p-4 text-left transition cursor-pointer backdrop-blur-sm ${isSelected ? 'border-cyan-400/50 bg-cyan-500/[0.08]' : 'border-slate-700/60 bg-slate-900/60 shadow-[0_4px_16px_rgba(0,0,0,0.2)] hover:border-slate-500/70'}`}
                     >
+                      <div className={`absolute left-0 top-0 h-full w-[3px] ${severityAccent}`} />
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">

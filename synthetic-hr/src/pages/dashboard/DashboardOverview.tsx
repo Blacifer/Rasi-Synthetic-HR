@@ -12,6 +12,7 @@ import {
   Sparkles,
   TrendingUp,
   Users,
+  X,
   XCircle,
   Zap,
 } from 'lucide-react';
@@ -19,6 +20,8 @@ import type { AIAgent, Incident, CostData } from '../../types';
 import OperationalMetrics from '../../components/OperationalMetrics';
 import { api } from '../../lib/api-client';
 import { useCountUp } from '../../hooks/useCountUp';
+import { useApp } from '../../context/AppContext';
+import { loadFromStorage, saveToStorage, STORAGE_KEYS } from '../../utils/storage';
 
 interface DashboardOverviewProps {
   agents: AIAgent[];
@@ -173,9 +176,24 @@ export default function DashboardOverview({
   onAddAgent,
   onNavigate,
 }: DashboardOverviewProps) {
+  const { user } = useApp();
   const [telemetry, setTelemetry] = useState<OverviewTelemetry | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const AUTO_REFRESH_INTERVAL = 30; // seconds
+
+  // Morning Briefing — show once per calendar day per org
+  const orgScope = user?.organizationName || 'workspace';
+  const briefingKey = `${STORAGE_KEYS.MORNING_BRIEFING_DATE}:${orgScope}`;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [showBriefing, setShowBriefing] = useState<boolean>(() => {
+    const lastSeen = loadFromStorage<string>(briefingKey, '');
+    return lastSeen !== todayStr;
+  });
+
+  const dismissBriefing = useCallback(() => {
+    saveToStorage(briefingKey, todayStr);
+    setShowBriefing(false);
+  }, [briefingKey, todayStr]);
 
   const loadOverviewState = useCallback(async () => {
     setRefreshing(true);
@@ -423,8 +441,60 @@ const hasData = agents.length > 0;
       : 'border-emerald-500/30 bg-emerald-500/[0.07] text-emerald-300';
   const dotClasses = heroTone === 'risk' ? 'bg-rose-400' : heroTone === 'warn' ? 'bg-amber-400' : 'bg-emerald-400';
 
+  const firstName = user?.email
+    ? (user.email.split('@')[0].split('.')[0] ?? 'there')
+        .replace(/[^a-zA-Z]/g, '')
+        .replace(/^./, (c: string) => c.toUpperCase()) || 'there'
+    : 'there';
+  const greetingHour = new Date().getHours();
+  const greeting = greetingHour < 12 ? 'Good morning' : greetingHour < 17 ? 'Good afternoon' : 'Good evening';
+  const nearBudgetAgents = agents.filter((a) => {
+    const limit = Number(a.budget_limit || 0);
+    const spend = Number(a.current_spend || 0);
+    return limit > 0 && spend / limit >= 0.75;
+  });
+
   return (
     <div className="space-y-8">
+      {/* Morning Briefing — shown once per calendar day */}
+      {showBriefing && (
+        <div className="relative flex items-start gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-5 py-4 shadow-sm">
+          {/* Accent bar */}
+          <div className="absolute left-0 inset-y-0 w-1 rounded-l-2xl bg-gradient-to-b from-cyan-400 to-blue-500" />
+          <div className="flex-1 min-w-0 pl-2">
+            <p className="text-sm font-semibold text-slate-200">
+              {greeting}, {firstName}. Here&apos;s where things stand.
+            </p>
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${openIncidents.length > 0 ? 'border-rose-500/30 bg-rose-500/10 text-rose-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${openIncidents.length > 0 ? 'bg-rose-400' : 'bg-emerald-400'}`} />
+                {openIncidents.length > 0 ? `${openIncidents.length} incident${openIncidents.length !== 1 ? 's' : ''} open` : 'No open incidents'}
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+                {last24hConversations.toLocaleString()} request{last24hConversations !== 1 ? 's' : ''} yesterday
+              </span>
+              {nearBudgetAgents.length > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                  {nearBudgetAgents[0].name} near budget limit
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-slate-400">
+                Month spend: {formatCompactCurrency(totalCost)}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={dismissBriefing}
+            className="flex-shrink-0 rounded-lg p-1.5 text-slate-500 transition hover:bg-white/[0.06] hover:text-slate-300"
+            aria-label="Dismiss briefing"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* System Health Banner */}
       <div className={`flex items-center justify-between rounded-2xl border px-4 py-2.5 text-xs font-semibold ${healthClasses}`}>
         <div className="flex items-center gap-2.5">
@@ -507,7 +577,7 @@ const hasData = agents.length > 0;
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{card.label}</p>
-                  <p className="mt-2 text-2xl font-bold font-mono tabular-nums text-white">{card.value}</p>
+                  <p className="mt-2 text-3xl font-bold font-mono tabular-nums text-white">{card.value}</p>
                   <p className={`mt-1 text-xs ${card.tone === 'risk' ? 'text-rose-300' : card.tone === 'warn' ? 'text-amber-300' : card.tone === 'good' ? 'text-emerald-300' : 'text-slate-200'}`}>
                     {card.delta}
                   </p>
