@@ -1201,7 +1201,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
               <button
                 onClick={() => setIsLightMode((v: boolean) => !v)}
                 className="p-2 text-slate-400 hover:text-white transition-colors"
-                title={isLightMode ? 'Switch to dark mode' : 'Switch to light mode'}
+                title={isLightMode ? 'Switch to dark mode' : 'Switch to dim mode'}
               >
                 {isLightMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
               </button>
