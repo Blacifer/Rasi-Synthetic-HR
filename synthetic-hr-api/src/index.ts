@@ -180,22 +180,7 @@ async function checkSupabaseHealth(): Promise<{ ok: boolean; latency_ms: number;
 // Middleware - Security first with CORS validation
 const allowedOrigins = getAllowedOrigins();
 logger.info('Configured allowed CORS origins', { allowedOrigins });
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'https:'],
-      connectSrc: ["'self'", ...allowedOrigins],
-      frameSrc: ["'none'"],
-      baseUri: ["'self'"],
-      formAction: ["'self'"],
-    },
-  },
-}));
-app.use(compression()); // Enable gzip compression
-app.use(cors({
+const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
     const normalizedOrigin = origin ? normalizeOrigin(origin) : null;
 
@@ -212,7 +197,28 @@ app.use(cors({
   },
   credentials: true,
   maxAge: 86400,
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Request-Id'],
+  exposedHeaders: ['x-request-id'],
+  optionsSuccessStatus: 204,
+};
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'", ...allowedOrigins],
+      frameSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
 }));
+app.use(compression()); // Enable gzip compression
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 // Slack webhook needs the raw body Buffer for HMAC signature verification.
 // Must be registered BEFORE express.json() parses the body into an object.
