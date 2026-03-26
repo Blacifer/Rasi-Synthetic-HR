@@ -127,22 +127,40 @@ const authWriteLimiter = rateLimit({
   },
 });
 
+function normalizeOrigin(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+  try {
+    return new URL(withScheme).origin;
+  } catch {
+    return trimmed.replace(/\/+$/, '') || null;
+  }
+}
+
 // Helper: Get safe CORS origins
 function getAllowedOrigins(): string[] {
   if (process.env.NODE_ENV !== 'production') {
     return ['http://localhost:3000', 'http://localhost:5173'];
   }
 
-  const configured = (process.env.FRONTEND_URL || '')
+  const configured = [
+    process.env.FRONTEND_URL || '',
+    process.env.VERCEL_PROJECT_PRODUCTION_URL || '',
+    process.env.VERCEL_URL || '',
+  ]
+    .join(',')
     .split(',')
-    .map((url) => url.trim())
-    .filter((url) => url.length > 0);
+    .map((url) => normalizeOrigin(url))
+    .filter((url): url is string => Boolean(url));
 
   if (configured.includes('*')) {
     throw new Error('CORS wildcard origins not allowed with credentials=true');
   }
 
-  return configured;
+  return Array.from(new Set(configured));
 }
 
 // Helper: Check Supabase connectivity
@@ -161,6 +179,7 @@ async function checkSupabaseHealth(): Promise<{ ok: boolean; latency_ms: number;
 
 // Middleware - Security first with CORS validation
 const allowedOrigins = getAllowedOrigins();
+logger.info('Configured allowed CORS origins', { allowedOrigins });
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -178,9 +197,16 @@ app.use(helmet({
 app.use(compression()); // Enable gzip compression
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    const normalizedOrigin = origin ? normalizeOrigin(origin) : null;
+
+    if (!origin || (normalizedOrigin && allowedOrigins.includes(normalizedOrigin))) {
       callback(null, true);
     } else {
+      logger.warn('Rejected CORS origin', {
+        origin,
+        normalizedOrigin,
+        allowedOrigins,
+      });
       callback(new Error('CORS not allowed'), false);
     }
   },
