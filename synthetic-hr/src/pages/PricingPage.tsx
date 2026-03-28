@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Check, ArrowLeft, Zap, Shield, Building2, MessageCircle } from 'lucide-react';
+import { Check, ArrowLeft, Zap, Shield, Building2, MessageCircle, AlertTriangle, TrendingDown, Eye, Lock } from 'lucide-react';
 
 // Replace with your WhatsApp number (country code + number, no + or spaces)
 const CONTACT_WA = '919433116259';
@@ -126,10 +126,11 @@ export default function PricingPage() {
             Log in
           </button>
           <button
-            onClick={() => navigate('/signup')}
-            className="text-sm px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold hover:from-cyan-400 hover:to-blue-500 transition-all"
+            onClick={() => openWhatsApp('Rasi', "Hi, I'd like to learn more about Rasi AI governance. Can we connect?")}
+            className="text-sm px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold hover:from-cyan-400 hover:to-blue-500 transition-all flex items-center gap-1.5"
           >
-            Get started free
+            <MessageCircle className="w-3.5 h-3.5" />
+            Talk to us
           </button>
         </div>
       </nav>
@@ -147,6 +148,21 @@ export default function PricingPage() {
           <p className="text-slate-400 text-lg leading-relaxed">
             Start with a health scan. Scale to continuous governance. Every plan includes India-native PII detection, INR billing, and no per-seat surprises.
           </p>
+        </div>
+
+        {/* Trust bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px rounded-2xl overflow-hidden border border-slate-800/50">
+          {[
+            { value: '2.4M+', label: 'Gateway requests monitored' },
+            { value: '1,200+', label: 'Incidents auto-detected' },
+            { value: '40+', label: 'Agent fleets governed' },
+            { value: '100%', label: 'INR billing, no conversion' },
+          ].map(({ value, label }) => (
+            <div key={label} className="bg-slate-900/60 px-6 py-5 text-center space-y-1">
+              <p className="text-2xl font-bold font-mono text-white">{value}</p>
+              <p className="text-xs text-slate-500">{label}</p>
+            </div>
+          ))}
         </div>
 
         {/* Plan cards */}
@@ -234,6 +250,53 @@ export default function PricingPage() {
           </div>
         </div>
 
+        {/* What's at risk */}
+        <div className="rounded-3xl border border-rose-500/20 bg-rose-950/20 p-10 space-y-8">
+          <div className="text-center space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-400">The cost of doing nothing</p>
+            <h2 className="text-2xl font-bold">What an undetected incident looks like</h2>
+            <p className="text-slate-400 text-sm max-w-xl mx-auto">One rogue agent leaking PII can cost more than a year of governance. These are real consequences — not hypothetical.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              {
+                icon: AlertTriangle,
+                color: 'text-rose-400',
+                bg: 'bg-rose-500/10 border-rose-500/20',
+                title: 'DPDPA violation',
+                body: 'Up to ₹2.5 Cr fine per breach. Aadhaar or PAN leakage via an agent chat counts as a personal data breach.',
+              },
+              {
+                icon: TrendingDown,
+                color: 'text-orange-400',
+                bg: 'bg-orange-500/10 border-orange-500/20',
+                title: 'Runaway spend',
+                body: 'Without cost controls, a single misconfigured agent can exhaust a monthly LLM budget overnight.',
+              },
+              {
+                icon: Eye,
+                color: 'text-amber-400',
+                bg: 'bg-amber-500/10 border-amber-500/20',
+                title: 'Shadow AI',
+                body: 'Teams deploy agents without IT knowing. No visibility means no accountability when something goes wrong.',
+              },
+              {
+                icon: Lock,
+                color: 'text-purple-400',
+                bg: 'bg-purple-500/10 border-purple-500/20',
+                title: 'Compliance gap',
+                body: 'Auditors are starting to ask for AI risk registers. Most orgs have nothing to show. Rasi generates the evidence trail.',
+              },
+            ].map(({ icon: Icon, color, bg, title, body }) => (
+              <div key={title} className={`rounded-2xl border p-5 space-y-3 ${bg}`}>
+                <Icon className={`w-5 h-5 ${color}`} />
+                <p className="font-semibold text-white text-sm">{title}</p>
+                <p className="text-xs text-slate-400 leading-relaxed">{body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* India callout */}
         <div className="rounded-3xl border border-slate-700/50 bg-slate-900/50 p-10 text-center space-y-4 max-w-3xl mx-auto">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">Built for India</p>
@@ -246,6 +309,48 @@ export default function PricingPage() {
               <span key={tag} className="px-3 py-1.5 rounded-full text-xs font-medium border border-slate-700/50 bg-slate-800/50 text-slate-300">
                 {tag}
               </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Why Rasi is different */}
+        <div className="space-y-6">
+          <div className="text-center space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">Why Rasi</p>
+            <h2 className="text-2xl font-bold">Built different. For Indian teams.</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              {
+                num: '01',
+                title: 'No per-seat pricing',
+                body: 'Pay for governance coverage, not headcount. Add 10 engineers to a project — your bill stays flat.',
+                accent: 'border-cyan-500/20',
+              },
+              {
+                num: '02',
+                title: 'India-native PII detection',
+                body: 'Aadhaar, PAN, UPI, IFSC — built-in and tuned for Indian data patterns. Not an afterthought.',
+                accent: 'border-blue-500/20',
+              },
+              {
+                num: '03',
+                title: 'Connects in minutes',
+                body: 'One API key. Point your LLM calls at the Rasi gateway and governance starts immediately.',
+                accent: 'border-violet-500/20',
+              },
+              {
+                num: '04',
+                title: 'No automated billing',
+                body: 'We invoice you. No card-on-file, no surprise charges. You stay in control of the relationship.',
+                accent: 'border-emerald-500/20',
+              },
+            ].map(({ num, title, body, accent }) => (
+              <div key={num} className={`rounded-2xl border bg-slate-900/40 p-6 space-y-3 ${accent}`}>
+                <p className="text-xs font-mono font-bold text-slate-600">{num}</p>
+                <p className="font-semibold text-white text-sm">{title}</p>
+                <p className="text-xs text-slate-400 leading-relaxed">{body}</p>
+              </div>
             ))}
           </div>
         </div>
@@ -344,6 +449,15 @@ export default function PricingPage() {
           </div>
         </div>
       </div>
+
+      {/* Floating WhatsApp button */}
+      <button
+        onClick={() => openWhatsApp('Rasi', "Hi, I'd like to learn more about Rasi AI governance. Can we connect?")}
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold shadow-xl shadow-emerald-900/50 transition-all hover:scale-105"
+      >
+        <MessageCircle className="w-4 h-4" />
+        Chat with us
+      </button>
     </div>
   );
 }
