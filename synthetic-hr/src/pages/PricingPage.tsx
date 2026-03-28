@@ -284,6 +284,45 @@ export default function PricingPage() {
           </div>
         </div>
 
+        {/* What happens next */}
+        <div className="max-w-3xl mx-auto space-y-6">
+          <div className="text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">After you reach out</p>
+            <h2 className="text-2xl font-bold mt-2">What happens next</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[
+              {
+                step: '01',
+                title: 'You message us',
+                body: "Send us a WhatsApp or email. Tell us how many agents you run and what you're trying to govern.",
+                color: 'border-cyan-500/20 bg-cyan-500/5',
+                num: 'text-cyan-400',
+              },
+              {
+                step: '02',
+                title: 'We review your setup',
+                body: 'Within one business day we map your AI footprint and send you a recommended plan with a clear scope.',
+                color: 'border-blue-500/20 bg-blue-500/5',
+                num: 'text-blue-400',
+              },
+              {
+                step: '03',
+                title: 'Onboarding in 5 days',
+                body: "Agents connected, policies live, first incident report delivered. You're governed from day one.",
+                color: 'border-emerald-500/20 bg-emerald-500/5',
+                num: 'text-emerald-400',
+              },
+            ].map(({ step, title, body, color, num }) => (
+              <div key={step} className={`rounded-2xl border p-6 space-y-3 ${color}`}>
+                <p className={`text-3xl font-black font-mono ${num}`}>{step}</p>
+                <p className="font-semibold text-white text-sm">{title}</p>
+                <p className="text-xs text-slate-400 leading-relaxed">{body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* CTA footer */}
         <div className="text-center space-y-4 pb-8">
           <h2 className="text-2xl font-bold">Not sure where to start?</h2>

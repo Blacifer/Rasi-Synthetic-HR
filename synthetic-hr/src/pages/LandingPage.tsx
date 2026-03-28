@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, type ChangeEvent } from 'react';
 import {
   Brain, ArrowRight, Play, FileText, DollarSign, BarChart3,
   Shield, ZapOff, TrendingUp, Users, CheckCircle, Sparkles, Lock,
@@ -414,6 +414,8 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
   const [monthlyConversations, setMonthlyConversations] = useState(8500);
   const [activeAgents, setActiveAgents] = useState(22);
   const [governanceLayer, setGovernanceLayer] = useState<(typeof GOVERNANCE_OPTIONS)[number]['id']>('scale');
+  const [calcEmail, setCalcEmail] = useState('');
+  const [calcEmailSent, setCalcEmailSent] = useState(false);
   const year = new Date().getFullYear();
 
   useEffect(() => {
@@ -1127,6 +1129,38 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                     Talk to us — ₹{calculator.monthlyInvestment.toLocaleString('en-IN')}/mo estimated
                   </button>
                   <p className="text-xs text-slate-500 text-center sm:text-left">We'll recommend the right plan based on your numbers.</p>
+                </div>
+
+                {/* Email capture — for people not ready to WhatsApp */}
+                <div className="mt-4">
+                  {calcEmailSent ? (
+                    <div className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
+                      <svg viewBox="0 0 20 20" className="w-4 h-4 fill-current flex-shrink-0"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+                      Got it — we'll reach out to {calcEmail} within one business day.
+                    </div>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="email"
+                        value={calcEmail}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => setCalcEmail(e.target.value)}
+                        placeholder="Not ready to chat? Leave your email"
+                        className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-slate-500 outline-none focus:border-cyan-500/40 transition-colors"
+                      />
+                      <button
+                        onClick={() => {
+                          if (!calcEmail.includes('@')) return;
+                          const msg = `Hi, a visitor left their email on the Rasi workload estimator. Email: ${calcEmail}. Their setup: ${activeAgents} agents, ${monthlyConversations.toLocaleString('en-IN')} monthly conversations, estimated ₹${calculator.monthlyInvestment.toLocaleString('en-IN')}/month.`;
+                          window.open(`https://wa.me/919433116259?text=${encodeURIComponent(msg)}`, '_blank');
+                          setCalcEmailSent(true);
+                        }}
+                        disabled={!calcEmail.includes('@')}
+                        className="px-5 py-2.5 rounded-xl bg-white/8 hover:bg-white/12 disabled:opacity-40 disabled:cursor-not-allowed border border-white/10 text-white text-sm font-semibold transition-all whitespace-nowrap"
+                      >
+                        Send me the plan →
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
