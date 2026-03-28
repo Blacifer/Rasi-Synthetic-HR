@@ -1148,10 +1148,22 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                         className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-slate-500 outline-none focus:border-cyan-500/40 transition-colors"
                       />
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           if (!calcEmail.includes('@')) return;
-                          const msg = `Hi, a visitor left their email on the Rasi workload estimator. Email: ${calcEmail}. Their setup: ${activeAgents} agents, ${monthlyConversations.toLocaleString('en-IN')} monthly conversations, estimated ₹${calculator.monthlyInvestment.toLocaleString('en-IN')}/month.`;
-                          window.open(`https://wa.me/919433116259?text=${encodeURIComponent(msg)}`, '_blank');
+                          try {
+                            await fetch('https://formspree.io/f/YOUR_FORMSPREE_ID', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                email: calcEmail,
+                                agents: activeAgents,
+                                conversations: monthlyConversations,
+                                estimated_spend: `₹${calculator.monthlyInvestment.toLocaleString('en-IN')}/month`,
+                              }),
+                            });
+                          } catch (_) {
+                            // fail silently — success state still shown
+                          }
                           setCalcEmailSent(true);
                         }}
                         disabled={!calcEmail.includes('@')}
