@@ -61,6 +61,54 @@ const CATEGORIES: Category[] = [
 
 const FEATURED_IDS = ['slack', 'google-workspace', 'zoho-people', 'quickbooks', 'hubspot', 'naukri'];
 
+// ─── Logo domains (Clearbit logo API) ────────────────────────────────────────
+
+const LOGO_DOMAINS: Record<string, string> = {
+  'slack':            'slack.com',
+  'google-workspace': 'google.com',
+  'microsoft-365':    'microsoft.com',
+  'quickbooks':       'quickbooks.intuit.com',
+  'hubspot':          'hubspot.com',
+  'naukri':           'naukri.com',
+  'stripe':           'stripe.com',
+  'razorpay':         'razorpay.com',
+  'xero':             'xero.com',
+  'tally':            'tallysolutions.com',
+  'paytm':            'paytm.com',
+  'zoho-people':      'zoho.com',
+  'zoho-books':       'zoho.com',
+  'zoho-crm':         'zoho.com',
+  'zendesk':          'zendesk.com',
+  'freshdesk':        'freshdesk.com',
+  'intercom':         'intercom.com',
+  'salesforce':       'salesforce.com',
+  'pipedrive':        'pipedrive.com',
+  'okta':             'okta.com',
+  'jira':             'atlassian.com',
+  'servicenow':       'servicenow.com',
+  'jumpcloud':        'jumpcloud.com',
+  'cleartax':         'cleartax.in',
+  'diligent':         'diligent.com',
+  'signdesk':         'signdesk.com',
+  'linkedin':         'linkedin.com',
+  'greenhouse':       'greenhouse.io',
+  'lever':            'lever.co',
+  'mailchimp':        'mailchimp.com',
+  'klaviyo':          'klaviyo.com',
+  'brevo':            'brevo.com',
+  'google-ads':       'google.com',
+  'meta-ads':         'meta.com',
+  'darwinbox':        'darwinbox.com',
+  'keka':             'keka.com',
+  'greythr':          'greythr.com',
+  'bamboohr':         'bamboohr.com',
+};
+
+function getLogoUrl(appId: string): string | null {
+  const domain = LOGO_DOMAINS[appId.toLowerCase()];
+  return domain ? `https://logo.clearbit.com/${domain}` : null;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function hashColor(id: string): string {
@@ -151,6 +199,32 @@ function fromIntegration(row: any): UnifiedApp {
 
 // ─── App Card ─────────────────────────────────────────────────────────────────
 
+function AppLogo({ appId, logoLetter, colorHex, size = 12 }: { appId: string; logoLetter: string; colorHex: string; size?: number }) {
+  const [failed, setFailed] = useState(false);
+  const url = getLogoUrl(appId);
+  const dim = `w-${size} h-${size}`;
+  if (url && !failed) {
+    return (
+      <div className={`${dim} rounded-xl flex items-center justify-center flex-shrink-0 bg-white p-1.5 overflow-hidden`}>
+        <img
+          src={url}
+          alt=""
+          className="w-full h-full object-contain"
+          onError={() => setFailed(true)}
+        />
+      </div>
+    );
+  }
+  return (
+    <div
+      className={`${dim} rounded-xl flex items-center justify-center text-white font-bold flex-shrink-0`}
+      style={{ backgroundColor: colorHex, fontSize: size >= 12 ? '1.125rem' : '0.875rem' }}
+    >
+      {logoLetter}
+    </div>
+  );
+}
+
 function AppCard({ app, onClick }: { app: UnifiedApp; onClick: () => void }) {
   return (
     <button
@@ -159,12 +233,7 @@ function AppCard({ app, onClick }: { app: UnifiedApp; onClick: () => void }) {
       className="group w-full text-left rounded-2xl border border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/[0.12] transition-all duration-150 p-4 flex flex-col gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {/* Logo */}
-      <div
-        className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
-        style={{ backgroundColor: app.colorHex }}
-      >
-        {app.logoLetter}
-      </div>
+      <AppLogo appId={app.appId} logoLetter={app.logoLetter} colorHex={app.colorHex} size={12} />
 
       {/* Meta */}
       <div className="space-y-1 flex-1 min-w-0">
@@ -230,12 +299,7 @@ function DetailPanel({
       {/* Header */}
       <div className="flex items-start justify-between p-5 border-b border-white/[0.06]">
         <div className="flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-base flex-shrink-0"
-            style={{ backgroundColor: app.colorHex }}
-          >
-            {app.logoLetter}
-          </div>
+          <AppLogo appId={app.appId} logoLetter={app.logoLetter} colorHex={app.colorHex} size={10} />
           <div>
             <p className="font-semibold text-white text-sm">{app.name}</p>
             {app.developer && <p className="text-xs text-slate-500">{app.developer}</p>}
