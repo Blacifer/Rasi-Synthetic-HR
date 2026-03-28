@@ -106,7 +106,7 @@ const LOGO_DOMAINS: Record<string, string> = {
 
 function getLogoUrl(appId: string): string | null {
   const domain = LOGO_DOMAINS[appId.toLowerCase()];
-  return domain ? `https://logo.clearbit.com/${domain}` : null;
+  return domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : null;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -205,11 +205,14 @@ function AppLogo({ appId, logoLetter, colorHex, size = 12 }: { appId: string; lo
   const dim = `w-${size} h-${size}`;
   if (url && !failed) {
     return (
-      <div className={`${dim} rounded-xl flex items-center justify-center flex-shrink-0 bg-white p-1.5 overflow-hidden`}>
+      <div
+        className={`${dim} rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden`}
+        style={{ backgroundColor: colorHex }}
+      >
         <img
           src={url}
           alt=""
-          className="w-full h-full object-contain"
+          className="w-3/4 h-3/4 object-contain drop-shadow-sm"
           onError={() => setFailed(true)}
         />
       </div>
