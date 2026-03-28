@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type ChangeEvent } from 'react';
+import { supabase } from '../lib/supabase-client';
 import {
   Brain, ArrowRight, Play, FileText, DollarSign, BarChart3,
   Shield, ZapOff, TrendingUp, Users, CheckCircle, Sparkles, Lock,
@@ -1150,20 +1151,12 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                       <button
                         onClick={async () => {
                           if (!calcEmail.includes('@')) return;
-                          try {
-                            await fetch('https://formspree.io/f/YOUR_FORMSPREE_ID', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                email: calcEmail,
-                                agents: activeAgents,
-                                conversations: monthlyConversations,
-                                estimated_spend: `₹${calculator.monthlyInvestment.toLocaleString('en-IN')}/month`,
-                              }),
-                            });
-                          } catch (_) {
-                            // fail silently — success state still shown
-                          }
+                          await supabase.from('contact_leads').insert({
+                            email: calcEmail,
+                            agents: activeAgents,
+                            conversations: monthlyConversations,
+                            estimated_spend: `₹${calculator.monthlyInvestment.toLocaleString('en-IN')}/month`,
+                          });
                           setCalcEmailSent(true);
                         }}
                         disabled={!calcEmail.includes('@')}
