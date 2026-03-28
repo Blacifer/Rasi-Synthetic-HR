@@ -661,7 +661,7 @@ const hasData = agents.length > 0;
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {nowCards.map((card) => (
               <div key={card.label} className="rounded-2xl border border-slate-700/60 bg-slate-900/60 backdrop-blur-sm p-4 shadow-[0_8px_24px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.04)]">
                 <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-semibold">{card.label}</p>
@@ -791,7 +791,7 @@ const hasData = agents.length > 0;
           </div>
           <p className="mt-1 text-sm text-slate-400">Governance and cost visibility across your fleet.</p>
 
-          <div className="mt-6 grid grid-cols-2 gap-3">
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="rounded-2xl border border-slate-800 bg-[linear-gradient(180deg,rgba(2,6,23,0.22),rgba(2,6,23,0.50))] p-4">
               <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Budget coverage</p>
               <p className="mt-3 text-3xl font-bold tabular-nums text-emerald-300">{agents.length === 0 ? '0%' : `${Math.round((agents.length - agentsWithoutBudget.length) / agents.length * 100)}%`}</p>
@@ -904,7 +904,7 @@ const hasData = agents.length > 0;
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-3 mb-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4 text-center">
               <CheckCircle2 className="w-5 h-5 text-emerald-400 mx-auto mb-2" />
               <p className="text-2xl font-bold tabular-nums text-emerald-300">{telemetry.integrations.healthy}</p>

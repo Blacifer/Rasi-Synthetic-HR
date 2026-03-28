@@ -5,7 +5,7 @@ import {
   Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
   DollarSign, Database, Key, Settings, X, Play, Layers,
   TrendingUp, Sparkles, ChevronLeft, ChevronDown, MessageSquare, AlertTriangle, PlugZap, Bot,
-  CheckSquare, ClipboardList, ScrollText, Server, Shield, Search, Sun, Moon,
+  CheckSquare, ClipboardList, ScrollText, Server, Shield, Search, Sun, Moon, Menu,
 } from 'lucide-react';
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
 import { useApp } from '../context/AppContext';
@@ -314,6 +314,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
   const [sidebarAdvancedOpen, setSidebarAdvancedOpen] = useState(() =>
     ADVANCED_PAGES.has(location.pathname.replace(/^\/dashboard\/?/, '').split('/')[0] || '')
   );
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   useEffect(() => {
     if (MORE_PAGES.has(currentPage)) setSidebarMoreOpen(true);
     if (ADVANCED_PAGES.has(currentPage)) setSidebarAdvancedOpen(true);
@@ -989,9 +990,80 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         </div>
       )}
 
-      <div className={`flex flex-1 w-full min-h-screen ${isDemoMode ? 'pt-[46px]' : ''} ${error ? 'pt-12' : ''}`}>
-        {/* Sidebar */}
-        <aside className="w-64 sidebar-surface p-4 flex flex-col min-h-screen">
+      {/* Mobile top bar */}
+      <div className={`md:hidden fixed left-0 right-0 z-40 flex items-center gap-3 px-4 py-3 sidebar-surface border-b border-white/10 ${isDemoMode ? 'top-[46px]' : error ? 'top-12' : 'top-0'}`}>
+        <button onClick={() => setMobileNavOpen(true)} className="p-2 text-slate-400 hover:text-white transition-colors">
+          <Menu className="w-5 h-5" />
+        </button>
+        <div className="flex items-center gap-2">
+          <Brain className="w-5 h-5 text-white" />
+          <span className="font-bold text-white text-sm">RASI</span>
+        </div>
+      </div>
+
+      {/* Mobile sidebar overlay */}
+      {mobileNavOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setMobileNavOpen(false)} />
+          <aside className="relative w-72 sidebar-surface p-4 flex flex-col min-h-screen overflow-y-auto">
+            <div className="flex items-center justify-between mb-6 px-2">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
+                  <Brain className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-base font-bold text-white">RASI</span>
+              </div>
+              <button onClick={() => setMobileNavOpen(false)} className="p-1 text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {/* Reuse the same nav content */}
+            <nav className="flex-1 space-y-1">
+              {needsOnboarding && (
+                <button onClick={() => { navigateTo('getting-started'); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === 'getting-started' && 'nav-item-active')}>
+                  <Sparkles className="w-5 h-5" />
+                  <span className="flex-1 text-left">Getting Started</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/25 font-semibold">New</span>
+                </button>
+              )}
+              {([
+                { id: 'overview', icon: BarChart3, label: 'Overview', badge: null as number | null },
+                { id: 'fleet', icon: Users, label: 'Fleet', badge: null },
+                { id: 'incidents', icon: AlertTriangle, label: 'Incidents', badge: incidents.filter(i => i.status !== 'resolved' && i.status !== 'false_positive').length || null },
+                { id: 'conversations', icon: MessageSquare, label: 'Conversations', badge: null },
+                { id: 'costs', icon: DollarSign, label: 'Costs', badge: null },
+                { id: 'apps', icon: Layers, label: 'Apps', badge: null },
+                { id: 'settings', icon: Settings, label: 'Settings', badge: null },
+              ] as const).map((item) => (
+                <button key={item.id} onClick={() => { navigateTo(item.id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === item.id && 'nav-item-active')}>
+                  <item.icon className="w-5 h-5 shrink-0" />
+                  <span className="flex-1 text-left">{item.label}</span>
+                  {item.badge ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/25 font-semibold">{item.badge}</span> : null}
+                </button>
+              ))}
+            </nav>
+            <div className="pt-4 border-t border-white/10">
+              <div className="flex items-center gap-3 px-2 mb-4">
+                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
+                  <User className="w-4 h-4 text-slate-300" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white truncate">{user?.organizationName}</p>
+                  <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+                </div>
+              </div>
+              <button onClick={signOut} className="w-full flex items-center gap-3 px-4 py-2 text-slate-400 hover:text-red-400 transition-colors">
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
+
+      <div className={`flex flex-1 w-full min-h-screen ${isDemoMode ? 'pt-[46px]' : ''} ${error ? 'pt-12' : ''} md:pt-0`}>
+        {/* Sidebar — desktop only */}
+        <aside className="hidden md:flex w-64 sidebar-surface p-4 flex-col min-h-screen">
           <div className="flex items-center gap-3 mb-6 px-2">
             <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
               <Brain className="w-6 h-6 text-white" />
@@ -1358,7 +1430,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto pt-[52px] md:pt-0">
           {/* Setup progress bar — slim sticky bar shown during onboarding */}
           {needsOnboarding && !setupBarDismissed && !isDemoMode && (() => {
             const steps = [

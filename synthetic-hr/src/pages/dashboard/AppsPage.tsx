@@ -298,7 +298,7 @@ function DetailPanel({
   };
 
   return (
-    <div className="w-80 shrink-0 border-l border-white/[0.08] bg-[#080f1a] flex flex-col overflow-y-auto">
+    <div className="hidden md:flex w-80 shrink-0 border-l border-white/[0.08] bg-[#080f1a] flex-col overflow-y-auto">
       {/* Header */}
       <div className="flex items-start justify-between p-5 border-b border-white/[0.06]">
         <div className="flex items-center gap-3">
@@ -549,7 +549,7 @@ export default function AppsPage({ onNavigate }: AppsPageProps) {
   return (
     <div className="flex h-full overflow-hidden bg-[#080f1a]">
       {/* ── Left sidebar ── */}
-      <div className="w-56 shrink-0 border-r border-white/[0.08] flex flex-col bg-[#080f1a] overflow-y-auto">
+      <div className="hidden md:flex w-56 shrink-0 border-r border-white/[0.08] flex-col bg-[#080f1a] overflow-y-auto">
         {/* Search */}
         <div className="p-3 border-b border-white/[0.06]">
           <div className="relative">
@@ -745,7 +745,7 @@ export default function AppsPage({ onNavigate }: AppsPageProps) {
         </div>
       </div>
 
-      {/* ── Right detail panel ── */}
+      {/* ── Right detail panel — desktop ── */}
       {selectedApp && (
         <DetailPanel
           app={selectedApp}
@@ -754,6 +754,22 @@ export default function AppsPage({ onNavigate }: AppsPageProps) {
           onDisconnect={handleDisconnect}
           onNavigate={onNavigate}
         />
+      )}
+
+      {/* ── Detail panel — mobile modal ── */}
+      {selectedApp && (
+        <div className="md:hidden fixed inset-0 z-50 flex items-end">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setSelectedApp(null)} />
+          <div className="relative w-full max-h-[85vh] rounded-t-2xl overflow-y-auto bg-[#080f1a] border-t border-white/[0.08]">
+            <DetailPanel
+              app={selectedApp}
+              onClose={() => setSelectedApp(null)}
+              onConnect={handleConnect}
+              onDisconnect={handleDisconnect}
+              onNavigate={onNavigate}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
