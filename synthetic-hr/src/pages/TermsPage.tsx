@@ -146,7 +146,7 @@ export default function TermsPage() {
 
           <Section title="13. Governing Law">
             <p>
-              These Terms are governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of the courts of Bengaluru, Karnataka, India.
+              These Terms are governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of the courts of Howrah, West Bengal, India.
             </p>
           </Section>
 
@@ -158,9 +158,14 @@ export default function TermsPage() {
 
           <Section title="15. Contact Us">
             <p>
-              For questions about these Terms, contact us at:{' '}
-              <a href={`mailto:${CONTACT_EMAIL}`} className="text-cyan-400 hover:underline">{CONTACT_EMAIL}</a>
+              For questions about these Terms, contact us at:
             </p>
+            <div className="mt-3 p-4 rounded-xl border border-slate-700 bg-white/[0.02] space-y-1">
+              <p className="text-slate-300 font-medium">{COMPANY}</p>
+              <p>PH-II GR FL, BL-B 20, Round Tank Ln, Howrah, West Bengal 711101, India</p>
+              <p>Mobile: +91-9433116259</p>
+              <p>Email: <a href={`mailto:${CONTACT_EMAIL}`} className="text-cyan-400 hover:underline">{CONTACT_EMAIL}</a></p>
+            </div>
           </Section>
 
         </div>

@@ -173,8 +173,10 @@ export default function PrivacyPage() {
             </p>
             <div className="mt-3 p-4 rounded-xl border border-slate-700 bg-white/[0.02] space-y-1">
               <p className="text-slate-300 font-medium">{COMPANY}</p>
+              <p>PH-II GR FL, BL-B 20, Round Tank Ln, Howrah, West Bengal 711101, India</p>
+              <p>Mobile: +91-9433116259</p>
               <p>Email: <a href={`mailto:${CONTACT_EMAIL}`} className="text-cyan-400 hover:underline">{CONTACT_EMAIL}</a></p>
-              <p>We aim to respond to all privacy requests within 72 hours.</p>
+              <p className="text-slate-500 text-xs mt-2">We aim to respond to all privacy requests within 72 hours.</p>
             </div>
           </Section>
 
