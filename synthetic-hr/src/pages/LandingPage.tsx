@@ -1304,10 +1304,12 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
           </div>
           <div className="border-t border-slate-700 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-sm text-slate-500">© {year} Rasi Solutions. All rights reserved.</p>
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-6 text-sm">
               <a href="#how-it-works" className="text-slate-400 hover:text-cyan-400 transition-colors">Overview</a>
               <a href="#pillars" className="text-slate-400 hover:text-cyan-400 transition-colors">Features</a>
               <a href="#security" className="text-slate-400 hover:text-cyan-400 transition-colors">Security</a>
+              <a href="/terms" className="text-slate-400 hover:text-cyan-400 transition-colors">Terms</a>
+              <a href="/privacy" className="text-slate-400 hover:text-cyan-400 transition-colors">Privacy</a>
             </div>
           </div>
         </div>
