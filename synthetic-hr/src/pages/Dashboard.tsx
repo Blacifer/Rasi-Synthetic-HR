@@ -1020,13 +1020,16 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
               {/* Cmd+K */}
               <div className="px-3 pt-3 pb-1">
                 <button
-                  onClick={() => { setMobileNavOpen(false); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true })); }}
+                  onClick={() => {
+                    setMobileNavOpen(false);
+                    const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+                    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: isMac, ctrlKey: !isMac, bubbles: true }));
+                  }}
                   className="flex items-center gap-2 w-full px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700/50 text-slate-500 text-xs hover:border-slate-600 hover:text-slate-400 transition-colors"
                 >
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 opacity-0 absolute" aria-hidden />
                   <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                   <span className="flex-1 text-left">Search...</span>
-                  <kbd className="font-mono text-[10px] bg-slate-700/60 border border-slate-600/50 rounded px-1">⌘K</kbd>
+                  <kbd className="font-mono text-[10px] bg-slate-700/60 border border-slate-600/50 rounded px-1">{/Mac|iPhone|iPad|iPod/.test(navigator.platform) ? '⌘K' : 'Ctrl+K'}</kbd>
                 </button>
               </div>
 

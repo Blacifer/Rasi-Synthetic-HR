@@ -187,7 +187,9 @@ export function CommandPalette({ onNavigate, agents = [] }: CommandPaletteProps)
             <kbd className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 font-mono text-[10px]">↵</kbd> open
           </span>
         </div>
-        <span className="text-[10px] text-slate-600 font-mono">⌘K to toggle</span>
+        <span className="text-[10px] text-slate-600 font-mono">
+          {typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform) ? '⌘K' : 'Ctrl+K'} to toggle
+        </span>
       </div>
     </Command.Dialog>
   );

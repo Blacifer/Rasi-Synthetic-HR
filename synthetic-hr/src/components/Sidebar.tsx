@@ -1,4 +1,15 @@
 import { useState } from 'react';
+
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+
+function dispatchSearch() {
+  window.dispatchEvent(new KeyboardEvent('keydown', {
+    key: 'k',
+    metaKey: isMac,
+    ctrlKey: !isMac,
+    bubbles: true,
+  }));
+}
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import {
@@ -210,21 +221,21 @@ export function Sidebar({
           </button>
         </div>
 
-        {/* Cmd+K search trigger */}
+        {/* Search trigger */}
         {expanded ? (
           <button
-            onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))}
+            onClick={dispatchSearch}
             className="mx-2 mb-3 flex items-center gap-2 w-full px-3 py-2 rounded-xl bg-slate-800/60 border border-slate-700/50 text-slate-500 text-xs hover:border-slate-600 hover:text-slate-400 transition-colors"
           >
             <Search className="w-3.5 h-3.5 shrink-0" />
             <span className="flex-1 text-left">Search...</span>
-            <kbd className="font-mono text-[10px] bg-slate-700/60 border border-slate-600/50 rounded px-1">⌘K</kbd>
+            <kbd className="font-mono text-[10px] bg-slate-700/60 border border-slate-600/50 rounded px-1">{isMac ? '⌘K' : 'Ctrl+K'}</kbd>
           </button>
         ) : (
           <Tooltip.Root delayDuration={300}>
             <Tooltip.Trigger asChild>
               <button
-                onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))}
+                onClick={dispatchSearch}
                 className="mx-auto mb-3 w-10 h-10 flex items-center justify-center rounded-xl text-slate-500 hover:text-slate-300 hover:bg-white/[0.05] transition-colors"
               >
                 <Search className="w-4 h-4" />
@@ -232,7 +243,7 @@ export function Sidebar({
             </Tooltip.Trigger>
             <Tooltip.Portal>
               <Tooltip.Content side="right" sideOffset={10} className="z-[100] px-2.5 py-1.5 rounded-lg bg-slate-800 border border-white/10 text-xs text-white shadow-xl">
-                Search <kbd className="font-mono ml-1">⌘K</kbd>
+                Search <kbd className="font-mono ml-1">{isMac ? '⌘K' : 'Ctrl+K'}</kbd>
                 <Tooltip.Arrow className="fill-slate-800" />
               </Tooltip.Content>
             </Tooltip.Portal>
