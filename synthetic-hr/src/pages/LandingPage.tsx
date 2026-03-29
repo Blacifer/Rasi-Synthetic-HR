@@ -557,7 +557,9 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
     const governanceConfig = GOVERNANCE_OPTIONS.find((item) => item.id === governanceLayer) || GOVERNANCE_OPTIONS[1];
     const opsLoad = monthlyConversations * 1.6 + activeAgents * 220;
     const estimatedHours = Math.round((opsLoad / 1800) * governanceConfig.multiplier);
-    const monthlyInvestment = Math.round((18000 + estimatedHours * 1450) * governanceConfig.multiplier);
+    const rawInvestment = Math.round((18000 + estimatedHours * 1450) * governanceConfig.multiplier);
+    // Never quote below the actual Retainer floor (₹40,000/month)
+    const monthlyInvestment = Math.max(rawInvestment, 40000);
     const costLeakage = Math.round(monthlyInvestment * 0.42);
     const savingsWindow = {
       low: Math.round(costLeakage * 0.7),
@@ -567,7 +569,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
     let recommendation = PLAN_CARDS[0];
     if (monthlyInvestment >= 70000 || governanceLayer === 'command' || activeAgents >= 60) {
       recommendation = PLAN_CARDS[2];
-    } else if (monthlyInvestment >= 35000 || governanceLayer === 'scale' || monthlyConversations >= 5000) {
+    } else if (monthlyInvestment >= 40000 || governanceLayer === 'scale' || monthlyConversations >= 5000) {
       recommendation = PLAN_CARDS[1];
     }
 
