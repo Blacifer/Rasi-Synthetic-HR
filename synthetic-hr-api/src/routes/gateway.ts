@@ -7,6 +7,7 @@ import { validateApiKey } from '../middleware/api-key-validation';
 import { logger } from '../lib/logger';
 import { supabaseRest, eq } from '../lib/supabase-rest';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
+import { sendTransactionalEmail } from '../lib/email';
 import { notifySlackIncident } from '../lib/slack-notify';
 import { applyRequestInterceptors, applyResponseInterceptors, resolveModelRouting } from '../lib/gateway-interceptors';
 import { recordPromptCacheObservation } from '../lib/prompt-caching';
@@ -830,7 +831,7 @@ const enforceOrgMonthlyQuota = async (req: Request, res: Response): Promise<bool
   const month = getCurrentMonth();
 
   try {
-    const orgRows = await supabaseRest('organizations', `id=eq.${orgId}&select=plan`, { method: 'GET' });
+    const orgRows = await supabaseRest('organizations', `id=eq.${orgId}&select=plan,settings`, { method: 'GET' });
     const org = Array.isArray(orgRows) ? orgRows[0] : null;
     const plan = String(org?.plan || 'free').toLowerCase();
     const quota = PLAN_MONTHLY_QUOTAS[plan] ?? PLAN_MONTHLY_QUOTAS.free;
@@ -855,7 +856,7 @@ const enforceOrgMonthlyQuota = async (req: Request, res: Response): Promise<bool
       return false;
     }
 
-    // Fire quota warning webhook at 80% threshold (once per crossing)
+    // Fire quota warning webhook + email at 80% threshold (once per crossing)
     const newCount = currentCount + 1;
     const percentUsed = Math.floor((newCount / quota) * 100);
     const wasBelow80 = Math.floor((currentCount / quota) * 100) < 80;
@@ -867,6 +868,28 @@ const enforceOrgMonthlyQuota = async (req: Request, res: Response): Promise<bool
         organization_id: orgId,
         data: { plan, quota, used: newCount, percent_used: percentUsed, threshold_percent: 80 },
       });
+
+      // Send email alert — fire-and-forget
+      const alertTo: string = org?.settings?.incident_email_recipient || process.env.ALERT_EMAIL_TO || '';
+      if (alertTo) {
+        const remaining = quota - newCount;
+        sendTransactionalEmail({
+          to: alertTo,
+          subject: `[Rasi] Gateway quota warning — ${percentUsed}% used this month`,
+          html: `
+            <p>Hi,</p>
+            <p>Your Rasi gateway has used <strong>${percentUsed}%</strong> of your monthly quota
+            (${newCount.toLocaleString()} of ${quota.toLocaleString()} requests).</p>
+            <p>You have <strong>${remaining.toLocaleString()} requests remaining</strong> for ${month}.
+            Requests will be blocked when you reach 100%.</p>
+            <p>Plan: <strong>${plan}</strong></p>
+            <p>To increase your quota, reply to this email or visit your dashboard settings.</p>
+            <br/>
+            <p style="color:#64748b;font-size:12px">Rasi · rasisolutions.in</p>
+          `,
+          text: `Rasi quota warning: ${percentUsed}% used (${newCount.toLocaleString()}/${quota.toLocaleString()} requests). ${remaining.toLocaleString()} remaining for ${month}. Requests block at 100%.`,
+        }).catch((err) => logger.warn('Quota warning email failed', { orgId, error: String(err?.message || err) }));
+      }
     }
 
     // Increment usage fire-and-forget — don't block the request
