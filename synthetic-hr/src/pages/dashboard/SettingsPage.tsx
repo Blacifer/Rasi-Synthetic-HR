@@ -717,7 +717,6 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
           { id: 'persona', icon: FileText, label: 'Persona Library', desc: 'Define agent personas and communication styles.', color: 'from-violet-500 to-purple-600' },
           { id: 'shadow', icon: Eye, label: 'Shadow Mode', desc: 'Run canary agents alongside production in parallel.', color: 'from-slate-500 to-slate-600' },
           { id: 'api-analytics', icon: TrendingUp, label: 'API Analytics', desc: 'Deep-dive into request patterns and latency.', color: 'from-blue-500 to-cyan-600' },
-          { id: 'model-comparison', icon: Scale, label: 'Model Comparison', desc: 'Benchmark multiple models on your own prompts.', color: 'from-indigo-500 to-blue-600' },
           { id: 'webhooks', icon: Webhook, label: 'Webhook Events', desc: 'Push platform events to your HTTP endpoints.', color: 'from-orange-500 to-amber-600' },
           { id: 'batch', icon: Zap, label: 'Batch Processing', desc: 'Submit bulk LLM jobs with async result retrieval.', color: 'from-yellow-500 to-orange-500' },
           { id: 'fine-tuning', icon: Sparkles, label: 'Fine-tuning', desc: 'Train custom models on your proprietary data.', color: 'from-pink-500 to-rose-600' },

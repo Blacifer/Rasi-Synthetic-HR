@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   Brain, Bell, User, LogOut, BarChart3, Users, Zap, FileText,
   DollarSign, Database, Key, Settings, X, Play, Layers,
-  TrendingUp, Sparkles, ChevronLeft, ChevronDown, MessageSquare, AlertTriangle, PlugZap, Bot,
+  Sparkles, ChevronLeft, ChevronDown, MessageSquare, AlertTriangle, PlugZap, Bot,
   CheckSquare, ClipboardList, ScrollText, Server, Shield, Search, Sun, Moon, Menu,
 } from 'lucide-react';
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
@@ -36,7 +36,6 @@ const PricingPage = lazy(() => import('./dashboard/PricingPage'));
 const SafeHarborPage = lazy(() => import('./dashboard/SafeHarborPage'));
 const SettingsPage = lazy(() => import('./dashboard/SettingsPage'));
 const ApiAnalyticsPage = lazy(() => import('./dashboard/ApiAnalyticsPage'));
-const ModelComparisonPage = lazy(() => import('./dashboard/ModelComparisonPage'));
 const WebhooksPage = lazy(() => import('./dashboard/WebhooksPage'));
 const BatchProcessingPage = lazy(() => import('./dashboard/BatchProcessingPage'));
 const ModelFineTuningPage = lazy(() => import('./dashboard/ModelFineTuningPage'));
@@ -302,8 +301,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
 
   // Sidebar expansion state
   const MORE_PAGES = useMemo(() => new Set([
-    'templates', 'agent-library', 'approvals', 'action-policies', 'audit-log',
-    'model-comparison', 'api-access',
+    'templates', 'agent-library', 'approvals', 'action-policies', 'audit-log', 'api-access',
   ]), []);
   const ADVANCED_PAGES = useMemo(() => new Set([
     'developer', 'playbooks', 'jobs', 'blackbox', 'runtime-workers',
@@ -1157,7 +1155,6 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                 {[
                   { id: 'approvals', icon: CheckSquare, label: 'Approvals' },
                   { id: 'action-policies', icon: Shield, label: 'Action Policies' },
-                  { id: 'model-comparison', icon: TrendingUp, label: 'Models' },
                   { id: 'audit-log', icon: ScrollText, label: 'Audit Log' },
                   { id: 'api-access', icon: Key, label: 'API Access' },
                 ].map((item) => (
@@ -1505,7 +1502,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
             <Suspense fallback={<DashboardSectionLoading />}>
               {[
                 'persona', 'shadow', 'api-analytics',
-                'model-comparison', 'webhooks', 'batch',
+                'webhooks', 'batch',
                 'fine-tuning', 'caching', 'pricing', 'legal'
               ].includes(currentPage) && (
 	                  <div className="mb-6">
@@ -1721,7 +1718,6 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="incidents" element={<IncidentsPage incidents={incidents} setIncidents={saveIncidents} agents={enrichedAgents} onNavigate={navigateTo} isLoading={loading} />} />
                   <Route path="approvals" element={<ApprovalsPage />} />
                   <Route path="costs" element={<CostsPage agents={enrichedAgents} incidents={incidents} onNavigate={navigateTo} />} />
-                  <Route path="model-comparison" element={<ModelComparisonPage />} />
                   <Route path="api-access" element={<ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="keys" />} />
                   <Route path="settings" element={<SettingsPage onNavigate={navigateTo} isDemoMode={!!isDemoMode} />} />
                   <Route path="developer" element={<DeveloperPage onNavigate={navigateTo} />} />
