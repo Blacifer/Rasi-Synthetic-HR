@@ -1822,7 +1822,7 @@ export default function FleetPage({
                   <h3 className="text-sm font-semibold text-white">Where this agent works</h3>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => onOpenOperationsPage?.(`connectors?agentId=${activeWorkspaceAgent.id}&tab=all`)}
+                      onClick={() => onOpenOperationsPage?.(`apps?agentId=${activeWorkspaceAgent.id}`)}
                       className="rounded-xl bg-violet-500/15 border border-violet-400/25 px-3 py-1.5 text-xs font-semibold text-violet-200 hover:bg-violet-500/25 inline-flex items-center gap-1.5"
                     >
                       <ShoppingBag className="w-3.5 h-3.5" />

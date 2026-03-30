@@ -1072,10 +1072,10 @@ router.get('/oauth/callback', async (req: Request, res: Response) => {
   const { code, state, error: oauthError, 'accounts-server': zohoAccountsServer } = req.query as Record<string, string>;
 
   if (oauthError) {
-    return res.redirect(`${frontendUrl}/dashboard?marketplace_error=${enc(oauthError)}`);
+    return res.redirect(`${frontendUrl}/dashboard/apps?marketplace_error=${enc(oauthError)}`);
   }
   if (!code || !state) {
-    return res.redirect(`${frontendUrl}/dashboard?marketplace_error=${enc('MissingCodeOrState')}`);
+    return res.redirect(`${frontendUrl}/dashboard/apps?marketplace_error=${enc('MissingCodeOrState')}`);
   }
 
   // Look up the state record
@@ -1087,7 +1087,7 @@ router.get('/oauth/callback', async (req: Request, res: Response) => {
   }))) as any[];
 
   if (!stateRows?.length) {
-    return res.redirect(`${frontendUrl}/dashboard?marketplace_error=${enc('InvalidOrExpiredState')}`);
+    return res.redirect(`${frontendUrl}/dashboard/apps?marketplace_error=${enc('InvalidOrExpiredState')}`);
   }
 
   const stateRow = stateRows[0];
@@ -1095,7 +1095,7 @@ router.get('/oauth/callback', async (req: Request, res: Response) => {
   const app = PARTNER_APP_CATALOG.find((a) => a.id === appId);
 
   if (!app) {
-    return res.redirect(`${frontendUrl}/dashboard?marketplace_error=${enc('UnknownApp')}`);
+    return res.redirect(`${frontendUrl}/dashboard/apps?marketplace_error=${enc('UnknownApp')}`);
   }
 
   // Exchange code for tokens
@@ -1112,7 +1112,7 @@ router.get('/oauth/callback', async (req: Request, res: Response) => {
   }
 
   if (!accessToken) {
-    return res.redirect(`${frontendUrl}/dashboard?marketplace_error=${enc(exchangeError || 'TokenExchangeFailed')}&marketplace_app=${enc(appId)}`);
+    return res.redirect(`${frontendUrl}/dashboard/apps?marketplace_error=${enc(exchangeError || 'TokenExchangeFailed')}&marketplace_app=${enc(appId)}`);
   }
 
   const now = new Date().toISOString();
@@ -1188,7 +1188,7 @@ router.get('/oauth/callback', async (req: Request, res: Response) => {
   });
 
   logger.info('Marketplace OAuth completed', { app_id: appId, org_id: orgId });
-  return res.redirect(`${frontendUrl}/dashboard?marketplace_connected=true&marketplace_app=${enc(appId)}`);
+  return res.redirect(`${frontendUrl}/dashboard/apps?marketplace_connected=true&marketplace_app=${enc(appId)}`);
 });
 
 // ---------------------------------------------------------------------------

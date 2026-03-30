@@ -2678,7 +2678,7 @@ router.post('/integrations/oauth/init', requirePermission('connectors.manage'), 
       const scopes = 'openid profile email';
       authUrl = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&state=${stateParam}`;
     } else if (provider === 'deel' || provider === 'gusto' || provider === 'zoho-books') {
-      return res.json({ success: true, data: { url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard/integrations?status=error&message=ProviderNotAutomatedInDemo` } });
+      return res.json({ success: true, data: { url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard/apps?status=error&message=ProviderNotAutomatedInDemo` } });
     } else {
       return res.status(400).json({ success: false, error: 'Unsupported OAuth provider', requestId: req.requestId });
     }
@@ -2697,11 +2697,11 @@ router.get('/integrations/oauth/callback', async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 
     if (oauthError) {
-      return res.redirect(`${frontendUrl}/dashboard/integrations?status=error&message=${encodeURIComponent(String(oauthError))}`);
+      return res.redirect(`${frontendUrl}/dashboard/apps?status=error&message=${encodeURIComponent(String(oauthError))}`);
     }
 
     if (!code || !state) {
-      return res.redirect(`${frontendUrl}/dashboard/integrations?status=error&message=MissingCodeOrState`);
+      return res.redirect(`${frontendUrl}/dashboard/apps?status=error&message=MissingCodeOrState`);
     }
 
     // Attempt to verify the state
@@ -2714,7 +2714,7 @@ router.get('/integrations/oauth/callback', async (req, res) => {
       .single();
 
     if (verifyError || !stateRow) {
-      return res.redirect(`${frontendUrl}/dashboard/integrations?status=error&message=InvalidOrExpiredOAuthState`);
+      return res.redirect(`${frontendUrl}/dashboard/apps?status=error&message=InvalidOrExpiredOAuthState`);
     }
 
     // In a real application, you exchange the code here depending on the provider.
@@ -2739,7 +2739,7 @@ router.get('/integrations/oauth/callback', async (req, res) => {
       const tokenData: any = await tokenResponse.json();
       if (!tokenResponse.ok) {
         logger.error('Google token exchange failed', { error: tokenData, requestId: req.requestId });
-        return res.redirect(`${frontendUrl}/dashboard/integrations?status=error&message=TokenExchangeFailed`);
+        return res.redirect(`${frontendUrl}/dashboard/apps?status=error&message=TokenExchangeFailed`);
       }
 
       finalAccessToken = tokenData.access_token;
@@ -2764,7 +2764,7 @@ router.get('/integrations/oauth/callback', async (req, res) => {
       const tokenData: any = await tokenResponse.json();
       if (!tokenResponse.ok) {
         logger.error('Microsoft token exchange failed', { error: tokenData, requestId: req.requestId });
-        return res.redirect(`${frontendUrl}/dashboard/integrations?status=error&message=TokenExchangeFailed`);
+        return res.redirect(`${frontendUrl}/dashboard/apps?status=error&message=TokenExchangeFailed`);
       }
 
       finalAccessToken = tokenData.access_token;
@@ -2787,7 +2787,7 @@ router.get('/integrations/oauth/callback', async (req, res) => {
       const tokenData: any = await tokenResponse.json();
       if (!tokenResponse.ok) {
         logger.error('LinkedIn token exchange failed', { error: tokenData, requestId: req.requestId });
-        return res.redirect(`${frontendUrl}/dashboard/integrations?status=error&message=TokenExchangeFailed`);
+        return res.redirect(`${frontendUrl}/dashboard/apps?status=error&message=TokenExchangeFailed`);
       }
 
       finalAccessToken = tokenData.access_token;
@@ -2809,7 +2809,7 @@ router.get('/integrations/oauth/callback', async (req, res) => {
 
     if (upsertError) {
       logger.error('Failed to securely store remote OAuth tokens', { error: upsertError, requestId: req.requestId });
-      return res.redirect(`${frontendUrl}/dashboard/integrations?status=error&message=FailedToStoreSecureTokens`);
+      return res.redirect(`${frontendUrl}/dashboard/apps?status=error&message=FailedToStoreSecureTokens`);
     }
 
     // Mark the state as consumed
@@ -2818,11 +2818,11 @@ router.get('/integrations/oauth/callback', async (req, res) => {
       .update({ consumed_at: new Date().toISOString() })
       .eq('id', stateRow.id);
 
-    return res.redirect(`${frontendUrl}/dashboard/integrations?status=connected&provider=${stateRow.provider_name}`);
+    return res.redirect(`${frontendUrl}/dashboard/apps?status=connected&provider=${stateRow.provider_name}`);
   } catch (err) {
     logger.error('Error handling OAuth callback', { error: err, requestId: req.requestId });
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    return res.redirect(`${frontendUrl}/dashboard/integrations?status=error&message=InternalCallbackError`);
+    return res.redirect(`${frontendUrl}/dashboard/apps?status=error&message=InternalCallbackError`);
   }
 });
 

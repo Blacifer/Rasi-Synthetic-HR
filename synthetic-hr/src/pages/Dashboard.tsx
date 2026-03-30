@@ -44,8 +44,7 @@ const ConversationsPage = lazy(() => import('./dashboard/ConversationsPage'));
 const CoverageStatusPage = lazy(() => import('./dashboard/CoverageStatusPage'));
 const DeveloperPage = lazy(() => import('./dashboard/DeveloperPage'));
 const DomainAgentLibraryPage = lazy(() => import('./dashboard/DomainAgentLibraryPage'));
-const ConnectorsPage = lazy(() => import('./dashboard/ConnectorsPage'));
-const AppsPage = lazy(() => import('./dashboard/AppsPage'));
+const AppsPage = lazy(() => import('./dashboard/apps'));
 const MarketingHubPage = lazy(() => import('./dashboard/MarketingHubPage'));
 const HRHubPage = lazy(() => import('./dashboard/HRHubPage'));
 const RecruitmentHubPage = lazy(() => import('./dashboard/RecruitmentHubPage'));
@@ -417,7 +416,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
   const openIntegrationsForAgent = useCallback((agent: AIAgent, _packId?: IntegrationPackId | null) => {
     setFleetWorkspaceAgentId(agent.id);
     writeFocusedAgentWorkspace(agent.id);
-    navigateTo(`connectors?agentId=${agent.id}&tab=all`, { userInitiated: false });
+    navigateTo(`apps?agentId=${agent.id}`, { userInitiated: false });
   }, [navigateTo]);
 
   const handleIntegrationConnected = useCallback((payload: {
@@ -1572,8 +1571,8 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                       }}
                     />
                   } />
-                  <Route path="connectors" element={<ConnectorsPage onNavigate={navigateTo} agents={enrichedAgents} />} />
-                  <Route path="apps" element={<AppsPage onNavigate={navigateTo} />} />
+                  <Route path="connectors" element={<Navigate to="/dashboard/apps" replace />} />
+                  <Route path="apps" element={<AppsPage onNavigate={navigateTo} agents={enrichedAgents} />} />
                   <Route path="marketing-hub" element={<MarketingHubPage />} />
                   <Route path="hr-hub" element={<HRHubPage />} />
                   <Route path="recruitment" element={<RecruitmentHubPage />} />

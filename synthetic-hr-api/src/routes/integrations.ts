@@ -1272,7 +1272,7 @@ router.post('/oauth/init', requirePermission('connectors.manage'), async (req, r
 
   const returnTo = parsed.data.popup
     ? '/oauth/popup'
-    : (safeReturnPath(parsed.data.returnTo) || '/dashboard/integrations');
+    : (safeReturnPath(parsed.data.returnTo) || '/dashboard/apps');
   const connection: Record<string, string> = {};
   Object.entries(parsed.data.connection || {}).forEach(([k, v]) => {
     if (!v) return;
@@ -1487,7 +1487,7 @@ router.get('/oauth/authorize/:service', requirePermission('connectors.manage'), 
   if (!spec) return res.status(404).json({ success: false, error: 'Integration not found' });
   if (spec.authType !== 'oauth2' || !spec.oauthConfig) return res.status(400).json({ success: false, error: 'Integration is not OAuth2 based' });
 
-  const returnTo = safeReturnPath(req.query.return_to) || '/dashboard/integrations';
+  const returnTo = safeReturnPath(req.query.return_to) || '/dashboard/apps';
   const connection: Record<string, string> = {};
   (spec.connectionFields || []).forEach((field) => {
     const raw = req.query[field.name];
@@ -1536,20 +1536,20 @@ router.get('/oauth/callback/:service', async (req, res) => {
       service,
       message: errorDescription || error,
     });
-    return res.redirect(302, `${frontendUrl}/dashboard/integrations?${params.toString()}`);
+    return res.redirect(302, `${frontendUrl}/dashboard/apps?${params.toString()}`);
   }
 
   const code = typeof req.query.code === 'string' ? req.query.code : null;
   const state = typeof req.query.state === 'string' ? req.query.state : null;
   if (!code || !state) {
     const params = new URLSearchParams({ status: 'error', service, message: 'Missing code/state' });
-    return res.redirect(302, `${frontendUrl}/dashboard/integrations?${params.toString()}`);
+    return res.redirect(302, `${frontendUrl}/dashboard/apps?${params.toString()}`);
   }
 
   const parsedState = await verifyOAuthState(state);
   if (!parsedState?.orgId || parsedState?.service !== service) {
     const params = new URLSearchParams({ status: 'error', service, message: 'Invalid state' });
-    return res.redirect(302, `${frontendUrl}/dashboard/integrations?${params.toString()}`);
+    return res.redirect(302, `${frontendUrl}/dashboard/apps?${params.toString()}`);
   }
 
   const orgId = String(parsedState.orgId);
@@ -1714,13 +1714,13 @@ router.get('/oauth/callback/:service', async (req, res) => {
       await applyWave1Policies(rest, orgId, parsedState.userId || null, [service]);
     }
 
-    const returnTo = safeReturnPath(parsedState.returnTo) || '/dashboard/integrations';
+    const returnTo = safeReturnPath(parsedState.returnTo) || '/dashboard/apps';
     const params = new URLSearchParams({ status: 'connected', service });
     return res.redirect(302, `${frontendUrl}${returnTo}?${params.toString()}`);
   } catch (err: any) {
     logger.warn('OAuth callback failed', { service, error: err?.message || String(err) });
     const params = new URLSearchParams({ status: 'error', service, message: err?.message || 'OAuth failed' });
-    const errReturnTo = safeReturnPath((parsedState as any)?.returnTo) || '/dashboard/integrations';
+    const errReturnTo = safeReturnPath((parsedState as any)?.returnTo) || '/dashboard/apps';
     return res.redirect(302, `${frontendUrl}${errReturnTo}?${params.toString()}`);
   }
 });
