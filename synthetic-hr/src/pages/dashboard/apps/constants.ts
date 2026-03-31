@@ -24,7 +24,10 @@ export const CATEGORIES: Category[] = [
   { id: 'compliance',  label: 'Compliance & Legal',    icon: Gavel,      hubRoute: 'compliance-hub', hubLabel: 'Compliance Hub',   apiCategory: 'compliance' },
   { id: 'recruitment', label: 'Recruitment & Hiring',  icon: Briefcase,  hubRoute: 'recruitment',    hubLabel: 'Recruitment Hub',  apiCategory: 'recruitment' },
   { id: 'marketing',   label: 'Marketing',             icon: Megaphone,  hubRoute: 'marketing-hub',  hubLabel: 'Marketing Hub',    apiCategory: 'marketing' },
-  { id: 'productivity',label: 'Productivity',          icon: Layers,     hubRoute: null,             hubLabel: null,               apiCategory: 'productivity' },
+  { id: 'productivity',  label: 'Productivity',          icon: Layers,       hubRoute: null,                hubLabel: null,             apiCategory: 'productivity' },
+  { id: 'communication', label: 'Communication',         icon: MessageSquare, hubRoute: 'communication-hub', hubLabel: 'Comms Hub',       apiCategory: 'communication' },
+  { id: 'analytics',     label: 'Analytics & BI',        icon: BarChart2,    hubRoute: null,                hubLabel: null,             apiCategory: 'analytics' },
+  { id: 'legal',         label: 'Legal & Compliance',    icon: Scale,        hubRoute: 'compliance-hub',    hubLabel: 'Compliance Hub', apiCategory: 'legal' },
 ];
 
 // ─── Category meta (from ConnectorsPage — icons + colors for browse filters) ─
@@ -170,4 +173,58 @@ export const LOGO_DOMAINS: Record<string, string> = {
   // Sales
   'apollo':             'apollo.io',
   'outreach':           'outreach.io',
+  'leadsquared':        'leadsquared.com',
+  // Finance (new)
+  'chargebee':          'chargebee.com',
+  'paytm-business':     'paytm.com',
+  'razorpayx':          'razorpay.com',
+  'marg-erp':           'margcompusoft.com',
+  'zoho-books-new':     'zoho.com',
+  // HR & People (new)
+  'zoho-learn':         'zoho.com',
+  'zoho-recruit':       'zoho.com',
+  'zimyo':              'zimyo.com',
+  'hrone':              'hrone.com',
+  // Recruitment (new)
+  'apna':               'apna.co',
+  'instahyre':          'instahyre.com',
+  'cutshort':           'cutshort.io',
+  // Communication (new)
+  'loom':               'loom.com',
+  'gupshup':            'gupshup.io',
+  // IT & Security (new)
+  'postman':            'postman.com',
+  'browserstack':       'browserstack.com',
+  'sentry':             'sentry.io',
+  '1password':          '1password.com',
+  'freshservice':       'freshservice.com',
+  'kissflow':           'kissflow.com',
+  'aws':                'aws.amazon.com',
+  'azure':              'azure.microsoft.com',
+  'gcp':                'cloud.google.com',
+  // Compliance & Legal (new)
+  'vanta':              'vanta.com',
+  'drata':              'drata.com',
+  'vakilsearch':        'vakilsearch.com',
+  'idfy':               'idfy.com',
+  'epfo':               'epfindia.gov.in',
+  'aadhaar-api':        'uidai.gov.in',
+  'digilocker':         'digilocker.gov.in',
+  // Marketing (new)
+  'invideo':            'invideo.io',
+  // Analytics (new)
+  'tableau':            'tableau.com',
+  'snowflake':          'snowflake.com',
+  // Productivity (new)
+  'figma':              'figma.com',
+  'notion':             'notion.so',
+  'canva':              'canva.com',
+  'calendly':           'calendly.com',
+  'miro':               'miro.com',
+  'asana':              'asana.com',
+  'monday':             'monday.com',
+  'zapier':             'zapier.com',
+  'whatfix':            'whatfix.com',
+  'shiprocket':         'shiprocket.in',
+  'unicommerce':        'unicommerce.com',
 };

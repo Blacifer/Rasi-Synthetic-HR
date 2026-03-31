@@ -67,6 +67,16 @@ function BrowseCard({ app, popLabel, onConnect, onManage }: {
           {app.maturity && app.maturity !== 'connected' && (
             <span className="text-[9px] px-1 py-0.5 rounded border border-white/10 text-slate-500 font-medium">{app.maturity}</span>
           )}
+          {app.installCount > 0 && (
+            <span className="text-[9px] text-slate-600">
+              {app.installCount >= 1000
+                ? `${(app.installCount / 1000).toFixed(app.installCount % 1000 === 0 ? 0 : 1)}k installs`
+                : `${app.installCount} installs`}
+            </span>
+          )}
+          {CATEGORY_META[app.category] && (
+            <span className="text-[9px] text-slate-600">{CATEGORY_META[app.category].label}</span>
+          )}
         </div>
       </div>
     </button>
