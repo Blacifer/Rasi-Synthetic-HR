@@ -215,6 +215,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
               apps={browseList}
               bundles={bundles as any}
               agents={agents}
+              featured={featured}
               initialCategory={selectedCat}
               onConnect={(app) => setConnectTarget(app)}
               onManage={(app) => setDrawerApp(app)}

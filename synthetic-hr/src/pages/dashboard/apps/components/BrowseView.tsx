@@ -14,6 +14,7 @@ interface BrowseViewProps {
   apps: UnifiedApp[];
   bundles: AppBundle[];
   agents: AIAgent[];
+  featured?: UnifiedApp[];
   initialCategory?: string | null;
   onConnect: (app: UnifiedApp) => void;
   onManage: (app: UnifiedApp) => void;
@@ -72,7 +73,7 @@ function BrowseCard({ app, popLabel, onConnect, onManage }: {
   );
 }
 
-export function BrowseView({ apps, bundles, agents, initialCategory, onConnect, onManage }: BrowseViewProps) {
+export function BrowseView({ apps, bundles, agents, featured: featuredProp, initialCategory, onConnect, onManage }: BrowseViewProps) {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<string>('popular');
   const [filterType, setFilterType] = useState<'all' | 'marketplace' | 'integration'>('all');
@@ -119,8 +120,10 @@ export function BrowseView({ apps, bundles, agents, initialCategory, onConnect, 
   }, [apps, filterType, filterCategory, search, sortBy]);
 
   const featured = useMemo(
-    () => apps.filter((a) => a.featured && !search && filterCategory === 'all' && filterType === 'all'),
-    [apps, search, filterCategory, filterType]
+    () => (!search && filterCategory === 'all' && filterType === 'all')
+      ? (featuredProp ?? apps.filter((a) => a.featured && !a.comingSoon))
+      : [],
+    [featuredProp, apps, search, filterCategory, filterType]
   );
 
   function popLabel(a: UnifiedApp): string | null {
