@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Shield, Plus, RefreshCw, Trash2, X, BookOpen, ChevronRight, Zap, GitBranch, Filter, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Shield, Plus, RefreshCw, Trash2, X, BookOpen, ChevronRight, Zap, GitBranch, Filter, ToggleLeft, ToggleRight, Code2, Play, History, CheckCircle2 } from 'lucide-react';
 import { api, type ActionPolicyRow, type RoutingRule, type InterceptorRule, type ActionPolicyConstraints } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 
@@ -467,6 +467,14 @@ export default function ActionPoliciesPage() {
   const [showInterceptors, setShowInterceptors] = useState(false);
   const [interceptorTab, setInterceptorTab] = useState<'patch_request' | 'patch_response' | 'route_model'>('patch_request');
   const [savingInterceptor, setSavingInterceptor] = useState(false);
+  const [editorMode, setEditorMode] = useState<'gui' | 'yaml'>('gui');
+  const [yamlSource, setYamlSource] = useState('');
+  const [yamlValid, setYamlValid] = useState<null | { valid: boolean; error?: string }>(null);
+  const [yamlValidating, setYamlValidating] = useState(false);
+  const [simulating, setSimulating] = useState(false);
+  const [simResult, setSimResult] = useState<{ decision: string; violations: any[] } | null>(null);
+  const [versionHistory, setVersionHistory] = useState<any[]>([]);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [editor, setEditor] = useState<Editor>({
     service: 'internal',
     action: 'support.ticket.create',
@@ -564,6 +572,45 @@ export default function ActionPoliciesPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const validateYaml = async () => {
+    if (!yamlSource.trim()) return;
+    setYamlValidating(true);
+    setYamlValid(null);
+    try {
+      const res = await api.policies.validateYaml('_', yamlSource);
+      setYamlValid({ valid: res.valid ?? false, error: res.error });
+    } catch {
+      setYamlValid({ valid: false, error: 'Validation request failed' });
+    } finally {
+      setYamlValidating(false);
+    }
+  };
+
+  const simulateYaml = async () => {
+    if (!yamlSource.trim()) return;
+    setSimulating(true);
+    setSimResult(null);
+    try {
+      const sampleCtx = {
+        content: 'Sample content with email user@example.com',
+        context: { service: editor.service, action: editor.action, amount: 5000 },
+      };
+      const res = await api.policies.simulate([yamlSource], sampleCtx);
+      if (res.success && res.data) setSimResult(res.data);
+      else toast.error(res.error || 'Simulation failed');
+    } catch {
+      toast.error('Simulation request failed');
+    } finally {
+      setSimulating(false);
+    }
+  };
+
+  const loadVersionHistory = async () => {
+    if (!selectedId) return;
+    const res = await api.policies.getVersionHistory(selectedId);
+    if (res.success) setVersionHistory(res.data || []);
   };
 
   const selectTemplate = (service: string, action: string) => {
@@ -1013,6 +1060,105 @@ export default function ActionPoliciesPage() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Policy-as-Code YAML Editor */}
+      <div className="rounded-xl border border-slate-700 bg-slate-800/20 overflow-hidden">
+        <button
+          onClick={() => setEditorMode(m => m === 'gui' ? 'yaml' : 'gui')}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-800/40 transition"
+        >
+          <div className="flex items-center gap-2">
+            <Code2 className="w-4 h-4 text-violet-400" />
+            <span className="text-sm font-semibold text-white">Policy-as-Code (YAML Editor)</span>
+            <span className="text-xs text-slate-500">Define policies using YAML with boolean logic, regex, and thresholds</span>
+          </div>
+          <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${editorMode === 'yaml' ? 'rotate-90' : ''}`} />
+        </button>
+
+        {editorMode === 'yaml' && (
+          <div className="border-t border-slate-700 p-5 space-y-4">
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <span>Write YAML policies using the</span>
+              <a href="#" className="text-cyan-400 hover:underline" onClick={async (e) => { e.preventDefault(); const res = await api.policies.getTemplates(); if (res.success && res.data?.[0]) setYamlSource(res.data[0].yaml_source); }}>built-in templates</a>
+              <span>as a starting point.</span>
+            </div>
+            <textarea
+              value={yamlSource}
+              onChange={e => { setYamlSource(e.target.value); setYamlValid(null); setSimResult(null); }}
+              placeholder={`name: "My Policy"\nenforcement_level: block\nrules:\n  - id: rule1\n    description: "Block emails"\n    condition:\n      field: content\n      op: matches\n      value: "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"\n    action: block\n    reason: "PII: email detected"`}
+              className="w-full h-64 px-3 py-3 rounded-lg bg-slate-900 border border-slate-700 text-sm font-mono text-slate-200 placeholder-slate-600 resize-y focus:outline-none focus:border-violet-500/50"
+              spellCheck={false}
+            />
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={validateYaml}
+                disabled={yamlValidating || !yamlSource.trim()}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-medium transition-colors disabled:opacity-50"
+              >
+                {yamlValidating ? <RefreshCw className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                Validate
+              </button>
+              <button
+                onClick={simulateYaml}
+                disabled={simulating || !yamlSource.trim()}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600/80 hover:bg-violet-600 text-white text-xs font-medium transition-colors disabled:opacity-50"
+              >
+                {simulating ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                Simulate
+              </button>
+              {selectedId && (
+                <button
+                  onClick={() => { setShowVersionHistory(v => !v); if (!showVersionHistory) loadVersionHistory(); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-medium transition-colors"
+                >
+                  <History className="w-3 h-3" />
+                  Version History
+                </button>
+              )}
+            </div>
+
+            {/* Validate result */}
+            {yamlValid && (
+              <div className={`px-3 py-2 rounded-lg text-xs ${yamlValid.valid ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300' : 'bg-rose-500/10 border border-rose-500/20 text-rose-300'}`}>
+                {yamlValid.valid ? '✓ Valid YAML policy' : `✗ ${yamlValid.error}`}
+              </div>
+            )}
+
+            {/* Simulate result */}
+            {simResult && (
+              <div className="bg-slate-900/60 border border-slate-700 rounded-lg p-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <span className="text-slate-400">Decision:</span>
+                  <span className={simResult.decision === 'block' ? 'text-rose-400' : simResult.decision === 'require_approval' ? 'text-amber-400' : simResult.decision === 'warn' ? 'text-yellow-400' : 'text-emerald-400'}>
+                    {simResult.decision.toUpperCase()}
+                  </span>
+                </div>
+                {simResult.violations.length > 0 && (
+                  <div className="space-y-1">
+                    {simResult.violations.map((v: any, i: number) => (
+                      <div key={i} className="text-xs text-slate-400">{v.rule_id}: {v.reason}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Version history */}
+            {showVersionHistory && versionHistory.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-slate-400">Version History</p>
+                {versionHistory.map((v: any) => (
+                  <div key={v.id} className="flex items-center justify-between text-xs bg-slate-900/50 rounded-lg px-3 py-2">
+                    <span className="text-slate-400">v{v.version} — {new Date(v.created_at).toLocaleDateString()}</span>
+                    {v.change_note && <span className="text-slate-500 italic">{v.change_note}</span>}
+                    <button onClick={() => setYamlSource(v.yaml_source)} className="text-cyan-400 hover:underline">Restore</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Gateway Interceptors */}

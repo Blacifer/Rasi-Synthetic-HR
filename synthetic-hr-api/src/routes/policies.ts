@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { eq, supabaseRestAsUser } from '../lib/supabase-rest';
 import { requirePermission } from '../middleware/rbac';
+import { parsePolicy, validateYaml, evaluatePolicies, POLICY_TEMPLATES, type EvalContext } from '../services/policy-engine';
 
 const router = express.Router();
 
@@ -341,5 +342,141 @@ function evaluateRule(rule: any, operation: string, context: any): boolean {
 
   return false;
 }
+
+// POST /packs/:id/validate-yaml — validate YAML policy syntax
+router.post('/packs/:id/validate-yaml', requirePermission('policies.manage'), async (req: Request, res: Response) => {
+  const { yaml_source } = req.body || {};
+  if (!yaml_source || typeof yaml_source !== 'string') {
+    return res.status(400).json({ success: false, error: 'yaml_source is required' });
+  }
+  const result = validateYaml(yaml_source);
+  return res.json({ success: true, valid: result.valid, error: result.error ?? null });
+});
+
+// POST /simulate — dry-run one or more policies against a sample payload
+router.post('/simulate', requirePermission('policies.manage'), async (req: Request, res: Response) => {
+  try {
+    const organizationId = req.user?.organization_id;
+    if (!organizationId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const { yaml_sources, context } = req.body || {};
+
+    if (!Array.isArray(yaml_sources) || yaml_sources.length === 0) {
+      return res.status(400).json({ success: false, error: 'yaml_sources must be a non-empty array of YAML strings' });
+    }
+    if (yaml_sources.length > 10) {
+      return res.status(400).json({ success: false, error: 'Maximum 10 policies per simulation' });
+    }
+
+    const policies = [];
+    const parseErrors: Array<{ index: number; error: string }> = [];
+    for (let i = 0; i < yaml_sources.length; i++) {
+      const result = validateYaml(yaml_sources[i]);
+      if (!result.valid) {
+        parseErrors.push({ index: i, error: result.error ?? 'Parse error' });
+      } else {
+        policies.push(parsePolicy(yaml_sources[i]));
+      }
+    }
+
+    if (parseErrors.length > 0) {
+      return res.status(400).json({ success: false, error: 'Some policies failed to parse', parse_errors: parseErrors });
+    }
+
+    const evalContext: EvalContext = {
+      content: context?.content ?? '',
+      context: context?.context ?? {},
+      ...(context ?? {}),
+    };
+
+    const result = evaluatePolicies(policies, evalContext);
+    return res.json({ success: true, data: result });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message ?? 'Simulation failed' });
+  }
+});
+
+// GET /templates — return built-in compliance policy YAML templates
+router.get('/templates', async (_req: Request, res: Response) => {
+  const templates = Object.entries(POLICY_TEMPLATES).map(([key, yaml_source]) => ({
+    key,
+    yaml_source,
+  }));
+  return res.json({ success: true, data: templates });
+});
+
+// POST /packs/:id/versions — save a new version snapshot when policy is updated
+// (called internally by PATCH /packs/:id; exposed for manual snapshotting too)
+router.post('/packs/:id/versions', requirePermission('policies.manage'), async (req: Request, res: Response) => {
+  try {
+    const userJwt = requireUserJwt(req, res);
+    if (!userJwt) return;
+    const organizationId = req.user?.organization_id;
+    if (!organizationId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const { id } = req.params;
+    const { yaml_source, rules, change_note } = req.body || {};
+
+    if (!yaml_source) return res.status(400).json({ success: false, error: 'yaml_source required' });
+    if (!rules) return res.status(400).json({ success: false, error: 'rules required' });
+
+    // Get current version number
+    const q = new URLSearchParams();
+    q.set('policy_pack_id', eq(id));
+    q.set('organization_id', eq(organizationId));
+    q.set('order', 'version.desc');
+    q.set('limit', '1');
+    q.set('select', 'version');
+    const existing = await supabaseRestAsUser(userJwt, 'policy_pack_versions', q) as any[];
+    const nextVersion = ((existing?.[0]?.version ?? 0) as number) + 1;
+
+    const created = await supabaseRestAsUser(userJwt, 'policy_pack_versions', '', {
+      method: 'POST',
+      body: {
+        policy_pack_id: id,
+        organization_id: organizationId,
+        version: nextVersion,
+        yaml_source,
+        rules,
+        changed_by: req.user?.id,
+        change_note: change_note ?? null,
+      },
+    }) as any[];
+
+    // Update the pack's own version counter and yaml_source
+    const pq = new URLSearchParams();
+    pq.set('id', eq(id));
+    pq.set('organization_id', eq(organizationId));
+    await supabaseRestAsUser(userJwt, 'policy_packs', pq, {
+      method: 'PATCH',
+      body: { yaml_source, version: nextVersion, updated_at: new Date().toISOString() },
+    });
+
+    return res.status(201).json({ success: true, data: created?.[0], version: nextVersion });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// GET /packs/:id/versions — list version history for a policy pack
+router.get('/packs/:id/versions', requirePermission('policies.manage'), async (req: Request, res: Response) => {
+  try {
+    const userJwt = requireUserJwt(req, res);
+    if (!userJwt) return;
+    const organizationId = req.user?.organization_id;
+    if (!organizationId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const { id } = req.params;
+    const q = new URLSearchParams();
+    q.set('policy_pack_id', eq(id));
+    q.set('organization_id', eq(organizationId));
+    q.set('order', 'version.desc');
+    q.set('limit', '50');
+    const versions = await supabaseRestAsUser(userJwt, 'policy_pack_versions', q) as any[];
+    return res.json({ success: true, data: versions || [] });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message });
+  }
+});
 
 export default router;

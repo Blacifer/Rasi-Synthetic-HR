@@ -239,4 +239,13 @@ export const conversationApi = {
       method: 'GET',
     });
   },
+
+  /**
+   * Get reasoning traces for a conversation
+   */
+  async getTrace(id: string): Promise<ApiResponse<any[]>> {
+    return authenticatedFetch<any[]>(`/conversations/${id}/trace`, {
+      method: 'GET',
+    });
+  },
 };

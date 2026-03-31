@@ -84,6 +84,41 @@ function applyRoutingRules(
   return { required_role: defaultRole, assigned_to: null };
 }
 
+// ─── Risk Scoring ──────────────────────────────────────────────────────────
+
+const PII_PATTERNS = [/\b[\w.+-]+@[\w-]+\.\w{2,}\b/i, /\b\d{3}-\d{2}-\d{4}\b/, /\b\d{10,12}\b/];
+const HIGH_RISK_ACTIONS = ['terminate', 'delete', 'dismiss', 'deny', 'reject', 'remove', 'ban', 'revoke'];
+
+function computeApprovalRiskScore(payload: Record<string, any>, service: string, action: string): number {
+  let score = 0.2; // baseline
+
+  // Amount-based risk
+  const amount = Number(payload?.amount ?? payload?.value ?? 0);
+  if (amount > 100000) score += 0.4;
+  else if (amount > 10000) score += 0.25;
+  else if (amount > 1000) score += 0.1;
+
+  // High-risk action keywords
+  const actionLower = action.toLowerCase();
+  if (HIGH_RISK_ACTIONS.some(k => actionLower.includes(k))) score += 0.3;
+
+  // PII in payload
+  const payloadStr = JSON.stringify(payload);
+  if (PII_PATTERNS.some(p => p.test(payloadStr))) score += 0.2;
+
+  // Unknown/untrusted service
+  const knownServices = ['zendesk', 'slack', 'razorpay', 'stripe', 'github', 'jira', 'hubspot'];
+  if (!knownServices.includes(service.toLowerCase())) score += 0.1;
+
+  return Math.min(1, Math.round(score * 1000) / 1000);
+}
+
+function roleForRiskScore(score: number): string {
+  if (score >= 0.7) return 'admin';
+  if (score >= 0.4) return 'manager';
+  return 'viewer';
+}
+
 const listSchema = z.object({
   status: z.string().optional(),
   agent_id: z.string().uuid().optional(),
@@ -179,7 +214,18 @@ router.post('/', requirePermission('policies.manage'), async (req: Request, res:
     }
 
     const expiresAt = new Date(Date.now() + expires_in_hours * 3600 * 1000).toISOString();
+    const slaDeadline = new Date(Date.now() + 4 * 3600 * 1000).toISOString(); // 4-hour SLA default
     const now = new Date().toISOString();
+
+    // Compute risk score and potentially elevate required role
+    const riskScore = computeApprovalRiskScore((action_payload as Record<string, any>) || {}, service, action);
+    if (!action_policy_id) {
+      // Only auto-elevate role when not governed by an explicit policy
+      const scoredRole = roleForRiskScore(riskScore);
+      const current = ROLE_ORDER[effectiveRole] ?? 0;
+      const scored = ROLE_ORDER[scoredRole] ?? 0;
+      if (scored > current) effectiveRole = scoredRole as typeof baseRole;
+    }
 
     const created = (await supabaseRestAsUser(getUserJwt(req), 'approval_requests', '', {
       method: 'POST',
@@ -194,6 +240,8 @@ router.post('/', requirePermission('policies.manage'), async (req: Request, res:
         requested_by,
         status: 'pending',
         required_role: effectiveRole,
+        risk_score: riskScore,
+        sla_deadline: slaDeadline,
         ...(assignedTo ? { assigned_to: assignedTo } : {}),
         expires_at: expiresAt,
         created_at: now,
@@ -458,6 +506,277 @@ router.post('/:id/cancel', requirePermission('policies.manage'), async (req: Req
     });
 
     return res.json({ success: true, data: updated?.[0] || row });
+  } catch (err: any) {
+    return errorResponse(res, err);
+  }
+});
+
+// POST /:id/snooze — snooze a pending approval
+router.post('/:id/snooze', requirePermission('policies.manage'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    const userId = req.user?.id;
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+    const hours = Number(req.body?.hours ?? 4);
+    if (![1, 4, 24].includes(hours)) {
+      return res.status(400).json({ success: false, error: 'hours must be 1, 4, or 24' });
+    }
+
+    const q = new URLSearchParams();
+    q.set('id', eq(id));
+    q.set('organization_id', eq(orgId));
+    q.set('status', eq('pending'));
+    const rows = (await supabaseRestAsUser(getUserJwt(req), 'approval_requests', q)) as any[];
+    if (!rows?.length) return res.status(404).json({ success: false, error: 'Pending approval not found' });
+
+    const snoozedUntil = new Date(Date.now() + hours * 3600 * 1000).toISOString();
+    const patchQ = new URLSearchParams();
+    patchQ.set('id', eq(id));
+    patchQ.set('organization_id', eq(orgId));
+    const updated = (await supabaseRestAsUser(getUserJwt(req), 'approval_requests', patchQ, {
+      method: 'PATCH',
+      body: { snoozed_until: snoozedUntil, updated_at: new Date().toISOString() },
+    })) as any[];
+
+    auditLog.log({
+      user_id: userId || 'system',
+      action: 'approval_request.snoozed',
+      resource_type: 'approval_request',
+      resource_id: id,
+      organization_id: orgId,
+      ip_address: req.ip || (req.socket as any)?.remoteAddress,
+      user_agent: req.get('user-agent') || undefined,
+      metadata: { snoozed_until: snoozedUntil, hours },
+    });
+
+    return res.json({ success: true, data: updated?.[0] || rows[0] });
+  } catch (err: any) {
+    return errorResponse(res, err);
+  }
+});
+
+// POST /:id/escalate — escalate an approval to a higher role
+router.post('/:id/escalate', requirePermission('policies.manage'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    const userId = req.user?.id;
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+    const q = new URLSearchParams();
+    q.set('id', eq(id));
+    q.set('organization_id', eq(orgId));
+    const rows = (await supabaseRestAsUser(getUserJwt(req), 'approval_requests', q)) as any[];
+    if (!rows?.length) return res.status(404).json({ success: false, error: 'Approval not found' });
+
+    const row = rows[0];
+    const currentRole = row.required_role as string;
+    const roleOrder = ['viewer', 'manager', 'admin', 'super_admin'];
+    const currentIdx = roleOrder.indexOf(currentRole);
+    const escalatedRole = roleOrder[Math.min(currentIdx + 1, roleOrder.length - 1)];
+
+    const patchQ = new URLSearchParams();
+    patchQ.set('id', eq(id));
+    patchQ.set('organization_id', eq(orgId));
+    const updated = (await supabaseRestAsUser(getUserJwt(req), 'approval_requests', patchQ, {
+      method: 'PATCH',
+      body: { required_role: escalatedRole, status: 'pending', updated_at: new Date().toISOString() },
+    })) as any[];
+
+    auditLog.log({
+      user_id: userId || 'system',
+      action: 'approval_request.escalated',
+      resource_type: 'approval_request',
+      resource_id: id,
+      organization_id: orgId,
+      ip_address: req.ip || (req.socket as any)?.remoteAddress,
+      user_agent: req.get('user-agent') || undefined,
+      metadata: { from_role: currentRole, to_role: escalatedRole },
+    });
+
+    return res.json({ success: true, data: updated?.[0] || row });
+  } catch (err: any) {
+    return errorResponse(res, err);
+  }
+});
+
+// GET /:id/comments — list comments on an approval
+router.get('/:id/comments', requirePermission('policies.manage'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+    const q = new URLSearchParams();
+    q.set('approval_request_id', eq(id));
+    q.set('organization_id', eq(orgId));
+    q.set('order', 'created_at.asc');
+    const comments = (await supabaseRestAsUser(getUserJwt(req), 'approval_comments', q)) as any[];
+    return res.json({ success: true, data: comments || [] });
+  } catch (err: any) {
+    return errorResponse(res, err);
+  }
+});
+
+// POST /:id/comments — add a comment to an approval
+router.post('/:id/comments', requirePermission('policies.manage'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    const userId = req.user?.id;
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const { content, mention_ids } = z.object({
+      content: z.string().min(1).max(5000),
+      mention_ids: z.array(z.string().uuid()).optional().default([]),
+    }).parse(req.body);
+
+    // Verify the approval belongs to this org
+    const aq = new URLSearchParams();
+    aq.set('id', eq(id));
+    aq.set('organization_id', eq(orgId));
+    aq.set('select', 'id');
+    const ar = (await supabaseRestAsUser(getUserJwt(req), 'approval_requests', aq)) as any[];
+    if (!ar?.length) return res.status(404).json({ success: false, error: 'Approval not found' });
+
+    const created = (await supabaseRestAsUser(getUserJwt(req), 'approval_comments', '', {
+      method: 'POST',
+      body: {
+        approval_request_id: id,
+        organization_id: orgId,
+        author_id: userId,
+        content,
+        mention_ids: mention_ids || [],
+      },
+    })) as any[];
+
+    return res.status(201).json({ success: true, data: created?.[0] });
+  } catch (err: any) {
+    return errorResponse(res, err);
+  }
+});
+
+// PATCH /:id/subtasks — update sub-tasks on an approval
+router.patch('/:id/subtasks', requirePermission('policies.manage'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+    const { sub_tasks } = z.object({
+      sub_tasks: z.array(z.object({
+        title: z.string().min(1).max(500),
+        completed: z.boolean().default(false),
+        created_by: z.string().uuid().optional(),
+      })).max(20),
+    }).parse(req.body);
+
+    const patchQ = new URLSearchParams();
+    patchQ.set('id', eq(id));
+    patchQ.set('organization_id', eq(orgId));
+    const updated = (await supabaseRestAsUser(getUserJwt(req), 'approval_requests', patchQ, {
+      method: 'PATCH',
+      body: { sub_tasks, updated_at: new Date().toISOString() },
+    })) as any[];
+
+    return res.json({ success: true, data: updated?.[0] });
+  } catch (err: any) {
+    return errorResponse(res, err);
+  }
+});
+
+// POST /bulk-approve — approve multiple pending approvals
+router.post('/bulk-approve', requirePermission('policies.manage'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    const userId = req.user?.id;
+    const userRole = req.user?.role || 'viewer';
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+    const { ids, note } = z.object({
+      ids: z.array(z.string().uuid()).min(1).max(50),
+      note: z.string().max(2000).optional(),
+    }).parse(req.body);
+
+    const results: Array<{ id: string; success: boolean; error?: string }> = [];
+
+    for (const id of ids) {
+      try {
+        const q = new URLSearchParams();
+        q.set('id', eq(id));
+        q.set('organization_id', eq(orgId));
+        q.set('status', eq('pending'));
+        const rows = (await supabaseRestAsUser(getUserJwt(req), 'approval_requests', q)) as any[];
+        if (!rows?.length) { results.push({ id, success: false, error: 'Not found or not pending' }); continue; }
+        const row = rows[0];
+        if (!canReview(userRole, row.required_role)) { results.push({ id, success: false, error: 'Insufficient role' }); continue; }
+        if (row.assigned_to && row.assigned_to !== userId) { results.push({ id, success: false, error: 'Assigned to another user' }); continue; }
+
+        const patchQ = new URLSearchParams();
+        patchQ.set('id', eq(id));
+        patchQ.set('organization_id', eq(orgId));
+        await supabaseRestAsUser(getUserJwt(req), 'approval_requests', patchQ, {
+          method: 'PATCH',
+          body: { status: 'approved', reviewer_id: userId, reviewer_note: note || null, reviewed_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+        });
+        results.push({ id, success: true });
+      } catch (e: any) {
+        results.push({ id, success: false, error: e?.message });
+      }
+    }
+
+    const approved = results.filter(r => r.success).length;
+    logger.info('Bulk approval completed', { orgId, approved, total: ids.length });
+    return res.json({ success: true, data: results, approved, total: ids.length });
+  } catch (err: any) {
+    return errorResponse(res, err);
+  }
+});
+
+// POST /bulk-deny — deny multiple pending approvals
+router.post('/bulk-deny', requirePermission('policies.manage'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    const userId = req.user?.id;
+    const userRole = req.user?.role || 'viewer';
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+    const { ids, note } = z.object({
+      ids: z.array(z.string().uuid()).min(1).max(50),
+      note: z.string().max(2000).optional(),
+    }).parse(req.body);
+
+    const results: Array<{ id: string; success: boolean; error?: string }> = [];
+
+    for (const id of ids) {
+      try {
+        const q = new URLSearchParams();
+        q.set('id', eq(id));
+        q.set('organization_id', eq(orgId));
+        q.set('status', eq('pending'));
+        const rows = (await supabaseRestAsUser(getUserJwt(req), 'approval_requests', q)) as any[];
+        if (!rows?.length) { results.push({ id, success: false, error: 'Not found or not pending' }); continue; }
+        const row = rows[0];
+        if (!canReview(userRole, row.required_role)) { results.push({ id, success: false, error: 'Insufficient role' }); continue; }
+
+        const patchQ = new URLSearchParams();
+        patchQ.set('id', eq(id));
+        patchQ.set('organization_id', eq(orgId));
+        await supabaseRestAsUser(getUserJwt(req), 'approval_requests', patchQ, {
+          method: 'PATCH',
+          body: { status: 'denied', reviewer_id: userId, reviewer_note: note || null, reviewed_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+        });
+        results.push({ id, success: true });
+      } catch (e: any) {
+        results.push({ id, success: false, error: e?.message });
+      }
+    }
+
+    const denied = results.filter(r => r.success).length;
+    return res.json({ success: true, data: results, denied, total: ids.length });
   } catch (err: any) {
     return errorResponse(res, err);
   }

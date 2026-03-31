@@ -77,6 +77,40 @@ export const policiesApi = {
       body: JSON.stringify(data),
     });
   },
+
+  async validateYaml(_id: string, yamlSource: string): Promise<{ valid: boolean; error?: string }> {
+    const res = await authenticatedFetch<{ valid: boolean; error?: string }>('/policies/packs/_/validate-yaml', {
+      method: 'POST',
+      body: JSON.stringify({ yaml_source: yamlSource }),
+    });
+    return (res as any).data ?? (res as any);
+  },
+
+  async simulate(yamlSources: string[], context: Record<string, unknown>): Promise<ApiResponse<any>> {
+    return authenticatedFetch<any>('/policies/simulate', {
+      method: 'POST',
+      body: JSON.stringify({ yaml_sources: yamlSources, context }),
+    });
+  },
+
+  async getTemplates(): Promise<ApiResponse<Array<{ key: string; yaml_source: string }>>> {
+    return authenticatedFetch<Array<{ key: string; yaml_source: string }>>('/policies/templates', {
+      method: 'GET',
+    });
+  },
+
+  async getVersionHistory(id: string): Promise<ApiResponse<any[]>> {
+    return authenticatedFetch<any[]>(`/policies/packs/${encodeURIComponent(id)}/versions`, {
+      method: 'GET',
+    });
+  },
+
+  async saveVersion(id: string, yamlSource: string, rules: unknown, changeNote?: string): Promise<ApiResponse<any>> {
+    return authenticatedFetch<any>(`/policies/packs/${encodeURIComponent(id)}/versions`, {
+      method: 'POST',
+      body: JSON.stringify({ yaml_source: yamlSource, rules, change_note: changeNote }),
+    });
+  },
 };
 
 /**
@@ -138,6 +172,12 @@ export const complianceApi = {
   async getStats(days?: number): Promise<ApiResponse<any>> {
     const query = days ? `?days=${days}` : '';
     return authenticatedFetch(`/compliance/stats${query}`, {
+      method: 'GET',
+    });
+  },
+
+  async getAgentScorecard(agentId: string, days = 30): Promise<ApiResponse<any>> {
+    return authenticatedFetch(`/compliance/agents/${encodeURIComponent(agentId)}/scorecard?days=${days}`, {
       method: 'GET',
     });
   },

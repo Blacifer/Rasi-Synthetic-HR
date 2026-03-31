@@ -623,4 +623,99 @@ router.get('/data-export.zip', requirePermission('compliance.export'), async (re
   }
 });
 
+// GET /agents/:agentId/scorecard — compliance scorecard for an agent
+router.get('/agents/:agentId/scorecard', requirePermission('compliance.export'), async (req: Request, res: Response) => {
+  try {
+    const userJwt = requireUserJwt(req, res);
+    if (!userJwt) return;
+    const organizationId = req.user?.organization_id;
+    if (!organizationId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const { agentId } = req.params;
+    const days = Math.min(Number(req.query.days ?? 30), 90);
+    const since = new Date(Date.now() - days * 86400000).toISOString();
+
+    // Fetch reasoning traces for this agent
+    const tq = new URLSearchParams();
+    tq.set('agent_id', eq(agentId));
+    tq.set('organization_id', eq(organizationId));
+    tq.set('created_at', gte(since));
+    tq.set('order', 'created_at.desc');
+    tq.set('limit', '500');
+    const traces = (await supabaseRestAsUser(userJwt, 'gateway_reasoning_traces', tq)) as any[];
+
+    const totalRuns = traces.length;
+    if (totalRuns === 0) {
+      return res.json({
+        success: true,
+        data: {
+          agent_id: agentId,
+          score: 100,
+          total_runs: 0,
+          violation_count: 0,
+          block_count: 0,
+          warn_count: 0,
+          top_violations: [],
+          risk_trend: [],
+          days,
+        },
+      });
+    }
+
+    let violationCount = 0;
+    let blockCount = 0;
+    let warnCount = 0;
+    const violationTally: Record<string, number> = {};
+    const dailyRisk: Record<string, number[]> = {};
+
+    for (const trace of traces) {
+      const violations: any[] = trace.policy_violations ?? [];
+      violationCount += violations.length;
+      for (const v of violations) {
+        if (v.action_taken === 'block') blockCount++;
+        else warnCount++;
+        const key = v.policy_name ?? v.rule ?? 'unknown';
+        violationTally[key] = (violationTally[key] ?? 0) + 1;
+      }
+      const day = (trace.created_at as string).slice(0, 10);
+      if (!dailyRisk[day]) dailyRisk[day] = [];
+      if (trace.risk_score != null) dailyRisk[day].push(Number(trace.risk_score));
+    }
+
+    // Score: 100 - penalty for violations (blocks cost 5pts, warns cost 1pt), floor 0
+    const penaltyScore = Math.min(100, blockCount * 5 + warnCount);
+    const score = Math.max(0, 100 - penaltyScore);
+
+    const topViolations = Object.entries(violationTally)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([name, count]) => ({ name, count }));
+
+    const riskTrend = Object.entries(dailyRisk)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, scores]) => ({
+        date,
+        avg_risk: scores.length > 0 ? Math.round((scores.reduce((s, v) => s + v, 0) / scores.length) * 1000) / 1000 : 0,
+      }));
+
+    return res.json({
+      success: true,
+      data: {
+        agent_id: agentId,
+        score,
+        total_runs: totalRuns,
+        violation_count: violationCount,
+        block_count: blockCount,
+        warn_count: warnCount,
+        top_violations: topViolations,
+        risk_trend: riskTrend,
+        days,
+      },
+    });
+  } catch (err: any) {
+    logger.error('Compliance scorecard error', { error: err?.message });
+    return res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
 export default router;

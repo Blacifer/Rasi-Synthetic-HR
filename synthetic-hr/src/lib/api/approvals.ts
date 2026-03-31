@@ -75,4 +75,49 @@ export const approvalsApi = {
       method: 'POST',
     });
   },
+
+  async snooze(id: string, hours: 1 | 4 | 24): Promise<ApiResponse<ApprovalRequest>> {
+    return authenticatedFetch<ApprovalRequest>(`/approvals/${encodeURIComponent(id)}/snooze`, {
+      method: 'POST',
+      body: JSON.stringify({ hours }),
+    });
+  },
+
+  async escalate(id: string): Promise<ApiResponse<ApprovalRequest>> {
+    return authenticatedFetch<ApprovalRequest>(`/approvals/${encodeURIComponent(id)}/escalate`, {
+      method: 'POST',
+    });
+  },
+
+  async getComments(id: string): Promise<ApiResponse<any[]>> {
+    return authenticatedFetch<any[]>(`/approvals/${encodeURIComponent(id)}/comments`, { method: 'GET' });
+  },
+
+  async addComment(id: string, content: string, mentionIds?: string[]): Promise<ApiResponse<any>> {
+    return authenticatedFetch<any>(`/approvals/${encodeURIComponent(id)}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ content, mention_ids: mentionIds ?? [] }),
+    });
+  },
+
+  async updateSubTasks(id: string, subTasks: Array<{ title: string; completed: boolean }>): Promise<ApiResponse<any>> {
+    return authenticatedFetch<any>(`/approvals/${encodeURIComponent(id)}/subtasks`, {
+      method: 'PATCH',
+      body: JSON.stringify({ sub_tasks: subTasks }),
+    });
+  },
+
+  async bulkApprove(ids: string[], note?: string): Promise<ApiResponse<any> & { approved?: number }> {
+    return authenticatedFetch<any>('/approvals/bulk-approve', {
+      method: 'POST',
+      body: JSON.stringify({ ids, note }),
+    });
+  },
+
+  async bulkDeny(ids: string[], note?: string): Promise<ApiResponse<any> & { denied?: number }> {
+    return authenticatedFetch<any>('/approvals/bulk-deny', {
+      method: 'POST',
+      body: JSON.stringify({ ids, note }),
+    });
+  },
 };

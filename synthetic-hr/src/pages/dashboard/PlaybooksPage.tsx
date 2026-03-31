@@ -145,6 +145,90 @@ function extractJobResult(job: AgentJob): string {
 type TestCase = { id: string; inputs: Record<string, string>; checklist: string[] };
 type TestResult = { id: string; status: 'running' | 'passed' | 'failed' | 'error'; output: string; scores: Record<string, boolean | null>; score: number };
 
+import { PlaybookBuilder, type WorkflowGraph } from '../../components/PlaybookBuilder/PlaybookBuilder';
+
+// ─── Visual ↔ text workflow conversion helpers ─────────────────────────────────
+
+function workflowToGraph(wf: Workflow): WorkflowGraph {
+  const nodes = wf.steps.map((step, idx) => ({
+    id: step.id,
+    type: step.kind === 'branch' ? 'condition' : 'llm_step',
+    position: { x: 240 * (idx % 3), y: 160 * Math.floor(idx / 3) },
+    data: step.kind === 'llm'
+      ? {
+          label: `Step ${idx + 1}`,
+          model: step.model,
+          prompt: step.messages?.[1]?.content ?? '',
+          output_key: (step as any).output_key,
+        }
+      : {
+          label: `Branch`,
+          condition: (step as BranchStep).source,
+        },
+  }));
+
+  const edges: WorkflowGraph['edges'] = [];
+  wf.steps.forEach((step) => {
+    if (step.kind === 'branch') {
+      (step as BranchStep).conditions.forEach((c, i) => {
+        edges.push({
+          id: `e_${step.id}_${i}`,
+          source: step.id,
+          target: c.next,
+          type: 'conditional',
+          data: { label: c.test === 'else' ? 'false' : 'true' },
+        });
+      });
+    } else if ((step as LlmStep).next) {
+      edges.push({
+        id: `e_${step.id}_next`,
+        source: step.id,
+        target: (step as LlmStep).next!,
+        type: 'conditional',
+        data: { label: '' },
+      });
+    }
+  });
+
+  return { type: 'workflow_run', nodes, edges, start: wf.start ?? wf.steps[0]?.id ?? null };
+}
+
+function graphToWorkflow(graph: WorkflowGraph, existing: Workflow): Workflow {
+  const steps: WorkflowStep[] = graph.nodes.map((n) => {
+    if (n.type === 'condition') {
+      const outEdges = graph.edges.filter((e) => e.source === n.id);
+      return {
+        id: n.id,
+        kind: 'branch' as const,
+        source: n.data.condition ?? '',
+        conditions: outEdges.map((e) => ({
+          test: (e.data?.label === 'false' ? 'else' : 'contains') as BranchCondition['test'],
+          value: '',
+          next: e.target,
+        })),
+      };
+    }
+    // llm_step / action / human_review all map to llm kind (best effort)
+    const existingStep = existing.steps.find((s) => s.id === n.id) as LlmStep | undefined;
+    const outEdge = graph.edges.find((e) => e.source === n.id);
+    return {
+      id: n.id,
+      kind: 'llm' as const,
+      model: n.data.model ?? existingStep?.model ?? 'openai/gpt-4o-mini',
+      messages: existingStep?.messages ?? [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: n.data.prompt || '{{input.input}}' },
+      ],
+      next: outEdge?.target ?? null,
+    };
+  });
+  return {
+    ...existing,
+    steps,
+    start: graph.start ?? undefined,
+  };
+}
+
 // ─── Workflow step types (B7 + B8) ────────────────────────────────────────────
 type LlmStep = {
   id: string;
@@ -221,6 +305,7 @@ function CustomPlaybookCard({
 }) {
   const [showTest, setShowTest] = useState(false);
   const [showBuilder, setShowBuilder] = useState(false);
+  const [builderMode, setBuilderMode] = useState<'text' | 'visual'>('text');
   const [workflow, setWorkflow] = useState<Workflow>(() => getWorkflow(cp));
   const [builderDirty, setBuilderDirty] = useState(false);
   const [testCases, setTestCases] = useState<TestCase[]>(() => {
@@ -538,24 +623,56 @@ function CustomPlaybookCard({
               <Settings className="w-3.5 h-3.5" />
               Workflow Builder — {workflow.steps.length} step{workflow.steps.length !== 1 ? 's' : ''}
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={addLlmStep}
-                className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-300 flex items-center gap-1"
-              >
-                <Plus className="w-3 h-3" /> Add LLM Step
-              </button>
-              <button
-                onClick={saveWorkflow}
-                disabled={!builderDirty}
-                className="px-2 py-1 rounded-md bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white text-xs font-medium flex items-center gap-1"
-              >
-                <Save className="w-3 h-3" /> Save
-              </button>
+            <div className="flex gap-2 items-center">
+              {/* Mode toggle */}
+              <div className="flex bg-slate-800 border border-slate-700 rounded-md p-0.5 gap-0.5">
+                <button
+                  onClick={() => setBuilderMode('text')}
+                  className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${builderMode === 'text' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                >Text</button>
+                <button
+                  onClick={() => setBuilderMode('visual')}
+                  className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${builderMode === 'visual' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                >Visual</button>
+              </div>
+              {builderMode === 'text' && (
+                <button
+                  onClick={addLlmStep}
+                  className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-300 flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" /> Add LLM Step
+                </button>
+              )}
+              {builderMode === 'text' && (
+                <button
+                  onClick={saveWorkflow}
+                  disabled={!builderDirty}
+                  className="px-2 py-1 rounded-md bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white text-xs font-medium flex items-center gap-1"
+                >
+                  <Save className="w-3 h-3" /> Save
+                </button>
+              )}
             </div>
           </div>
 
-          {workflow.steps.length === 0 ? (
+          {/* ── Visual Builder Canvas ─────────────────────────────────────────── */}
+          {builderMode === 'visual' && (
+            <div style={{ height: 480 }}>
+              <PlaybookBuilder
+                initialGraph={workflowToGraph(workflow)}
+                onSave={(graph: WorkflowGraph) => {
+                  const updatedWf = graphToWorkflow(graph, workflow);
+                  setWorkflow(updatedWf);
+                  void api.playbooks.updateCustom(cp.id, { workflow: updatedWf } as any).then((r) => {
+                    if (r.success && r.data) { onUpdate(r.data); toast.success('Visual workflow saved'); }
+                    else toast.error(r.error || 'Failed to save');
+                  });
+                }}
+              />
+            </div>
+          )}
+
+          {builderMode === 'text' && (workflow.steps.length === 0 ? (
             <p className="text-xs text-slate-500">No steps yet. Click "Add LLM Step" to start building.</p>
           ) : (
             <div className="space-y-2">
@@ -791,9 +908,9 @@ function CustomPlaybookCard({
                 );
               })}
             </div>
-          )}
+          ))}
 
-          {workflow.steps.length > 0 && (
+          {builderMode === 'text' && workflow.steps.length > 0 && (
             <div className="pt-1">
               <label className="text-[10px] text-slate-500">Final step (output shown to user)</label>
               <select

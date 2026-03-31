@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   CheckSquare, Clock, RefreshCw, CheckCircle2, XCircle,
   AlertCircle, Ban, ChevronDown, ChevronUp, Loader2,
+  MessageSquare, BellOff, TrendingUp, Shield, ListTodo, Tag,
+  Square, CheckSquare2,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import type { ApprovalRequest } from '../../lib/api-client';
@@ -81,22 +83,61 @@ function StatusBadge({ status }: { status: ApprovalRequest['status'] }) {
   );
 }
 
+function RiskBadge({ score }: { score?: number | null }) {
+  if (score == null) return null;
+  const pct = Math.round(score * 100);
+  const color = score >= 0.7 ? 'text-rose-400 bg-rose-500/10 border-rose-500/20'
+    : score >= 0.4 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+    : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+  return (
+    <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border', color)}>
+      <TrendingUp className="w-3 h-3" />
+      Risk {pct}%
+    </span>
+  );
+}
+
+function SlaCountdown({ deadline }: { deadline?: string | null }) {
+  if (!deadline) return null;
+  const text = formatTimeUntil(deadline);
+  const overdue = new Date(deadline) < new Date();
+  return (
+    <span className={cn('inline-flex items-center gap-1 text-xs', overdue ? 'text-rose-400' : 'text-amber-400')}>
+      <Shield className="w-3 h-3" />
+      SLA: {text}
+    </span>
+  );
+}
+
 type ReviewState = { note: string; submitting: boolean };
 
 function PendingCard({
   request,
+  selected,
+  onSelect,
   onApprove,
   onDeny,
   onCancel,
+  onSnooze,
 }: {
-  request: ApprovalRequest;
+  request: ApprovalRequest & { risk_score?: number | null; sla_deadline?: string | null; snoozed_until?: string | null; sub_tasks?: Array<{title: string; completed: boolean}>; tags?: string[] };
+  selected: boolean;
+  onSelect: (id: string) => void;
   onApprove: (id: string, note: string) => Promise<void>;
   onDeny: (id: string, note: string) => Promise<void>;
   onCancel: (id: string) => Promise<void>;
+  onSnooze: (id: string, hours: number) => Promise<void>;
 }) {
   const [review, setReview] = useState<ReviewState>({ note: '', submitting: false });
   const [showNote, setShowNote] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [showSnooze, setShowSnooze] = useState(false);
+  const [comment, setComment] = useState('');
+  const [comments, setComments] = useState<Array<{id: string; content: string; created_at: string}>>([]);
+  const [commentsLoaded, setCommentsLoaded] = useState(false);
+  const [subTasks, setSubTasks] = useState(request.sub_tasks ?? []);
   const isExpired = new Date(request.expires_at) < new Date();
+  const isSnoozed = request.snoozed_until && new Date(request.snoozed_until) > new Date();
 
   const handleApprove = async () => {
     setReview(r => ({ ...r, submitting: true }));
@@ -110,15 +151,44 @@ function PendingCard({
     setReview(r => ({ ...r, submitting: false }));
   };
 
+  const loadComments = async () => {
+    if (commentsLoaded) return;
+    const res = await api.approvals.getComments(request.id);
+    if (res.success) setComments(res.data || []);
+    setCommentsLoaded(true);
+  };
+
+  const submitComment = async () => {
+    if (!comment.trim()) return;
+    const res = await api.approvals.addComment(request.id, comment.trim());
+    if (res.success && res.data) {
+      setComments(prev => [...prev, res.data]);
+      setComment('');
+    } else {
+      toast.error('Failed to post comment');
+    }
+  };
+
+  const toggleSubTask = async (idx: number) => {
+    const updated = subTasks.map((t, i) => i === idx ? { ...t, completed: !t.completed } : t);
+    setSubTasks(updated);
+    await api.approvals.updateSubTasks(request.id, updated);
+  };
+
   return (
     <div className={cn(
-      'rounded-xl border p-5 space-y-4',
-      isExpired
-        ? 'border-slate-700 bg-white/[0.02] opacity-60'
-        : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.05] transition-colors'
+      'rounded-xl border p-5 space-y-4 transition-colors',
+      selected ? 'border-cyan-500/40 bg-cyan-500/5' :
+      isSnoozed ? 'border-slate-700 bg-white/[0.02] opacity-60' :
+      isExpired ? 'border-slate-700 bg-white/[0.02] opacity-60' :
+      'border-white/10 bg-white/[0.03] hover:bg-white/[0.05]'
     )}>
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
+      {/* Header row */}
+      <div className="flex items-start gap-3">
+        {/* Selection checkbox */}
+        <button onClick={() => onSelect(request.id)} className="mt-0.5 shrink-0 text-slate-500 hover:text-cyan-400 transition-colors">
+          {selected ? <CheckSquare2 className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4" />}
+        </button>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="text-xs font-mono px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20">
@@ -126,15 +196,29 @@ function PendingCard({
             </span>
             <span className="text-xs text-slate-500">/</span>
             <span className="text-sm font-medium text-white truncate">{request.action}</span>
+            <RiskBadge score={request.risk_score} />
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
             <span>From: <span className="text-slate-300">{request.requested_by}</span></span>
             {request.agent_id && <span>Agent: <span className="text-slate-400 font-mono text-[10px]">{request.agent_id.slice(0, 8)}…</span></span>}
             <span>Needs: <span className="text-amber-300">{ROLE_LABELS[request.required_role] || request.required_role}</span></span>
+            <SlaCountdown deadline={request.sla_deadline} />
           </div>
+          {/* Tags */}
+          {request.tags && request.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {request.tags.map(tag => (
+                <span key={tag} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-slate-700 text-slate-300 border border-slate-600">
+                  <Tag className="w-2.5 h-2.5" />{tag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0 text-xs">
-          {isExpired
+          {isSnoozed
+            ? <span className="text-blue-400 flex items-center gap-1"><BellOff className="w-3 h-3" />Snoozed</span>
+            : isExpired
             ? <span className="text-slate-500">Expired</span>
             : <span className="text-amber-400">{formatTimeUntil(request.expires_at)}</span>
           }
@@ -145,15 +229,38 @@ function PendingCard({
       {/* Payload */}
       <PayloadPreview payload={request.action_payload} />
 
+      {/* Sub-tasks */}
+      {subTasks.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold text-slate-400 flex items-center gap-1"><ListTodo className="w-3 h-3" />Sub-tasks</p>
+          {subTasks.map((t, i) => (
+            <label key={i} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer hover:text-white">
+              <input type="checkbox" checked={t.completed} onChange={() => toggleSubTask(i)} className="accent-cyan-400" />
+              <span className={t.completed ? 'line-through text-slate-500' : ''}>{t.title}</span>
+            </label>
+          ))}
+        </div>
+      )}
+
       {/* Note + Actions */}
-      {!isExpired && (
+      {!isExpired && !isSnoozed && (
         <div className="space-y-3 pt-1 border-t border-white/[0.06]">
-          <button
-            onClick={() => setShowNote(v => !v)}
-            className="text-xs text-slate-400 hover:text-white transition-colors"
-          >
-            {showNote ? 'Hide reviewer note' : 'Add reviewer note (optional)'}
-          </button>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button onClick={() => setShowNote(v => !v)} className="text-xs text-slate-400 hover:text-white transition-colors">
+              {showNote ? 'Hide note' : 'Add note'}
+            </button>
+            <button
+              onClick={() => { setShowComments(v => !v); if (!showComments) loadComments(); }}
+              className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+            >
+              <MessageSquare className="w-3 h-3" />
+              Comments {comments.length > 0 ? `(${comments.length})` : ''}
+            </button>
+            <button onClick={() => setShowSnooze(v => !v)} className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors">
+              <BellOff className="w-3 h-3" />
+              Snooze
+            </button>
+          </div>
           {showNote && (
             <textarea
               value={review.note}
@@ -163,6 +270,41 @@ function PendingCard({
               rows={2}
               maxLength={2000}
             />
+          )}
+          {showSnooze && (
+            <div className="flex gap-2">
+              {([1, 4, 24] as const).map(h => (
+                <button
+                  key={h}
+                  onClick={async () => { await onSnooze(request.id, h); setShowSnooze(false); }}
+                  className="px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs hover:bg-blue-500/20 transition-colors"
+                >
+                  {h}h
+                </button>
+              ))}
+            </div>
+          )}
+          {showComments && (
+            <div className="bg-black/20 rounded-lg p-3 space-y-3">
+              {comments.map(c => (
+                <div key={c.id} className="text-xs text-slate-300">
+                  <span className="text-slate-500">{formatTimeAgo(c.created_at)} · </span>
+                  {c.content}
+                </div>
+              ))}
+              <div className="flex gap-2">
+                <input
+                  value={comment}
+                  onChange={e => setComment(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && submitComment()}
+                  placeholder="Add a comment…"
+                  className="flex-1 px-2 py-1.5 rounded-lg bg-white/[0.05] border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none"
+                />
+                <button onClick={submitComment} className="px-3 py-1.5 bg-cyan-600/80 hover:bg-cyan-600 text-white text-xs rounded-lg transition-colors">
+                  Post
+                </button>
+              </div>
+            </div>
           )}
           <div className="flex items-center gap-2">
             <button
@@ -232,6 +374,8 @@ export default function ApprovalsPage() {
   const [all, setAll] = useState<ApprovalRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
 
   const pending = all.filter(r => r.status === 'pending');
   const history = all.filter(r => r.status !== 'pending');
@@ -250,6 +394,12 @@ export default function ApprovalsPage() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  const toggleSelect = (id: string) => setSelected(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   const handleApprove = async (id: string, note: string) => {
     const res = await api.approvals.approve(id, note || undefined);
@@ -281,6 +431,45 @@ export default function ApprovalsPage() {
     }
   };
 
+  const handleSnooze = async (id: string, hours: number) => {
+    const res = await api.approvals.snooze(id, hours as 1 | 4 | 24);
+    if (res.success) {
+      toast.success(`Request snoozed for ${hours}h`);
+      const snoozedUntil = new Date(Date.now() + hours * 3600 * 1000).toISOString();
+      setAll(prev => prev.map(r => r.id === id ? { ...r, snoozed_until: snoozedUntil } : r));
+    } else {
+      toast.error(res.error || 'Failed to snooze request');
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    if (selected.size === 0) return;
+    setBulkSubmitting(true);
+    const res = await api.approvals.bulkApprove([...selected]);
+    setBulkSubmitting(false);
+    if (res.success) {
+      toast.success(`Approved ${res.approved ?? selected.size} requests`);
+      setAll(prev => prev.map(r => selected.has(r.id) ? { ...r, status: 'approved', reviewed_at: new Date().toISOString() } : r));
+      setSelected(new Set());
+    } else {
+      toast.error(res.error || 'Bulk approve failed');
+    }
+  };
+
+  const handleBulkDeny = async () => {
+    if (selected.size === 0) return;
+    setBulkSubmitting(true);
+    const res = await api.approvals.bulkDeny([...selected]);
+    setBulkSubmitting(false);
+    if (res.success) {
+      toast.error(`Denied ${res.denied ?? selected.size} requests`);
+      setAll(prev => prev.map(r => selected.has(r.id) ? { ...r, status: 'denied', reviewed_at: new Date().toISOString() } : r));
+      setSelected(new Set());
+    } else {
+      toast.error(res.error || 'Bulk deny failed');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -303,6 +492,32 @@ export default function ApprovalsPage() {
           Refresh
         </button>
       </div>
+
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
+          <span className="text-sm text-cyan-300 font-medium">{selected.size} selected</span>
+          <button
+            onClick={handleBulkApprove}
+            disabled={bulkSubmitting}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/80 hover:bg-emerald-600 text-white text-xs font-medium transition-colors disabled:opacity-50"
+          >
+            {bulkSubmitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+            Approve All
+          </button>
+          <button
+            onClick={handleBulkDeny}
+            disabled={bulkSubmitting}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/70 hover:bg-red-600 text-white text-xs font-medium transition-colors disabled:opacity-50"
+          >
+            {bulkSubmitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
+            Deny All
+          </button>
+          <button onClick={() => setSelected(new Set())} className="ml-auto text-xs text-slate-400 hover:text-white transition-colors">
+            Deselect all
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-white/[0.04] rounded-xl border border-white/[0.06] w-fit">
@@ -352,10 +567,13 @@ export default function ApprovalsPage() {
             {pending.map(r => (
               <PendingCard
                 key={r.id}
-                request={r}
+                request={r as any}
+                selected={selected.has(r.id)}
+                onSelect={toggleSelect}
                 onApprove={handleApprove}
                 onDeny={handleDeny}
                 onCancel={handleCancel}
+                onSnooze={handleSnooze}
               />
             ))}
           </div>

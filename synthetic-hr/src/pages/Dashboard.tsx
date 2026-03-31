@@ -16,6 +16,7 @@ import { CommandPalette } from '../components/CommandPalette';
 import { Sidebar } from '../components/Sidebar';
 import { guessPackForIntegration, type IntegrationPackId } from '../lib/integration-packs';
 import { loadFromStorage, saveToStorage, STORAGE_KEYS } from '../utils/storage';
+import { OnboardingTour } from '../components/OnboardingTour';
 
 const DashboardOverview = lazy(() => import('./dashboard/DashboardOverview'));
 const GettingStartedPage = lazy(() => import('./dashboard/GettingStartedPage'));
@@ -970,6 +971,8 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         </div>
       )}
 
+      <OnboardingTour />
+
       {/* Mobile top bar */}
       <div className={`md:hidden fixed left-0 right-0 z-40 flex items-center gap-3 px-4 py-3 sidebar-surface border-b border-white/10 ${isDemoMode ? 'top-[46px]' : error ? 'top-12' : 'top-0'}`}>
         <button onClick={() => setMobileNavOpen(true)} className="p-2 text-slate-400 hover:text-white transition-colors">
@@ -1050,7 +1053,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   { id: 'apps', icon: Layers, label: 'Apps', badge: null },
                   { id: 'settings', icon: Settings, label: 'Settings', badge: null },
                 ] as const).map((item) => (
-                  <button key={item.id} onClick={() => { navigateTo(item.id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === item.id && 'nav-item-active')}>
+                  <button key={item.id} data-tour={item.id} onClick={() => { navigateTo(item.id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === item.id && 'nav-item-active')}>
                     <item.icon className="w-4 h-4 shrink-0" />
                     <span className="flex-1 text-left text-sm">{item.label}</span>
                     {item.badge ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/25 font-semibold tabular-nums">{item.badge}</span> : null}
@@ -1062,7 +1065,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                 {(['templates', 'agent-library', 'playbooks', 'action-policies'] as const).map((id) => {
                   const labels: Record<string, string> = { templates: 'Templates', 'agent-library': 'Agent Library', playbooks: 'Playbooks', 'action-policies': 'Action Policies' };
                   return (
-                    <button key={id} onClick={() => { navigateTo(id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === id && 'nav-item-active')}>
+                    <button key={id} data-tour={id} onClick={() => { navigateTo(id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === id && 'nav-item-active')}>
                       <span className="w-4 h-4 shrink-0" />
                       <span className="flex-1 text-left text-sm">{labels[id]}</span>
                     </button>
@@ -1073,7 +1076,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                 {(['approvals', 'audit-log', 'api-access'] as const).map((id) => {
                   const labels: Record<string, string> = { approvals: 'Approvals', 'audit-log': 'Audit Log', 'api-access': 'API Access' };
                   return (
-                    <button key={id} onClick={() => { navigateTo(id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === id && 'nav-item-active')}>
+                    <button key={id} data-tour={id} onClick={() => { navigateTo(id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === id && 'nav-item-active')}>
                       <span className="w-4 h-4 shrink-0" />
                       <span className="flex-1 text-left text-sm">{labels[id]}</span>
                     </button>

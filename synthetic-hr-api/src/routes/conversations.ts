@@ -76,4 +76,36 @@ router.get('/conversations/:id', requirePermission('dashboard.read'), async (req
   }
 });
 
+// Get reasoning traces for a conversation
+router.get('/conversations/:id/trace', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) {
+      return errorResponse(res, new Error('Organization not found'), 400);
+    }
+
+    // Verify the conversation belongs to this org
+    const convQuery = new URLSearchParams();
+    convQuery.set('id', eq(id));
+    convQuery.set('organization_id', eq(orgId));
+    convQuery.set('select', 'id');
+    const convData = await supabaseRestAsUser(getUserJwt(req), 'conversations', convQuery);
+    if (!convData?.length) {
+      return errorResponse(res, new Error('Conversation not found'), 404);
+    }
+
+    const traceQuery = new URLSearchParams();
+    traceQuery.set('conversation_id', eq(id));
+    traceQuery.set('organization_id', eq(orgId));
+    traceQuery.set('order', 'created_at.asc');
+
+    const traces = await supabaseRestAsUser(getUserJwt(req), 'gateway_reasoning_traces', traceQuery);
+
+    res.json({ success: true, data: traces || [] });
+  } catch (error: any) {
+    errorResponse(res, error);
+  }
+});
+
 export default router;

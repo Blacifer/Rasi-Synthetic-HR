@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BriefcaseBusiness, Building2, CheckCircle2, Copy, Gavel, HandCoins, Headset, Key, Loader2, Rocket, ShieldCheck, ShoppingBag, Sparkles, Trash2, Wrench, Zap } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowRight, BriefcaseBusiness, Building2, CheckCircle2, ChevronLeft, ChevronRight, Copy, Gavel, HandCoins, Headset, Key, Loader2, Rocket, ShieldCheck, ShoppingBag, Sparkles, Trash2, Wrench, Zap } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 import type { AIAgent } from '../../types';
@@ -7,6 +8,7 @@ import { supabase } from '../../lib/supabase-client';
 import { getFrontendConfig } from '../../lib/config';
 
 type StepId = 'workspace' | 'key' | 'agent' | 'apps' | 'test' | 'verify';
+const STEP_ORDER: StepId[] = ['workspace', 'key', 'agent', 'apps', 'test', 'verify'];
 
 type LiveModel = { id: string; name?: string; provider?: string };
 
@@ -29,6 +31,11 @@ export default function GettingStartedPage(props: {
 }) {
   const [step, setStep] = useState<StepId>('workspace');
   const [isBusy, setIsBusy] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+
+  const stepIndex = STEP_ORDER.indexOf(step);
+  const goNext = () => { if (stepIndex < STEP_ORDER.length - 1) setStep(STEP_ORDER[stepIndex + 1]); };
+  const goPrev = () => { if (stepIndex > 0) setStep(STEP_ORDER[stepIndex - 1]); };
 
   const [coverageLoading, setCoverageLoading] = useState(true);
   const [coverageError, setCoverageError] = useState<string | null>(null);
@@ -358,6 +365,54 @@ export default function GettingStartedPage(props: {
           </button>
         </div>
       </div>
+
+      {/* Progress bar */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-xs text-slate-400">
+          <span>Step {stepIndex + 1} of {STEP_ORDER.length}</span>
+          <span>{Math.round(((stepIndex + 1) / STEP_ORDER.length) * 100)}% complete</span>
+        </div>
+        <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+          <motion.div
+            className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 rounded-full"
+            initial={false}
+            animate={{ width: `${((stepIndex + 1) / STEP_ORDER.length) * 100}%` }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+          />
+        </div>
+      </div>
+
+      {/* Confetti burst on completion */}
+      <AnimatePresence>
+        {showConfetti && (
+          <motion.div
+            key="confetti"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center"
+          >
+            <div className="text-center">
+              {['🎉', '✨', '🚀', '🎊', '⭐'].map((emoji, i) => (
+                <motion.span
+                  key={i}
+                  className="absolute text-4xl"
+                  initial={{ opacity: 1, y: 0, x: 0 }}
+                  animate={{
+                    opacity: 0,
+                    y: -120 - i * 20,
+                    x: (i - 2) * 60,
+                  }}
+                  transition={{ duration: 1.4, delay: i * 0.08 }}
+                  style={{ left: `calc(50% + ${(i - 2) * 40}px)` }}
+                >
+                  {emoji}
+                </motion.span>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-4 space-y-3">
@@ -820,6 +875,52 @@ export default function GettingStartedPage(props: {
                 ) : null}
               </div>
             )}
+            {/* Prev / Next navigation */}
+            <div className="mt-6 pt-4 border-t border-slate-700 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={goPrev}
+                disabled={stepIndex === 0}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200 text-sm border border-slate-700 transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Previous
+              </button>
+              <span className="text-xs text-slate-500 hidden sm:block">
+                {STEP_ORDER.map((id, i) => (
+                  <button
+                    key={id}
+                    onClick={() => setStep(id)}
+                    className={`inline-block w-2 h-2 rounded-full mx-0.5 transition-colors ${
+                      id === step ? 'bg-cyan-400' : i < stepIndex ? 'bg-emerald-500' : 'bg-slate-700'
+                    }`}
+                    aria-label={`Go to step ${i + 1}`}
+                  />
+                ))}
+              </span>
+              {stepIndex < STEP_ORDER.length - 1 ? (
+                <button
+                  type="button"
+                  onClick={goNext}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm transition-colors"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowConfetti(true);
+                    setTimeout(() => setShowConfetti(false), 2000);
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm transition-colors"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Complete
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

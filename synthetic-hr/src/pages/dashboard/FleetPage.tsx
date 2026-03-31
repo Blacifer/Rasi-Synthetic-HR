@@ -25,7 +25,7 @@ interface FleetPageProps {
   isLoading?: boolean;
 }
 
-type WorkspaceTab = 'overview' | 'deployment' | 'conversations' | 'integrations' | 'policies' | 'analytics' | 'controls' | 'settings';
+type WorkspaceTab = 'overview' | 'deployment' | 'conversations' | 'integrations' | 'policies' | 'analytics' | 'controls' | 'settings' | 'compliance';
 type DeployMethod = 'website' | 'api' | 'terminal' | 'advanced';
 type DeployCodeTab = 'curl' | 'python' | 'nodejs' | 'php';
 type WorkspaceState = {
@@ -49,6 +49,92 @@ function InfoTip({ text }: { text: string }) {
         {text}
       </span>
     </span>
+  );
+}
+
+function ComplianceScorecardTab({ agentId }: { agentId: string }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    api.compliance.getAgentScorecard(agentId)
+      .then(res => { if (res.success) setData(res.data); })
+      .finally(() => setLoading(false));
+  }, [agentId]);
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-16">
+      <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
+    </div>
+  );
+
+  if (!data) return (
+    <div className="py-12 text-center text-slate-400 text-sm">No compliance data available.</div>
+  );
+
+  const scoreColor = data.score >= 80 ? 'text-emerald-400' : data.score >= 50 ? 'text-amber-400' : 'text-rose-400';
+
+  return (
+    <div className="space-y-6">
+      {/* Score overview */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[
+          { label: 'Compliance Score', value: `${data.score}/100`, color: scoreColor },
+          { label: 'Total Runs', value: data.total_runs?.toLocaleString() ?? '0', color: 'text-white' },
+          { label: 'Violations', value: data.violation_count ?? 0, color: data.violation_count > 0 ? 'text-rose-400' : 'text-emerald-400' },
+          { label: 'Blocks', value: data.block_count ?? 0, color: data.block_count > 0 ? 'text-rose-400' : 'text-emerald-400' },
+        ].map(m => (
+          <div key={m.label} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="text-xs uppercase tracking-widest text-slate-500 mb-2">{m.label}</div>
+            <div className={`text-2xl font-bold ${m.color}`}>{m.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Top violations */}
+      {data.top_violations?.length > 0 && (
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
+          <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+            <Shield className="w-4 h-4 text-rose-400" /> Top Policy Violations
+          </h3>
+          <div className="space-y-2">
+            {data.top_violations.map((v: any) => (
+              <div key={v.name} className="flex items-center justify-between text-sm">
+                <span className="text-slate-300 truncate">{v.name}</span>
+                <span className="text-rose-400 font-medium ml-4">{v.count}×</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Risk trend */}
+      {data.risk_trend?.length > 0 && (
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
+          <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-cyan-400" /> Risk Score Trend ({data.days}d)
+          </h3>
+          <div className="flex items-end gap-1 h-20">
+            {data.risk_trend.map((p: any) => {
+              const h = Math.round((p.avg_risk ?? 0) * 100);
+              return (
+                <div key={p.date} className="flex-1 flex flex-col items-center gap-1" title={`${p.date}: ${(p.avg_risk * 100).toFixed(0)}%`}>
+                  <div
+                    className={`w-full rounded-sm ${h >= 70 ? 'bg-rose-500/60' : h >= 40 ? 'bg-amber-500/60' : 'bg-emerald-500/60'}`}
+                    style={{ height: `${Math.max(2, h)}%` }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+            <span>{data.risk_trend[0]?.date}</span>
+            <span>{data.risk_trend[data.risk_trend.length - 1]?.date}</span>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1421,6 +1507,7 @@ export default function FleetPage({
               ['integrations', 'Integrations'],
               ['policies', 'Policies / Persona'],
               ['analytics', 'Analytics / Usage'],
+              ['compliance', 'Compliance'],
               ['controls', 'Controls'],
               ['settings', 'Settings'],
             ] as Array<[WorkspaceTab, string]>).map(([tabId, label]) => (
@@ -2217,6 +2304,10 @@ export default function FleetPage({
                   </>
                 )}
               </div>
+            ) : null}
+
+            {workspaceTab === 'compliance' ? (
+              <ComplianceScorecardTab agentId={activeWorkspaceAgent.id} />
             ) : null}
 
             {workspaceTab === 'controls' ? (

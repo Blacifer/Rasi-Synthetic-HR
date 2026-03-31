@@ -1,12 +1,28 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   MessageSquare, Search, Filter, Bot, User, Clock,
-  CheckCircle, AlertTriangle, Eye, Download, X, Loader2
+  CheckCircle, AlertTriangle, Eye, Download, X, Loader2,
+  Activity, Cpu, Wrench, ShieldCheck
 } from 'lucide-react';
 import type { AIAgent } from '../../types';
 import { api } from '../../lib/api-client';
 import { loadFromStorage, removeFromStorage } from '../../utils/storage';
 import { toast } from '../../lib/toast';
+
+type ReasoningTrace = {
+  id: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  latency_ms: number;
+  risk_score: number | null;
+  response_entropy: number | null;
+  tool_calls: Array<{ name: string; arguments: string; result?: string; latency_ms?: number }>;
+  interceptors_applied: string[];
+  policy_violations: Array<{ policy_name: string; rule: string; action_taken: string }>;
+  created_at: string;
+};
 
 interface ConversationsPageProps {
   agents: AIAgent[];
@@ -131,6 +147,9 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [incidentContext, setIncidentContext] = useState<{ incidentId?: string; agentId?: string; incidentType?: string } | null>(null);
+  const [detailTab, setDetailTab] = useState<'transcript' | 'trace'>('transcript');
+  const [traces, setTraces] = useState<ReasoningTrace[]>([]);
+  const [tracesLoading, setTracesLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -258,12 +277,33 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
     }
   }, [filteredConversations, incidentContext, openConversation, selectedConversation]);
 
+  const closeDetail = () => {
+    setSelectedConversation(null);
+    setDetailTab('transcript');
+    setTraces([]);
+  };
+
+  const handleTabChange = async (tab: 'transcript' | 'trace') => {
+    setDetailTab(tab);
+    if (tab === 'trace' && selectedConversation && traces.length === 0 && !tracesLoading) {
+      setTracesLoading(true);
+      try {
+        const res = await api.conversations.getTrace(selectedConversation.id);
+        if (res.success && Array.isArray(res.data)) setTraces(res.data as ReasoningTrace[]);
+      } catch {
+        toast.error('Failed to load trace data');
+      } finally {
+        setTracesLoading(false);
+      }
+    }
+  };
+
   const clearIncidentFocus = () => {
     setIncidentContext(null);
     setFilterAgent('all');
     setFilterSentiment('all');
     setSearchQuery('');
-    setSelectedConversation(null);
+    closeDetail();
   };
 
   const exportCSV = () => {
@@ -472,7 +512,7 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
 
       {(selectedConversation || detailLoading) && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !detailLoading && setSelectedConversation(null)} />
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !detailLoading && closeDetail()} />
           <div className="relative w-full max-w-2xl bg-slate-900 border-l border-slate-700/60 h-full flex flex-col animate-in slide-in-from-right duration-300 shadow-2xl">
             <div className="px-6 py-5 border-b border-slate-700/60 flex items-center justify-between bg-slate-800/50">
               <div>
@@ -485,7 +525,7 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
                 </p>
               </div>
               <button
-                onClick={() => setSelectedConversation(null)}
+                onClick={() => closeDetail()}
                 disabled={detailLoading}
                 className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-xl transition-colors disabled:opacity-40"
               >
@@ -493,13 +533,33 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
               </button>
             </div>
 
+            {/* Tab bar */}
+            {!detailLoading && selectedConversation && (
+              <div className="flex border-b border-slate-700/60 bg-slate-800/30 px-6">
+                {(['transcript', 'trace'] as const).map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => handleTabChange(tab)}
+                    className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors capitalize ${
+                      detailTab === tab
+                        ? 'border-cyan-400 text-cyan-400'
+                        : 'border-transparent text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {tab === 'transcript' ? <MessageSquare className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
+                    {tab}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {detailLoading || !selectedConversation ? (
                 <div className="py-20 text-center">
                   <Loader2 className="w-10 h-10 text-cyan-400 mx-auto mb-4 animate-spin" />
                   <p className="text-slate-400">Loading transcript...</p>
                 </div>
-              ) : (
+              ) : detailTab === 'transcript' ? (
                 <>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3">
@@ -553,12 +613,85 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
                     )}
                   </div>
                 </>
+              ) : (
+                /* ── Trace Tab ── */
+                <div className="space-y-4">
+                  <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider border-b border-slate-700/50 pb-2 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-cyan-400" /> Reasoning Traces
+                  </h3>
+                  {tracesLoading ? (
+                    <div className="py-16 text-center">
+                      <Loader2 className="w-8 h-8 text-cyan-400 mx-auto mb-3 animate-spin" />
+                      <p className="text-slate-400 text-sm">Loading traces…</p>
+                    </div>
+                  ) : traces.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-700 p-8 text-center text-slate-400">
+                      No reasoning traces recorded for this conversation.
+                      <p className="text-xs mt-2 text-slate-500">Traces are captured for requests routed through the Rasi gateway.</p>
+                    </div>
+                  ) : (
+                    traces.map((trace, i) => (
+                      <div key={trace.id} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-mono text-slate-400">Turn {i + 1} · {new Date(trace.created_at).toLocaleTimeString()}</span>
+                          <span className="text-xs text-slate-500 font-medium">{trace.model}</span>
+                        </div>
+
+                        {/* Metrics row */}
+                        <div className="grid grid-cols-4 gap-2">
+                          {[
+                            { icon: <Cpu className="w-3 h-3" />, label: 'Tokens', value: trace.total_tokens?.toLocaleString() ?? '—' },
+                            { icon: <Clock className="w-3 h-3" />, label: 'Latency', value: trace.latency_ms != null ? `${trace.latency_ms}ms` : '—' },
+                            { icon: <Activity className="w-3 h-3" />, label: 'Risk', value: trace.risk_score != null ? (trace.risk_score * 100).toFixed(0) + '%' : '—' },
+                            { icon: <ShieldCheck className="w-3 h-3" />, label: 'Entropy', value: trace.response_entropy != null ? trace.response_entropy.toFixed(2) : '—' },
+                          ].map(m => (
+                            <div key={m.label} className="bg-slate-900/60 rounded-lg p-2 text-center">
+                              <div className="flex items-center justify-center gap-1 text-slate-500 mb-1">{m.icon}<span className="text-[10px] uppercase tracking-wider">{m.label}</span></div>
+                              <p className="text-sm font-semibold text-white">{m.value}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Tool calls */}
+                        {trace.tool_calls?.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Wrench className="w-3 h-3" /> Tool Calls ({trace.tool_calls.length})</p>
+                            <div className="space-y-1.5">
+                              {trace.tool_calls.map((tc, j) => (
+                                <div key={j} className="bg-slate-900/50 rounded-lg p-2.5 text-xs">
+                                  <span className="font-mono text-cyan-400">{tc.name}</span>
+                                  {tc.latency_ms != null && <span className="ml-2 text-slate-500">{tc.latency_ms}ms</span>}
+                                  {tc.result && <p className="mt-1 text-slate-400 truncate">{tc.result}</p>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Policy violations */}
+                        {trace.policy_violations?.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-rose-400 mb-2 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> Policy Violations</p>
+                            <div className="space-y-1">
+                              {trace.policy_violations.map((v, j) => (
+                                <div key={j} className="flex items-start gap-2 text-xs bg-rose-500/5 border border-rose-500/20 rounded-lg p-2">
+                                  <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0 mt-0.5" />
+                                  <span className="text-rose-300">{v.policy_name} — {v.rule} <span className="text-slate-500">({v.action_taken})</span></span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
               )}
             </div>
 
             <div className="p-6 border-t border-slate-700/60 bg-slate-800/30">
               <button
-                onClick={() => setSelectedConversation(null)}
+                onClick={closeDetail}
                 className="w-full xl:w-auto px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl transition-colors"
               >
                 Close Transcript

@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Search, Download, RefreshCw, ChevronLeft, ChevronRight,
   Shield, Filter, X, ChevronDown, ChevronUp, Clock,
-  User, Activity, AlertCircle, CheckCircle2,
+  User, Activity, AlertCircle, CheckCircle2, Radio,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import type { AuditLogEntry } from '../../lib/api-client';
@@ -110,6 +110,9 @@ export default function AuditLogPage() {
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [liveMode, setLiveMode] = useState(false);
+  const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const latestTimestampRef = useRef<string | null>(null);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
@@ -142,6 +145,35 @@ export default function AuditLogPage() {
     load(1);
   }, [load]);
 
+  // Track the latest timestamp for live polling
+  useEffect(() => {
+    if (entries.length > 0) {
+      latestTimestampRef.current = entries[0].created_at;
+    }
+  }, [entries]);
+
+  // Live streaming: poll every 5s for new entries
+  useEffect(() => {
+    if (!liveMode) {
+      if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
+      return;
+    }
+    liveIntervalRef.current = setInterval(async () => {
+      const since = latestTimestampRef.current;
+      if (!since) return;
+      const result = await api.auditLogs.list({ limit: 20, from: since });
+      if (!result.success || !Array.isArray(result.data) || result.data.length === 0) return;
+      const existing = latestTimestampRef.current;
+      const newer = result.data.filter(e => e.created_at > (existing ?? ''));
+      if (newer.length === 0) return;
+      setEntries(prev => [...newer, ...prev].slice(0, 500));
+      setTotal(prev => prev + newer.length);
+    }, 5000);
+    return () => {
+      if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
+    };
+  }, [liveMode]);
+
   const clearFilters = () => {
     setFilterAction('');
     setFilterResourceType('');
@@ -171,6 +203,18 @@ export default function AuditLogPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setLiveMode(m => !m)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                liveMode
+                  ? 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20'
+                  : 'text-slate-400 border-slate-700/60 hover:bg-slate-800/60'
+              }`}
+              title={liveMode ? 'Stop live stream' : 'Start live stream (polls every 5s)'}
+            >
+              <Radio className={`w-3.5 h-3.5 ${liveMode ? 'animate-pulse' : ''}`} />
+              {liveMode ? 'Live' : 'Go Live'}
+            </button>
             <button
               onClick={() => load(page)}
               disabled={loading}

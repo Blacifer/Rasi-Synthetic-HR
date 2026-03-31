@@ -14,6 +14,7 @@ import { recordPromptCacheObservation } from '../lib/prompt-caching';
 import { ACTION_REGISTRY } from '../lib/connectors/action-registry';
 import { executeConnectorAction } from '../lib/connectors/action-executor';
 import { decryptSecret, encryptSecret } from '../lib/integrations/encryption';
+import { computeEntropy } from '../services/policy-engine';
 
 const router = express.Router();
 
@@ -200,6 +201,57 @@ const maybeCreateIncidentFromCompletion = async (params: {
       agentId: params.agentId,
       model: params.modelId,
     });
+  }
+};
+
+// ── Reasoning Trace Capture ───────────────────────────────────────────────────
+
+interface CaptureTraceParams {
+  orgId: string;
+  agentId?: string | null;
+  conversationId?: string | null;
+  requestId?: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  latencyMs: number;
+  toolCalls: Array<{ name: string; arguments: string; result?: string; latency_ms?: number }>;
+  interceptorsApplied: string[];
+  responseContent: string;
+  policyViolations?: Array<{ policy_id?: string; policy_name: string; rule: string; action_taken: string }>;
+}
+
+const captureReasoningTrace = async (params: CaptureTraceParams): Promise<void> => {
+  try {
+    // Compute risk score from a quick incident scan
+    const scanResults = incidentDetection.fullScan(params.responseContent || '');
+    const highest = incidentDetection.getHighestSeverity(scanResults);
+    const riskScore = highest ? highest.confidence : null;
+
+    // Shannon entropy of response text (higher = more unpredictable/random output)
+    const responseEntropy = computeEntropy(params.responseContent || '');
+
+    await supabaseRest('gateway_reasoning_traces', '', {
+      method: 'POST',
+      body: {
+        organization_id: params.orgId,
+        agent_id: params.agentId ?? null,
+        conversation_id: params.conversationId ?? null,
+        request_id: params.requestId ?? null,
+        model: params.model,
+        input_tokens: params.inputTokens,
+        output_tokens: params.outputTokens,
+        latency_ms: params.latencyMs,
+        tool_calls: params.toolCalls,
+        interceptors_applied: params.interceptorsApplied,
+        risk_score: riskScore,
+        response_entropy: responseEntropy,
+        policy_violations: params.policyViolations ?? [],
+      },
+    });
+  } catch (err: any) {
+    // Non-fatal — never block the response for trace capture failures
+    logger.debug('captureReasoningTrace failed (non-fatal)', { err: err?.message, orgId: params.orgId });
   }
 };
 
@@ -1691,6 +1743,7 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
     let totalCostUSD = 0;
     let totalLatency = 0;
     let finalContent = '';
+    const capturedToolCalls: Array<{ name: string; arguments: string; result?: string; latency_ms?: number }> = [];
 
     for (let loopCount = 0; loopCount < MAX_TOOL_LOOPS; loopCount++) {
       let aiResponse: { content: string; tokenCount: { input: number; output: number; total: number }; costUSD: number; latency: number; toolCalls?: ToolCall[] };
@@ -1730,7 +1783,14 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
 
       // Execute each tool call and append results
       for (const tc of aiResponse.toolCalls) {
+        const tcStart = Date.now();
         const resultContent = await executeSingleToolCall(tc, toolContext.credentialsByConnector, orgId, agentId);
+        capturedToolCalls.push({
+          name: tc.function.name,
+          arguments: tc.function.arguments,
+          result: typeof resultContent === 'string' ? resultContent.slice(0, 500) : undefined,
+          latency_ms: Date.now() - tcStart,
+        });
         conversationMessages.push({
           role: 'tool',
           tool_call_id: tc.id,
@@ -1793,6 +1853,24 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
         logger.error('Failed to create incident from completion', { err: err.message, agentId, requestId: req.requestId });
       });
     }
+
+    // ── Reasoning trace capture (fire-and-forget, non-blocking) ────────────
+    if (req.apiKey?.organization_id) {
+      void captureReasoningTrace({
+        orgId: req.apiKey.organization_id,
+        agentId: agentId ?? null,
+        conversationId: (req.body?.conversation_id as string | undefined) ?? null,
+        requestId: req.requestId,
+        model: modelConfig.id,
+        inputTokens: completion.inputTokens,
+        outputTokens: completion.outputTokens,
+        latencyMs: completion.latency,
+        toolCalls: capturedToolCalls,
+        interceptorsApplied: [],
+        responseContent: completion.content,
+      });
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     const nowSeconds = Math.floor(Date.now() / 1000);
 
