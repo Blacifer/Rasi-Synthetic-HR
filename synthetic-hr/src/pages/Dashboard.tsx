@@ -1044,7 +1044,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                 {([
                   { id: 'overview', icon: BarChart3, label: 'Overview', badge: null as number | null },
                   { id: 'fleet', icon: Users, label: 'Fleet', badge: null },
-                  { id: 'incidents', icon: AlertTriangle, label: 'Incidents', badge: incidents.filter(i => i.status !== 'resolved' && i.status !== 'false_positive').length || null },
+                  { id: 'incidents', icon: AlertTriangle, label: 'Incidents', badge: incidents.filter(i => i.status !== 'resolved' && i.status !== 'false_positive' && i.source !== 'manual_test').length || null },
                   { id: 'conversations', icon: MessageSquare, label: 'Conversations', badge: null },
                   { id: 'costs', icon: DollarSign, label: 'Costs', badge: null },
                   { id: 'apps', icon: Layers, label: 'Apps', badge: null },
@@ -1107,7 +1107,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         <Sidebar
           currentPage={currentPage}
           onNavigate={navigateTo}
-          incidentBadge={incidents.filter(i => i.status !== 'resolved' && i.status !== 'false_positive').length}
+          incidentBadge={incidents.filter(i => i.status !== 'resolved' && i.status !== 'false_positive' && i.source !== 'manual_test').length}
           unreadCount={unreadCount}
           needsOnboarding={needsOnboarding}
           isDemoMode={isDemoMode}
