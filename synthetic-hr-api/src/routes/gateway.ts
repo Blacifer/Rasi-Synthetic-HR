@@ -15,6 +15,7 @@ import { ACTION_REGISTRY } from '../lib/connectors/action-registry';
 import { executeConnectorAction } from '../lib/connectors/action-executor';
 import { decryptSecret, encryptSecret } from '../lib/integrations/encryption';
 import { computeEntropy } from '../services/policy-engine';
+import { runPreflightGate } from '../lib/preflight-gate';
 
 const router = express.Router();
 
@@ -795,6 +796,36 @@ const executeSingleToolCall = async (
   let params: Record<string, any> = {};
   try { params = JSON.parse(tc.function.arguments); } catch { /* use empty */ }
 
+  // Pre-Flight Gate: policy check, DLP scan, blast-radius limit.
+  const preflight = await runPreflightGate(orgId, connectorId, action, params, agentId);
+  if (!preflight.allowed) {
+    // If approval is required, create a pending approval request (fire-and-forget).
+    if (preflight.approvalRequired && preflight.approvalData) {
+      const ad = preflight.approvalData;
+      supabaseRest('approval_requests', '', {
+        method: 'POST',
+        body: {
+          organization_id: orgId,
+          service: ad.service,
+          action: ad.action,
+          action_payload: ad.action_payload,
+          requested_by: 'agent',
+          required_role: ad.required_role,
+          ...(ad.action_policy_id ? { action_policy_id: ad.action_policy_id } : {}),
+          ...(ad.agent_id ? { agent_id: ad.agent_id } : {}),
+          expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+          sla_deadline: new Date(Date.now() + 4 * 3600 * 1000).toISOString(),
+          status: 'pending',
+        },
+      }).catch(() => {/* non-critical */});
+    }
+    return JSON.stringify({
+      blocked: true,
+      reason: preflight.blockReason,
+      action: tc.function.name,
+    });
+  }
+
   const credentials = credentialsByConnector[connectorId] || {};
   const result = await executeConnectorAction(connectorId, action, params, credentials, orgId);
 
@@ -811,6 +842,7 @@ const executeSingleToolCall = async (
         result: result.data || result.error || {},
         success: result.success,
         error_message: result.error || null,
+        ...(result.idempotencyKey ? { idempotency_key: result.idempotencyKey } : {}),
       },
     }).catch(() => {/* non-critical */});
   }

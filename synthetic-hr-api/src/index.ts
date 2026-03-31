@@ -45,6 +45,7 @@ import { logger } from './lib/logger';
 import { monitoring, setupAlertHandlers } from './lib/monitoring';
 import { setProviderSyncSchedulerNextRun, syncEnabledProviderCostsForAllOrganizations } from './lib/provider-sync';
 import { startIntegrationTokenRefreshScheduler } from './lib/integrations/auto-refresh';
+import { startRetryWorker } from './lib/retry-worker';
 
 dotenv.config();
 validateEnvironment();
@@ -447,6 +448,9 @@ async function startServer() {
 
   // Keep OAuth integrations healthy by refreshing expiring tokens in the background.
   startIntegrationTokenRefreshScheduler();
+
+  // Drain the connector retry queue (circuit-breaker retries).
+  startRetryWorker();
 
   const server = app.listen(PORT, () => {
     logger.info('Synthetic HR API server started', {

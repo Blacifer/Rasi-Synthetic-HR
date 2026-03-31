@@ -1,16 +1,22 @@
 // ---------------------------------------------------------------------------
 // Connector Action Executor
 // Makes real HTTP calls to third-party APIs using stored credentials.
-// Handles token refresh, rate limiting, and structured error returns.
+// Handles token refresh, rate limiting, circuit breaking, idempotency,
+// and structured error returns.
 // ---------------------------------------------------------------------------
 
 import { logger } from '../logger';
+import { checkCircuitBreaker, recordSuccess, recordFailure } from '../circuit-breaker';
+import { enqueueRetry } from '../retry-worker';
+import { connectorActionFingerprint } from '../preflight-gate';
+import { supabaseRest, eq, gte } from '../supabase-rest';
 
 export type ActionResult = {
   success: boolean;
   data?: any;
   error?: string;
   statusCode?: number;
+  idempotencyKey?: string; // set on write actions so callers can persist it for deduplication
 };
 
 // ---------------------------------------------------------------------------
@@ -38,42 +44,119 @@ function checkRateLimit(orgId: string, connectorId: string): boolean {
 // ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
+
+// Write-heavy actions that should be idempotency-checked.
+// Read-only actions (get_*, list_*, search_*) are skipped — they're safe to repeat.
+const WRITE_ACTION_PREFIXES = ['create', 'send', 'update', 'delete', 'submit', 'post', 'add', 'remove', 'refund', 'charge', 'pay'];
+
+function isWriteAction(action: string): boolean {
+  const lower = action.toLowerCase();
+  return WRITE_ACTION_PREFIXES.some((p) => lower.startsWith(p));
+}
+
 export async function executeConnectorAction(
   connectorId: string,
   action: string,
   params: Record<string, any>,
   credentials: Record<string, string>,
   orgId?: string,
+  agentId?: string | null,
+  credentialsRef?: string | null,
 ): Promise<ActionResult> {
   // Rate limiting (best-effort; in-memory only, resets on restart)
   if (orgId && !checkRateLimit(orgId, connectorId)) {
     return { success: false, error: 'Rate limit exceeded — try again in a minute', statusCode: 429 };
   }
 
+  // -------------------------------------------------------------------
+  // Circuit breaker: fast-fail and enqueue if the connector is down
+  // -------------------------------------------------------------------
+  if (orgId) {
+    const circuitState = await checkCircuitBreaker(orgId, connectorId);
+    if (circuitState === 'open') {
+      void enqueueRetry(orgId, connectorId, action, params, agentId, credentialsRef);
+      return {
+        success: false,
+        error: `${connectorId} is temporarily unavailable (circuit open). The action has been queued and will be retried automatically.`,
+        statusCode: 503,
+      };
+    }
+  }
+
+  // -------------------------------------------------------------------
+  // Idempotency: for write actions, check if we already have a successful
+  // execution with the same fingerprint in the last 24 hours.
+  // -------------------------------------------------------------------
+  let idempotencyKey: string | null = null;
+  if (orgId && isWriteAction(action)) {
+    idempotencyKey = connectorActionFingerprint(orgId, connectorId, action, params);
+    try {
+      const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const q = new URLSearchParams();
+      q.set('organization_id', eq(orgId));
+      q.set('idempotency_key', eq(idempotencyKey));
+      q.set('success', 'eq.true');
+      q.set('created_at', gte(since));
+      q.set('select', 'id,result');
+      q.set('limit', '1');
+      const rows = (await supabaseRest('connector_action_executions', q)) as any[];
+      if (rows?.length > 0) {
+        logger.info('[executor] Idempotency hit — returning cached result', { orgId, connectorId, action });
+        return { success: true, data: rows[0].result ?? {}, statusCode: 200 };
+      }
+    } catch (err: any) {
+      logger.warn('[executor] Idempotency check failed, proceeding', { connectorId, action, error: err?.message });
+    }
+  }
+
+  // -------------------------------------------------------------------
+  // Execute the connector action
+  // -------------------------------------------------------------------
+  let result: ActionResult;
   try {
     switch (connectorId) {
-      case 'zendesk': return await zendeskAction(action, params, credentials);
-      case 'slack': return await slackAction(action, params, credentials);
-      case 'salesforce': return await salesforceAction(action, params, credentials);
-      case 'hubspot': return await hubspotAction(action, params, credentials);
-      case 'razorpay': return await razorpayAction(action, params, credentials);
-      case 'paytm': return await paytmAction(action, params, credentials);
-      case 'tally': return await tallyAction(action, params, credentials);
-      case 'naukri': return await naukriAction(action, params, credentials);
-      case 'cleartax': return await clearTaxAction(action, params, credentials);
-      case 'google-workspace': return await googleWorkspaceAction(action, params, credentials);
-      case 'microsoft-365': return await microsoft365Action(action, params, credentials);
-      case 'zoho': return await zohoAction(action, params, credentials);
-      case 'deel': return await deelAction(action, params, credentials);
-      case 'gusto': return await gustoAction(action, params, credentials);
-      case 'linkedin-recruiter': return await linkedinRecruiterAction(action, params, credentials);
+      case 'zendesk': result = await zendeskAction(action, params, credentials); break;
+      case 'slack': result = await slackAction(action, params, credentials); break;
+      case 'salesforce': result = await salesforceAction(action, params, credentials); break;
+      case 'hubspot': result = await hubspotAction(action, params, credentials); break;
+      case 'razorpay': result = await razorpayAction(action, params, credentials); break;
+      case 'paytm': result = await paytmAction(action, params, credentials); break;
+      case 'tally': result = await tallyAction(action, params, credentials); break;
+      case 'naukri': result = await naukriAction(action, params, credentials); break;
+      case 'cleartax': result = await clearTaxAction(action, params, credentials); break;
+      case 'google-workspace': result = await googleWorkspaceAction(action, params, credentials); break;
+      case 'microsoft-365': result = await microsoft365Action(action, params, credentials); break;
+      case 'zoho': result = await zohoAction(action, params, credentials); break;
+      case 'deel': result = await deelAction(action, params, credentials); break;
+      case 'gusto': result = await gustoAction(action, params, credentials); break;
+      case 'linkedin-recruiter': result = await linkedinRecruiterAction(action, params, credentials); break;
       default:
         return { success: false, error: `Connector "${connectorId}" actions are not yet supported`, statusCode: 501 };
     }
   } catch (err: any) {
     logger.error('Connector action failed', { connectorId, action, error: err.message });
-    return { success: false, error: err.message || 'Unknown error', statusCode: 500 };
+    result = { success: false, error: err.message || 'Unknown error', statusCode: 500 };
   }
+
+  // -------------------------------------------------------------------
+  // Update circuit breaker state based on outcome
+  // -------------------------------------------------------------------
+  if (orgId) {
+    const isTransientFailure = !result.success && (result.statusCode ?? 0) >= 500;
+    if (isTransientFailure) {
+      void recordFailure(orgId, connectorId);
+    } else if (result.success) {
+      void recordSuccess(orgId, connectorId);
+    }
+  }
+
+  // Surface the idempotency key back to the caller (gateway.ts) so it can
+  // include it when it inserts the connector_action_executions row.
+  if (idempotencyKey && result.success) {
+    result.idempotencyKey = idempotencyKey;
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------

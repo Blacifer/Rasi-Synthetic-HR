@@ -718,4 +718,125 @@ router.get('/agents/:agentId/scorecard', requirePermission('compliance.export'),
   }
 });
 
+// ---------------------------------------------------------------------------
+// DELETE /api/compliance/subject-erasure
+// DPDP Article 12 / GDPR Article 17 — Right to Erasure
+//
+// Hard-deletes conversation messages and anonymises audit trail rows for a
+// given subject (user or agent). Returns a receipt with deletion counts.
+// Admin-only; uses the service-role client to bypass RLS for cross-table purge.
+// ---------------------------------------------------------------------------
+router.delete('/subject-erasure', requirePermission('compliance.export'), async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.organization_id;
+    if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const { subject_id, subject_type } = req.body as { subject_id?: string; subject_type?: string };
+    if (!subject_id || typeof subject_id !== 'string') {
+      return res.status(400).json({ success: false, error: 'subject_id is required' });
+    }
+    if (subject_type !== 'user' && subject_type !== 'agent') {
+      return res.status(400).json({ success: false, error: 'subject_type must be "user" or "agent"' });
+    }
+
+    const receipt: Record<string, number> = {};
+
+    if (subject_type === 'user') {
+      // Delete messages authored by this user
+      const msgsQ = new URLSearchParams();
+      msgsQ.set('organization_id', eq(orgId));
+      msgsQ.set('user_id', eq(subject_id));
+      const msgs = (await supabaseAdmin
+        .from('messages')
+        .delete()
+        .eq('organization_id', orgId)
+        .eq('user_id', subject_id)) as any;
+      receipt.messages_deleted = msgs.count ?? 0;
+
+      // Delete conversations started by this user (cascades to messages via FK)
+      const convs = await supabaseAdmin
+        .from('conversations')
+        .delete()
+        .eq('organization_id', orgId)
+        .eq('user_id', subject_id);
+      receipt.conversations_deleted = (convs as any).count ?? 0;
+
+      // Delete cost_tracking rows associated with this user
+      const costs = await supabaseAdmin
+        .from('cost_tracking')
+        .delete()
+        .eq('organization_id', orgId)
+        .eq('user_id', subject_id);
+      receipt.cost_records_deleted = (costs as any).count ?? 0;
+
+      // Anonymise audit_log rows — replace user_id + IP with redacted markers
+      await supabaseAdmin
+        .from('audit_logs')
+        .update({ user_id: null, ip_address: null, user_agent: '[ERASED]' })
+        .eq('organization_id', orgId)
+        .eq('user_id', subject_id);
+    }
+
+    if (subject_type === 'agent') {
+      // Delete messages from conversations owned by this agent
+      const agentConvs = await supabaseAdmin
+        .from('conversations')
+        .select('id')
+        .eq('organization_id', orgId)
+        .eq('agent_id', subject_id);
+      const convIds = ((agentConvs.data as any[]) ?? []).map((c: any) => c.id);
+      if (convIds.length > 0) {
+        const delMsgs = await supabaseAdmin
+          .from('messages')
+          .delete()
+          .eq('organization_id', orgId)
+          .in('conversation_id', convIds);
+        receipt.messages_deleted = (delMsgs as any).count ?? 0;
+      } else {
+        receipt.messages_deleted = 0;
+      }
+
+      // Delete conversations
+      const convDel = await supabaseAdmin
+        .from('conversations')
+        .delete()
+        .eq('organization_id', orgId)
+        .eq('agent_id', subject_id);
+      receipt.conversations_deleted = (convDel as any).count ?? 0;
+
+      // Delete incidents linked to this agent
+      const incDel = await supabaseAdmin
+        .from('incidents')
+        .delete()
+        .eq('organization_id', orgId)
+        .eq('agent_id', subject_id);
+      receipt.incidents_deleted = (incDel as any).count ?? 0;
+    }
+
+    // Audit the erasure itself (using service role to ensure it's recorded even after user data purge)
+    await supabaseAdmin.from('audit_logs').insert({
+      organization_id: orgId,
+      user_id: req.user?.id ?? null,
+      action: 'dpdp.erasure.completed',
+      resource_type: subject_type,
+      resource_id: subject_id,
+      details: { receipt, requested_by: req.user?.id, subject_type, subject_id },
+      ip_address: req.ip ?? null,
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        subject_id,
+        subject_type,
+        erased_at: new Date().toISOString(),
+        receipt,
+      },
+    });
+  } catch (err: any) {
+    logger.error('Subject erasure error', { error: err?.message });
+    return res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
 export default router;
