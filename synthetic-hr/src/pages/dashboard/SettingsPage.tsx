@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type MouseEvent } from 'react';
+import { lazy, Suspense, useEffect, type MouseEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   User, Building2, Users, Bell, Shield,
@@ -62,7 +62,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
   const pathSuffix = location.pathname.replace(/^.*\/dashboard\/settings\/?/, '');
   const routeTab = normalizeSettingsTab(pathSuffix.split('/')[0] || null);
   const queryTab = normalizeSettingsTab(new URLSearchParams(location.search).get('section'));
-  const [activeTab, setActiveTab] = useState<SettingsTab>(routeTab || queryTab || 'overview');
+  const activeTab: SettingsTab = routeTab || queryTab || 'overview';
   const {
     user,
     signOut,
@@ -156,24 +156,22 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
     handleVerifyMfa,
   } = useSettingsState({ isDemoMode });
 
+  const navigateToTab = (tab: SettingsTab, replace = false) => {
+    const targetPath = tab === 'overview' ? '/dashboard/settings' : `/dashboard/settings/${tab}`;
+    if (location.pathname === targetPath && !location.search) return;
+    navigate(targetPath, { replace });
+  };
+
   useEffect(() => {
-    if (queryTab && !routeTab) {
-      const target = queryTab === 'overview' ? '/dashboard/settings' : `/dashboard/settings/${queryTab}`;
-      navigate(target, { replace: true });
+    if (queryTab) {
+      navigateToTab(queryTab, true);
       return;
     }
 
-    if (routeTab && routeTab !== activeTab) {
-      setActiveTab(routeTab);
+    if (!routeTab && pathSuffix) {
+      navigateToTab('overview', true);
     }
-  }, [activeTab, navigate, queryTab, routeTab]);
-
-  useEffect(() => {
-    const targetPath = activeTab === 'overview' ? '/dashboard/settings' : `/dashboard/settings/${activeTab}`;
-    if (location.pathname !== targetPath || location.search) {
-      navigate(targetPath, { replace: true });
-    }
-  }, [activeTab, location.pathname, location.search, navigate]);
+  }, [navigate, pathSuffix, queryTab, routeTab]);
 
   // ==================== SUB-VIEWS ====================
   const renderOverview = () => {
@@ -186,7 +184,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
     if (!twoFactorEnabled) {
       recommendedActions.push({
         key: 'enable-2fa',
-        action: () => setActiveTab('security'),
+        action: () => navigateToTab('security'),
         title: 'Enable two-factor authentication',
         detail: 'Protect admin access before adding more operators.',
         tone: 'amber' as const,
@@ -195,7 +193,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
     if (configuredChannels < 2) {
       recommendedActions.push({
         key: 'complete-alert-routing',
-        action: () => setActiveTab('alerts'),
+        action: () => navigateToTab('alerts'),
         title: 'Complete alert routing',
         detail: 'Set Slack, email, or PagerDuty so critical events do not stay in-app only.',
         tone: 'amber' as const,
@@ -204,7 +202,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
     if (pendingMembers > 0) {
       recommendedActions.push({
         key: 'review-pending-invites',
-        action: () => setActiveTab('team_access'),
+        action: () => navigateToTab('team_access'),
         title: 'Review pending team invitations',
         detail: 'Confirm access before more workspace activity starts to spread.',
         tone: 'cyan' as const,
@@ -213,7 +211,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
     if (quotaPct >= 80) {
       recommendedActions.push({
         key: 'review-plan-capacity',
-        action: () => setActiveTab('billing_data'),
+        action: () => navigateToTab('billing_data'),
         title: 'Plan capacity is getting tight',
         detail: `${quotaPct}% of monthly quota used. Review plan and data controls.`,
         tone: 'rose' as const,
@@ -229,28 +227,28 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
             label: 'Workspace health',
             value: `${orgName || 'Workspace'} ready`,
             detail: `${usageData?.plan || 'Plan'} · ${dataRetention} day retention · ${workspaceTimezone}`,
-            action: () => setActiveTab('workspace'),
+            action: () => navigateToTab('workspace'),
             cta: 'Review workspace',
           },
           {
             label: 'Security status',
             value: twoFactorEnabled ? 'Protected' : 'Needs attention',
             detail: `${twoFactorEnabled ? '2FA enabled' : 'Enable 2FA'} · ${sessions.length} active session${sessions.length !== 1 ? 's' : ''}`,
-            action: () => setActiveTab('security'),
+            action: () => navigateToTab('security'),
             cta: twoFactorEnabled ? 'Open security' : 'Turn on 2FA',
           },
           {
             label: 'Alert coverage',
             value: configuredChannels >= 2 ? 'Healthy routing' : 'Incomplete routing',
             detail: `${configuredChannels}/3 channel types configured · reconciliation alerts ${reconciliationAlertConfig.channels.inApp ? 'live' : 'limited'}`,
-            action: () => setActiveTab('alerts'),
+            action: () => navigateToTab('alerts'),
             cta: configuredChannels >= 2 ? 'Tune alerts' : 'Finish setup',
           },
           {
             label: 'Team access',
             value: `${activeMembers} active`,
             detail: pendingMembers > 0 ? `${pendingMembers} invite${pendingMembers !== 1 ? 's' : ''} pending` : 'No pending invites',
-            action: () => setActiveTab('team_access'),
+            action: () => navigateToTab('team_access'),
             cta: pendingMembers > 0 ? 'Review access' : 'Manage team',
           },
         ]}
@@ -557,7 +555,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => navigateToTab(tab.id)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${isActive
                       ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
                       : 'text-slate-400 hover:text-white hover:bg-slate-700/50'

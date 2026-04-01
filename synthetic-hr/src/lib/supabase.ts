@@ -1,8 +1,6 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { getFrontendConfig } from './config';
-
-// Frontend auth and organization scoping still rely on Supabase.
-// Keep this helper as the single place that initializes the browser client.
+import { supabase as sharedSupabase } from './supabase-client';
 
 const config = getFrontendConfig();
 const supabaseUrl = config.supabaseUrl;
@@ -13,65 +11,23 @@ const isSupabaseConfigured = (): boolean => {
   return !!(supabaseUrl && supabaseAnonKey);
 };
 
-// Create a lazy-initialized client that handles initialization errors
-let supabaseClient: SupabaseClient | null = null;
-
 export const isSupabaseAvailable = (): boolean => {
   if (!isSupabaseConfigured()) {
     console.info('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables.');
     return false;
   }
-
-  if (supabaseClient) return true;
-
-  try {
-    if (!supabaseUrl || !supabaseAnonKey) return false;
-
-    supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-      },
-      global: {
-        headers: {
-          'Accept': 'application/json',
-        },
-      },
-    });
-    return true;
-  } catch (error) {
-    console.warn('Failed to initialize Supabase client:', error);
-    return false;
-  }
+  return true;
 };
 
 export const getSupabase = (): SupabaseClient | null => {
-  if (isSupabaseAvailable()) {
-    return supabaseClient;
-  }
-  return null;
+  return isSupabaseAvailable() ? sharedSupabase : null;
 };
 
-// Export the client getter for use throughout the app
 export const getSupabaseClient = (): SupabaseClient | null => {
-  if (isSupabaseAvailable()) {
-    if (!supabaseClient && supabaseUrl && supabaseAnonKey) {
-      supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: true,
-        },
-      });
-    }
-    return supabaseClient;
-  }
-  return null;
+  return isSupabaseAvailable() ? sharedSupabase : null;
 };
 
-// Export a placeholder for legacy imports. Prefer getSupabaseClient().
-export const supabase = null as unknown as SupabaseClient;
+export const supabase = sharedSupabase;
 
 // Database types (kept for reference, not used)
 export interface Organization {

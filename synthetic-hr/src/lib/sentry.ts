@@ -12,7 +12,6 @@ export const initSentry = () => {
   const sentryDsn = config.sentryDsn;
   
   if (!sentryDsn) {
-    console.warn('Sentry DSN not configured. Error tracking disabled.');
     return;
   }
 
