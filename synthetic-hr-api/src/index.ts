@@ -182,27 +182,58 @@ async function checkSupabaseHealth(): Promise<{ ok: boolean; latency_ms: number;
 // Middleware - Security first with CORS validation
 const allowedOrigins = getAllowedOrigins();
 logger.info('Configured allowed CORS origins', { allowedOrigins });
-const corsOptions: cors.CorsOptions = {
-  origin: (origin, callback) => {
-    const normalizedOrigin = origin ? normalizeOrigin(origin) : null;
-
-    if (!origin || (normalizedOrigin && allowedOrigins.includes(normalizedOrigin))) {
-      callback(null, true);
-    } else {
-      logger.warn('Rejected CORS origin', {
-        origin,
-        normalizedOrigin,
-        allowedOrigins,
-      });
-      callback(new Error('CORS not allowed'), false);
+const corsOptionsDelegate: cors.CorsOptionsDelegate = (req, callback) => {
+  const requestLike = req as typeof req & { url?: string };
+  const routePath = (() => {
+    const rawUrl = requestLike.url || '';
+    try {
+      return new URL(rawUrl, 'http://localhost').pathname;
+    } catch {
+      return rawUrl.split('?')[0] || '';
     }
-  },
-  credentials: true,
-  maxAge: 86400,
-  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Request-Id'],
-  exposedHeaders: ['x-request-id'],
-  optionsSuccessStatus: 204,
+  })();
+  const isPublicWidgetRoute =
+    routePath === '/v1/agents/:agentId/chat'
+    || /^\/v1\/agents\/[^/]+\/chat$/.test(routePath);
+
+  if (isPublicWidgetRoute) {
+    callback(null, {
+      origin: true,
+      credentials: false,
+      maxAge: 86400,
+      methods: ['POST', 'OPTIONS'],
+      allowedHeaders: ['Authorization', 'Content-Type', 'X-Request-Id'],
+      exposedHeaders: ['x-request-id'],
+      optionsSuccessStatus: 204,
+    });
+    return;
+  }
+
+  const requestOrigin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
+  const normalizedOrigin = requestOrigin ? normalizeOrigin(requestOrigin) : null;
+
+  if (!requestOrigin || (normalizedOrigin && allowedOrigins.includes(normalizedOrigin))) {
+    callback(null, {
+      origin: true,
+      credentials: true,
+      maxAge: 86400,
+      methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Request-Id'],
+      exposedHeaders: ['x-request-id'],
+      optionsSuccessStatus: 204,
+    });
+    return;
+  }
+
+  logger.warn('Rejected CORS origin', {
+    origin: requestOrigin,
+    normalizedOrigin,
+    allowedOrigins,
+    routePath,
+  });
+  callback(new Error('CORS not allowed'), {
+    origin: false,
+  });
 };
 app.use(helmet({
   contentSecurityPolicy: {
@@ -219,8 +250,8 @@ app.use(helmet({
   },
 }));
 app.use(compression()); // Enable gzip compression
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+app.use(cors(corsOptionsDelegate));
+app.options('*', cors(corsOptionsDelegate));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 // Slack webhook needs the raw body Buffer for HMAC signature verification.
 // Must be registered BEFORE express.json() parses the body into an object.
