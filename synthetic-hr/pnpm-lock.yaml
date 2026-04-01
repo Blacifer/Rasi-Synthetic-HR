@@ -147,8 +147,8 @@ importers:
         specifier: ^7.54.2
         version: 7.71.2(react@18.3.1)
       react-joyride:
-        specifier: ^3.0.0
-        version: 3.0.0(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: ^3.0.1
+        version: 3.0.1(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react-resizable-panels:
         specifier: ^2.1.7
         version: 2.1.9(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -3701,8 +3701,8 @@ packages:
   react-is@18.3.1:
     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
 
-  react-joyride@3.0.0:
-    resolution: {integrity: sha512-ut5kZEu0fZauOVW0JnX0s6Vcia/mAFxSLUIV7nu8025U47PktqN1fnLtMqE+IzgGac8F3id9IPd/U9APmWYvkA==}
+  react-joyride@3.0.1:
+    resolution: {integrity: sha512-mBmwT7CD0YAW6lpSX3Ay1ORjD0qkpX15Z0HFYGRDUIz7B+FXxpYX/alEkZfBH0FtE7nfLOMVUQQ+PohO3v/tyA==}
     peerDependencies:
       react: 16.8 - 19
       react-dom: 16.8 - 19
@@ -8164,7 +8164,7 @@ snapshots:
 
   react-is@18.3.1: {}
 
-  react-joyride@3.0.0(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+  react-joyride@3.0.1(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
       '@fastify/deepmerge': 3.2.1
       '@floating-ui/react-dom': 2.1.8(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
