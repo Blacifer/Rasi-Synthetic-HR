@@ -1487,7 +1487,7 @@ export default function FleetPage({
               const createScopedWorkspaceKey = async () => {
                 if (deployMethod === 'website') {
                   await openDeploy(activeWorkspaceAgent);
-                  toast('Use the Website deploy flow to generate a website key with an allowed origin.');
+                  toast.info('Use the Website deploy flow to generate a website key with an allowed origin.');
                   return;
                 }
                 const target: 'api' | 'terminal' = deployMethod === 'terminal' ? 'terminal' : 'api';
