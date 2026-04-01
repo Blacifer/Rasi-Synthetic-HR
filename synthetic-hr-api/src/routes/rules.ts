@@ -6,7 +6,7 @@
 
 import { Router, type Request, type Response } from 'express';
 import { requirePermission } from '../middleware/rbac';
-import { supabaseRestAsUser, supabaseRest, eq } from '../lib/supabase-rest';
+import { supabaseRestAsUser, eq } from '../lib/supabase-rest';
 import { getOrgId, getUserJwt, errorResponse } from '../lib/route-helpers';
 import { logger } from '../lib/logger';
 
@@ -67,7 +67,7 @@ router.patch('/synthesized/:id', requirePermission('policies.manage'), async (re
     if (status === 'accepted' && rule.proposed_policy) {
       const policy = rule.proposed_policy as Record<string, any>;
       try {
-        await supabaseRest('action_policies', '', {
+        await supabaseRestAsUser(getUserJwt(req), 'action_policies', '', {
           method: 'POST',
           headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
           body: {

@@ -6,7 +6,7 @@ import { logger } from '../lib/logger';
 import { validateRequestBody, agentSchemas } from '../schemas/validation';
 import { requirePermission } from '../middleware/rbac';
 import { auditLog } from '../lib/audit-logger';
-import { supabaseRestAsUser, supabaseRest, eq, gte, in_ } from '../lib/supabase-rest';
+import { supabaseRestAsUser, eq, gte, in_ } from '../lib/supabase-rest';
 import { getOrgId, getUserJwt, errorResponse, buildDaySeries, toIsoDay } from '../lib/route-helpers';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
 
@@ -827,7 +827,7 @@ router.post('/agents/:id/test', requirePermission('agents.update'), async (req: 
     logger.info('Agent test completed', { agent_id: id, org_id: orgId, model: modelName, latency, expectedPass });
 
     // Persist result to shadow_test_runs (fire-and-forget)
-    supabaseRest('shadow_test_runs', '', {
+    supabaseRestAsUser(getUserJwt(req), 'shadow_test_runs', '', {
       method: 'POST',
       body: {
         organization_id: orgId,
