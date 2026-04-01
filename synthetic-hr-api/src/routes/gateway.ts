@@ -5,7 +5,7 @@ import { AnthropicService, OpenAIService, type ConnectorTool, type ToolCall } fr
 import { incidentDetection } from '../services/incident-detection';
 import { validateApiKey } from '../middleware/api-key-validation';
 import { logger } from '../lib/logger';
-import { supabaseRest, eq } from '../lib/supabase-rest';
+import { supabaseRest, eq, gte } from '../lib/supabase-rest';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
 import { sendTransactionalEmail } from '../lib/email';
 import { notifySlackIncident } from '../lib/slack-notify';
@@ -17,6 +17,7 @@ import { decryptSecret, encryptSecret } from '../lib/integrations/encryption';
 import { computeEntropy } from '../services/policy-engine';
 import { runPreflightGate } from '../lib/preflight-gate';
 import { fetchRelevantCorrections } from '../lib/correction-memory';
+import { usdToInr } from '../lib/currency';
 
 const router = express.Router();
 
@@ -546,7 +547,19 @@ const checkAgentBudget = async (req: Request, res: Response): Promise<string | n
 
     const agent = agents[0];
     const budgetLimit = Number(agent.config?.budget_limit ?? 0);
-    const currentSpend = Number(agent.config?.current_spend ?? 0);
+    let currentSpend = Number(agent.config?.current_spend ?? 0);
+
+    if (budgetLimit > 0) {
+      const monthStart = new Date();
+      monthStart.setUTCDate(1);
+      const costQuery = new URLSearchParams();
+      costQuery.set('organization_id', eq(req.apiKey.organization_id));
+      costQuery.set('agent_id', eq(agentId));
+      costQuery.set('date', gte(monthStart.toISOString().split('T')[0]));
+      const costRows = await supabaseRest('cost_tracking', costQuery) as any[];
+      const totalCostUsd = (costRows || []).reduce((sum, row) => sum + Number(row?.cost_usd || 0), 0);
+      currentSpend = usdToInr(totalCostUsd);
+    }
 
     if (budgetLimit > 0 && currentSpend >= budgetLimit) {
       res.status(402).json({
@@ -571,6 +584,7 @@ const updateAgentBudgetAndLogCost = async (
   agentId: string | null,
   modelId: string,
   modelProvider: string,
+  billedModel: string,
   completion: { inputTokens: number; outputTokens: number; totalTokens: number; costUSD: number; latency: number; }
 ) => {
   if (!req.apiKey) return;
@@ -592,6 +606,8 @@ const updateAgentBudgetAndLogCost = async (
         metadata: {
           api_key_id: req.apiKey.id,
           provider: modelProvider,
+          billed_model: billedModel,
+          gateway_model_id: modelId,
           endpoint: req.path,
           request_id: req.requestId,
         },
@@ -604,7 +620,15 @@ const updateAgentBudgetAndLogCost = async (
       const agents = await supabaseRest('ai_agents', query) as any[];
       if (agents && agents.length > 0) {
         const agent = agents[0];
-        const newSpend = Number(agent.config?.current_spend ?? 0) + completion.costUSD;
+        const monthStart = new Date();
+        monthStart.setUTCDate(1);
+        const costQuery = new URLSearchParams();
+        costQuery.set('organization_id', eq(req.apiKey.organization_id));
+        costQuery.set('agent_id', eq(agentId));
+        costQuery.set('date', gte(monthStart.toISOString().split('T')[0]));
+        const costRows = await supabaseRest('cost_tracking', costQuery) as any[];
+        const totalCostUsd = (costRows || []).reduce((sum, row) => sum + Number(row?.cost_usd || 0), 0);
+        const newSpend = usdToInr(totalCostUsd);
         // Also atomic update isn't directly supported by pure rest patch config JSONB,
         // but this is acceptable for now.
         const newConfig = { ...agent.config, current_spend: newSpend };
@@ -1896,7 +1920,7 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
       latency: totalLatency,
     };
 
-    await updateAgentBudgetAndLogCost(req, agentId, modelConfig.id, modelConfig.provider, completion);
+    await updateAgentBudgetAndLogCost(req, agentId, modelConfig.id, modelConfig.provider, modelConfig.upstreamModel, completion);
 
     if (req.apiKey?.organization_id) {
       void recordPromptCacheObservation({
@@ -2749,7 +2773,18 @@ router.post('/agents/:agentId/chat', async (req: Request, res: Response) => {
 
     // Check budget
     const budgetLimit = Number(agent.config?.budget_limit ?? 0);
-    const currentSpend = Number(agent.config?.current_spend ?? 0);
+    let currentSpend = Number(agent.config?.current_spend ?? 0);
+    if (budgetLimit > 0) {
+      const monthStart = new Date();
+      monthStart.setUTCDate(1);
+      const costQuery = new URLSearchParams();
+      costQuery.set('organization_id', eq(req.apiKey.organization_id));
+      costQuery.set('agent_id', eq(agentId));
+      costQuery.set('date', gte(monthStart.toISOString().split('T')[0]));
+      const costRows = await supabaseRest('cost_tracking', costQuery) as any[];
+      const totalCostUsd = (costRows || []).reduce((sum, row) => sum + Number(row?.cost_usd || 0), 0);
+      currentSpend = usdToInr(totalCostUsd);
+    }
     if (budgetLimit > 0 && currentSpend >= budgetLimit) {
       return res.status(402).json({ success: false, error: 'Budget limit exceeded' });
     }
@@ -2865,7 +2900,7 @@ router.post('/agents/:agentId/chat', async (req: Request, res: Response) => {
     });
 
     // Cost tracking (fire and forget)
-    void updateAgentBudgetAndLogCost(req, agentId, modelConfig.id, modelConfig.provider, completion).catch((err: any) => {
+    void updateAgentBudgetAndLogCost(req, agentId, modelConfig.id, modelConfig.provider, modelConfig.upstreamModel, completion).catch((err: any) => {
       logger.error('Failed to log cost for agent chat', { err: err.message, agentId });
     });
 

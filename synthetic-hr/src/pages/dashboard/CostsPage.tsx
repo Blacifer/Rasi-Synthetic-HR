@@ -129,7 +129,16 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
 
   // Per-agent spend for the breakdown table — aggregate from cost_tracking data
   const agentSpend = useMemo(() => {
-    const grouped: Record<string, { id: string; name: string; model: string; spend: number; budget: number; pct: number; status: string }> = {};
+    const grouped: Record<string, {
+      id: string;
+      name: string;
+      model: string;
+      spend: number;
+      budget: number;
+      pct: number;
+      status: string;
+      modelCounts: Record<string, number>;
+    }> = {};
     filteredCostData.forEach(d => {
       const key = d.agent_id || '__unattributed__';
       if (!grouped[key]) {
@@ -137,18 +146,22 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
         grouped[key] = {
           id: d.agent_id || '__unattributed__',
           name: agent?.name ?? 'Unattributed',
-          model: agent?.model_name ?? ((d.model || '').replace(/^[^/]+\//, '') || '—'),
+          model: (d.model || agent?.model_name || '').replace(/^[^/]+\//, '') || '—',
           spend: 0,
           budget: agent?.budget_limit || 0,
           pct: 0,
           status: agent?.status || 'active',
+          modelCounts: {},
         };
       }
       grouped[key].spend += d.cost || 0;
+      const modelKey = (d.model || '').replace(/^[^/]+\//, '') || grouped[key].model;
+      grouped[key].modelCounts[modelKey] = (grouped[key].modelCounts[modelKey] || 0) + 1;
     });
     return Object.values(grouped)
       .map(a => ({
         ...a,
+        model: Object.entries(a.modelCounts).sort((left, right) => right[1] - left[1])[0]?.[0] || a.model,
         pct: a.budget > 0 ? Math.min((a.spend / a.budget) * 100, 100) : 0,
       }))
       .sort((a, b) => b.spend - a.spend);

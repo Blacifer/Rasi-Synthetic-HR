@@ -239,7 +239,8 @@ export const useCostData = (period: '7d' | '30d' | '90d' | 'all' = '30d', option
           // request_count defaults to 1 per gateway insert but guard against 0
           requests: (item.request_count as number) || 1,
           agent_id: item.agent_id as string | undefined,
-          model: (item.model_name as string | undefined),
+          model: ((item.metadata?.billed_model as string | undefined)
+            || (item.model_name as string | undefined)),
         })) as CostData[],
         totals: rawRes.totals
           ? { ...rawRes.totals, totalCost: (rawRes.totals.totalCost || 0) * USD_TO_INR }
