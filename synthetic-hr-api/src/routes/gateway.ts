@@ -333,7 +333,10 @@ const normalizeModel = (model: string): GatewayModel | null => {
     // Backwards-compat model aliases (older UI/agent configs used dot notation).
     const normalizedUpstream = upstream
       .replace('claude-3.5-sonnet', 'claude-3-5-sonnet')
-      .replace('claude-3.5-haiku', 'claude-3-haiku');
+      .replace('claude-3.5-haiku', 'claude-3-haiku')
+      // Older Anthropic dated IDs still exist in stored agent configs.
+      .replace('claude-3-5-sonnet-20241022', 'claude-3-5-sonnet')
+      .replace('claude-3-5-haiku-20241022', 'claude-3-haiku');
     const id = `anthropic/${normalizedUpstream}`;
     const known = GATEWAY_MODELS.find((m) => m.id === id);
     if (known) return known;
