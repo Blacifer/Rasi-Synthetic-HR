@@ -27,6 +27,22 @@ interface GatewayModel {
   ownedBy: string;
 }
 
+const ANTHROPIC_MODEL_ALIASES: Record<string, string> = {
+  'claude-3-opus': 'claude-3-5-sonnet',
+  'claude-3-opus-20240229': 'claude-3-5-sonnet',
+  'claude-3-sonnet': 'claude-3-5-sonnet',
+  'claude-3-sonnet-20240229': 'claude-3-5-sonnet',
+  'claude-3-haiku': 'claude-3-haiku',
+  'claude-3-haiku-20240307': 'claude-3-haiku',
+  'claude-3.5-sonnet': 'claude-3-5-sonnet',
+  'claude-3-5-sonnet-20240620': 'claude-3-5-sonnet',
+  'claude-3-5-sonnet-20241022': 'claude-3-5-sonnet',
+  'claude-3.5-haiku': 'claude-3-haiku',
+  'claude-3-5-haiku-20241022': 'claude-3-haiku',
+  'claude-sonnet-4': 'claude-sonnet-4',
+  'claude-sonnet-4-0': 'claude-sonnet-4',
+};
+
 const GATEWAY_MODELS: GatewayModel[] = [
   { id: 'openai/gpt-4o', provider: 'openai', upstreamModel: 'gpt-4o', ownedBy: 'openai' },
   { id: 'openai/gpt-4o-mini', provider: 'openai', upstreamModel: 'gpt-4o-mini', ownedBy: 'openai' },
@@ -330,13 +346,9 @@ const normalizeModel = (model: string): GatewayModel | null => {
 
   if (model.startsWith('anthropic/') || model.startsWith('claude-')) {
     const upstream = model.startsWith('anthropic/') ? model.slice('anthropic/'.length) : model;
-    // Backwards-compat model aliases (older UI/agent configs used dot notation).
-    const normalizedUpstream = upstream
-      .replace('claude-3.5-sonnet', 'claude-3-5-sonnet')
-      .replace('claude-3.5-haiku', 'claude-3-haiku')
-      // Older Anthropic dated IDs still exist in stored agent configs.
-      .replace('claude-3-5-sonnet-20241022', 'claude-3-5-sonnet')
-      .replace('claude-3-5-haiku-20241022', 'claude-3-haiku');
+    // Normalize legacy Anthropic IDs so older saved agents still route to
+    // currently-supported models without requiring manual edits.
+    const normalizedUpstream = ANTHROPIC_MODEL_ALIASES[upstream] || upstream;
     const id = `anthropic/${normalizedUpstream}`;
     const known = GATEWAY_MODELS.find((m) => m.id === id);
     if (known) return known;
