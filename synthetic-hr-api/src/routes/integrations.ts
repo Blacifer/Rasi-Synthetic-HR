@@ -50,6 +50,9 @@ type StoredIntegrationRow = {
   last_sync_at: string | null;
   last_error_at: string | null;
   last_error_msg: string | null;
+  last_tested_at: string | null;
+  last_test_result: string | null;
+  enabled_capabilities: string[] | null;
   created_at: string;
   updated_at: string;
 };
@@ -1095,6 +1098,7 @@ router.get('/', requirePermission('connectors.read'), async (req, res) => {
       aiEnabled: row?.ai_enabled ?? Boolean(spec.aiFeatures?.enabled),
       connectionId: row?.id || null,
       specStatus: spec.status,
+      enabledCapabilities: row?.enabled_capabilities || [],
     };
   });
 

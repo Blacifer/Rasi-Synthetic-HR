@@ -37,8 +37,10 @@ export function PermissionsTab({ app }: PermissionsTabProps) {
   // Load current enabled_capabilities from the backend on mount
   useEffect(() => {
     if (!serviceId) { setLoading(false); return; }
-    api.integrations.get(serviceId).then((res: any) => {
-      const caps: string[] = res?.data?.enabled_capabilities ?? [];
+    api.integrations.getAll().then((res: any) => {
+      const entries: any[] = res?.data || [];
+      const found = entries.find((i: any) => i.id === serviceId || i.connectionId === serviceId);
+      const caps: string[] = found?.enabledCapabilities ?? [];
       // Empty array = all allowed; pre-populate all as enabled for display
       setEnabledSet(caps.length === 0 ? new Set(allCapabilities) : new Set(caps));
     }).catch(() => {
