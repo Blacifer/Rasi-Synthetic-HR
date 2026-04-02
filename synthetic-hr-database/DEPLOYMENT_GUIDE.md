@@ -166,6 +166,32 @@ Then re-run the migration.
 
 **Timeline:** 2-3 minutes for deployment + 5 minutes for verification
 
+## Production Hotfix: Missing Governed-Action Columns
+
+If API startup fails with missing `connector_action_executions` columns such as:
+- `requested_by`
+- `policy_snapshot`
+- `before_state`
+- `after_state`
+- `remediation`
+
+run this migration in your production database:
+
+```sql
+\i migration_041_connector_action_execution_governance_backfill.sql
+```
+
+Supabase SQL editor alternative:
+1. Open `migration_041_connector_action_execution_governance_backfill.sql`
+2. Copy SQL
+3. Run in SQL Editor
+
+After this migration is applied, you can enforce strict optional schema checks by setting:
+
+```env
+SCHEMA_COMPAT_STRICT_OPTIONAL=true
+```
+
 ## Troubleshooting
 
 ### Error: "Extension uuid-ossp does not exist"

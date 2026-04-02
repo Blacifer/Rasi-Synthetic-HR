@@ -10,6 +10,7 @@ type Requirement = {
 type CompatibilityResult = {
   ok: boolean;
   missing: Array<{ table: string; column: string | null; reason: string }>;
+  optionalMissing: Array<{ table: string; column: string | null; reason: string }>;
 };
 
 const REQUIRED_CONTRACTS: Requirement[] = [
@@ -126,12 +127,16 @@ export async function verifySchemaCompatibility(): Promise<CompatibilityResult> 
   return {
     ok: missing.length === 0,
     missing,
+    optionalMissing,
   };
 }
 
 export async function runSchemaCompatibilityCheck(): Promise<void> {
+  const strictOptional = String(process.env.SCHEMA_COMPAT_STRICT_OPTIONAL || '').toLowerCase() === 'true';
   const result = await verifySchemaCompatibility();
-  if (result.ok) {
+  const hasOptionalMismatch = result.optionalMissing.length > 0;
+
+  if (result.ok && (!strictOptional || !hasOptionalMismatch)) {
     logger.info('Schema compatibility check passed');
     return;
   }
@@ -142,9 +147,19 @@ export async function runSchemaCompatibilityCheck(): Promise<void> {
       column: item.column,
       reason: item.reason,
     })),
+    ...(hasOptionalMismatch ? {
+      missing_optional_contracts: result.optionalMissing.map((item) => ({
+        table: item.table,
+        column: item.column,
+        reason: item.reason,
+      })),
+      strict_optional: strictOptional,
+    } : {}),
   });
 
   throw new Error(
-    `Schema compatibility check failed for ${result.missing.length} contract item(s). Apply latest DB migrations before starting API.`,
+    strictOptional && hasOptionalMismatch
+      ? `Schema compatibility strict mode failed for ${result.optionalMissing.length} optional contract item(s). Apply latest DB migrations before starting API.`
+      : `Schema compatibility check failed for ${result.missing.length} contract item(s). Apply latest DB migrations before starting API.`,
   );
 }

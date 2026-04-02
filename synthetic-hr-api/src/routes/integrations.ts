@@ -2067,7 +2067,56 @@ router.post('/test/:service', requirePermission('connectors.read'), async (req, 
   query.set('service_type', eq(service));
   query.set('select', '*');
   const rows = await safeQuery<StoredIntegrationRow>(rest, 'integrations', query);
-  const row = rows?.[0];
+  let row = rows?.[0];
+
+  // Built-in SyntheticHR integration does not require external adapter/credentials.
+  if (service === 'internal') {
+    if (!row?.id) {
+      row = await upsertIntegration(rest, orgId, service, {
+        status: 'connected',
+        auth_type: 'api_key',
+        category: 'OTHER',
+        service_name: spec.name,
+        last_error_at: null,
+        last_error_msg: null,
+      });
+    }
+
+    if (!row?.id) return res.status(500).json({ success: false, error: 'Failed to initialize internal integration' });
+
+    const patchQuery = new URLSearchParams();
+    patchQuery.set('id', eq(row.id));
+    await rest('integrations', patchQuery, {
+      method: 'PATCH',
+      body: {
+        status: 'connected',
+        last_error_at: null,
+        last_error_msg: null,
+        last_sync_at: new Date().toISOString(),
+        last_tested_at: new Date().toISOString(),
+        last_test_result: 'ok',
+        updated_at: new Date().toISOString(),
+      },
+    });
+
+    await writeConnectionLog(rest, row.id, 'test', 'success', 'Internal integration test passed', {
+      service: spec.id,
+      actor_user_id: req.user?.id || null,
+      actor_email: req.user?.email || null,
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        service,
+        result: {
+          success: true,
+          message: 'Internal integration is healthy',
+        },
+      },
+    });
+  }
+
   if (!row?.id) return res.status(400).json({ success: false, error: 'Integration not connected' });
 
   const creds = await readCredentials(rest, row.id);
