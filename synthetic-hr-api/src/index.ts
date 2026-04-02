@@ -143,6 +143,8 @@ function normalizeOrigin(value: string): string | null {
   }
 }
 
+const DEFAULT_PRODUCTION_ORIGINS = ['https://rasi-synthetic-hr.vercel.app'] as const;
+
 // Helper: Get safe CORS origins
 function getAllowedOrigins(): string[] {
   if (process.env.NODE_ENV !== 'production') {
@@ -153,6 +155,7 @@ function getAllowedOrigins(): string[] {
     process.env.FRONTEND_URL || '',
     process.env.VERCEL_PROJECT_PRODUCTION_URL || '',
     process.env.VERCEL_URL || '',
+    process.env.CORS_ALLOWED_ORIGINS || '',
   ]
     .join(',')
     .split(',')
@@ -163,7 +166,14 @@ function getAllowedOrigins(): string[] {
     throw new Error('CORS wildcard origins not allowed with credentials=true');
   }
 
-  return Array.from(new Set(configured));
+  const unique = Array.from(new Set(configured));
+  if (unique.length > 0) return unique;
+
+  // Safety fallback to prevent accidental production lockout when env vars are missing.
+  logger.warn('No production CORS origins configured. Falling back to default production origin(s).', {
+    defaults: DEFAULT_PRODUCTION_ORIGINS,
+  });
+  return [...DEFAULT_PRODUCTION_ORIGINS];
 }
 
 // Helper: Check Supabase connectivity
