@@ -66,6 +66,7 @@ const GROUPS: NavGroup[] = [
       { id: 'action-policies', icon: Shield, label: 'Action Policies' },
       { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
       { id: 'costs', icon: DollarSign, label: 'Costs' },
+      { id: 'governed-actions', icon: Shield, label: 'Governed Actions' },
       { id: 'approvals', icon: CheckSquare, label: 'Approvals' },
       { id: 'audit-log', icon: ScrollText, label: 'Audit Log' },
       { id: 'api-access', icon: Key, label: 'API Access' },

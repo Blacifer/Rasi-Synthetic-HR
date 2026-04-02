@@ -1162,12 +1162,14 @@ router.get('/actions', requirePermission('connectors.read'), async (req, res) =>
   return res.json({ success: true, data: actions });
 });
 
-router.get('/executions', requirePermission('connectors.read'), async (req, res) => {
+const listGovernedActions = async (req: any, res: any) => {
   const orgId = getOrgId(req);
   if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
 
   const rest = restAsUser(req);
   const service = typeof req.query.service === 'string' ? req.query.service.trim() : '';
+  const decision = typeof req.query.decision === 'string' ? req.query.decision.trim() : '';
+  const source = typeof req.query.source === 'string' ? req.query.source.trim() : '';
   const limitRaw = typeof req.query.limit === 'string' ? Number(req.query.limit) : 25;
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, Math.floor(limitRaw))) : 25;
 
@@ -1179,12 +1181,17 @@ router.get('/executions', requirePermission('connectors.read'), async (req, res)
   if (service) query.set('connector_id', eq(service));
 
   const rows = await safeQuery<StoredConnectorExecutionRow>(rest, 'connector_action_executions', query);
-  const data = (rows || []).map((row) => ({
+  let data = (rows || []).map((row) => ({
     ...row,
     governance: normalizeGovernedActionSummary(row),
   }));
+  if (decision) data = data.filter((row) => row.governance?.decision === decision);
+  if (source) data = data.filter((row) => row.governance?.source === source);
   return res.json({ success: true, data });
-});
+};
+
+router.get('/executions', requirePermission('connectors.read'), listGovernedActions);
+router.get('/governed-actions', requirePermission('connectors.read'), listGovernedActions);
 
 // Upsert action enablement for spec actions (writes only).
 router.post('/actions', requirePermission('connectors.manage'), async (req, res) => {

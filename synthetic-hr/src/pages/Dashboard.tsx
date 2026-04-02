@@ -56,6 +56,7 @@ const FinanceHubPage = lazy(() => import('./dashboard/FinanceHubPage'));
 const ComplianceHubPage = lazy(() => import('./dashboard/ComplianceHubPage'));
 const IdentityHubPage = lazy(() => import('./dashboard/IdentityHubPage'));
 const ApprovalsPage = lazy(() => import('./dashboard/ApprovalsPage'));
+const GovernedActionsPage = lazy(() => import('./dashboard/GovernedActionsPage'));
 const AuditLogPage = lazy(() => import('./dashboard/AuditLogPage'));
 const RuntimeWorkersPage = lazy(() => import('./dashboard/RuntimeWorkersPage'));
 
@@ -1095,8 +1096,8 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   );
                 })}
 
-                {(['approvals', 'audit-log', 'api-access', 'developer', 'jobs', 'blackbox', 'runtime-workers'] as const).map((id) => {
-                  const labels: Record<string, string> = { approvals: 'Approvals', 'audit-log': 'Audit Log', 'api-access': 'API Access', developer: 'Developer', jobs: 'Run History', blackbox: 'Black Box', 'runtime-workers': 'Runtime Workers' };
+                {(['governed-actions', 'approvals', 'audit-log', 'api-access', 'developer', 'jobs', 'blackbox', 'runtime-workers'] as const).map((id) => {
+                  const labels: Record<string, string> = { 'governed-actions': 'Governed Actions', approvals: 'Approvals', 'audit-log': 'Audit Log', 'api-access': 'API Access', developer: 'Developer', jobs: 'Run History', blackbox: 'Black Box', 'runtime-workers': 'Runtime Workers' };
                   return (
                     <button key={id} data-tour={id} onClick={() => { navigateTo(id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === id && 'nav-item-active')}>
                       <span className="w-4 h-4 shrink-0" />
@@ -1611,6 +1612,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="integrations" element={<Navigate to="/dashboard/apps" replace />} />
                   <Route path="conversations" element={<ConversationsPage agents={enrichedAgents} onNavigate={navigateTo} initialAgentId={fleetWorkspaceAgentId} />} />
                   <Route path="incidents" element={<IncidentsPage incidents={incidents} setIncidents={saveIncidents} agents={enrichedAgents} onNavigate={navigateTo} isLoading={loading} />} />
+                  <Route path="governed-actions" element={<GovernedActionsPage onNavigate={navigateTo} />} />
                   <Route path="approvals" element={<ApprovalsPage />} />
                   <Route path="costs" element={<CostsPage agents={enrichedAgents} incidents={incidents} onNavigate={navigateTo} />} />
                   <Route path="api-access" element={<ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="keys" onNavigate={navigateTo} />} />

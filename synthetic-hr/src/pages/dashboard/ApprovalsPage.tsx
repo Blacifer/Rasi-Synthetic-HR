@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   CheckSquare, Clock, RefreshCw, CheckCircle2, XCircle,
   AlertCircle, Ban, ChevronDown, ChevronUp, Loader2,
@@ -114,6 +115,7 @@ type ReviewState = { note: string; submitting: boolean };
 function PendingCard({
   request,
   selected,
+  highlighted,
   onSelect,
   onApprove,
   onDeny,
@@ -122,6 +124,7 @@ function PendingCard({
 }: {
   request: ApprovalRequest & { risk_score?: number | null; sla_deadline?: string | null; snoozed_until?: string | null; sub_tasks?: Array<{title: string; completed: boolean}>; tags?: string[] };
   selected: boolean;
+  highlighted?: boolean;
   onSelect: (id: string) => void;
   onApprove: (id: string, note: string) => Promise<void>;
   onDeny: (id: string, note: string) => Promise<void>;
@@ -178,11 +181,12 @@ function PendingCard({
   return (
     <div className={cn(
       'rounded-xl border p-5 space-y-4 transition-colors',
+      highlighted ? 'border-amber-400/40 bg-amber-500/8 shadow-[0_0_0_1px_rgba(251,191,36,0.16)]' :
       selected ? 'border-cyan-500/40 bg-cyan-500/5' :
       isSnoozed ? 'border-slate-700 bg-white/[0.02] opacity-60' :
       isExpired ? 'border-slate-700 bg-white/[0.02] opacity-60' :
       'border-white/10 bg-white/[0.03] hover:bg-white/[0.05]'
-    )}>
+    )} id={`approval-${request.id}`}>
       {/* Header row */}
       <div className="flex items-start gap-3">
         {/* Selection checkbox */}
@@ -338,9 +342,17 @@ function PendingCard({
   );
 }
 
-function HistoryCard({ request }: { request: ApprovalRequest }) {
+function HistoryCard({ request, highlighted = false }: { request: ApprovalRequest; highlighted?: boolean }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
+    <div
+      id={`approval-${request.id}`}
+      className={cn(
+        'rounded-xl border p-4 space-y-3',
+        highlighted
+          ? 'border-amber-400/40 bg-amber-500/8 shadow-[0_0_0_1px_rgba(251,191,36,0.16)]'
+          : 'border-white/10 bg-white/[0.02]',
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -370,6 +382,10 @@ function HistoryCard({ request }: { request: ApprovalRequest }) {
 }
 
 export default function ApprovalsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const approvalIdParam = searchParams.get('approvalId');
+  const serviceParam = searchParams.get('service');
+  const requestedTab = searchParams.get('tab');
   const [tab, setTab] = useState<Tab>('queue');
   const [all, setAll] = useState<ApprovalRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -379,6 +395,7 @@ export default function ApprovalsPage() {
 
   const pending = all.filter(r => r.status === 'pending');
   const history = all.filter(r => r.status !== 'pending');
+  const focusedApproval = approvalIdParam ? all.find((request) => request.id === approvalIdParam) : null;
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -394,6 +411,35 @@ export default function ApprovalsPage() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (!requestedTab && !approvalIdParam) return;
+    if (requestedTab === 'history' || requestedTab === 'queue') {
+      setTab(requestedTab);
+      return;
+    }
+    if (focusedApproval) {
+      setTab(focusedApproval.status === 'pending' ? 'queue' : 'history');
+    }
+  }, [approvalIdParam, focusedApproval, requestedTab]);
+
+  useEffect(() => {
+    if (!approvalIdParam) return;
+    const node = document.getElementById(`approval-${approvalIdParam}`);
+    if (!node) return;
+    window.requestAnimationFrame(() => {
+      node.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  }, [approvalIdParam, pending.length, history.length, tab]);
+
+  const clearFocusParams = useCallback(() => {
+    setSearchParams((params) => {
+      params.delete('approvalId');
+      params.delete('service');
+      params.delete('tab');
+      return params;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const toggleSelect = (id: string) => setSelected(prev => {
     const next = new Set(prev);
@@ -493,6 +539,24 @@ export default function ApprovalsPage() {
         </button>
       </div>
 
+      {focusedApproval && (
+        <div className="flex flex-col gap-2 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="font-semibold text-white">Focused approval</p>
+            <p className="mt-1 text-amber-100/80">
+              Reviewing <span className="font-medium text-white">{focusedApproval.service}</span> / <span className="font-medium text-white">{focusedApproval.action}</span>
+              {serviceParam ? ` from ${serviceParam}` : ''}.
+            </p>
+          </div>
+          <button
+            onClick={clearFocusParams}
+            className="rounded-xl border border-white/12 bg-white/[0.05] px-3 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/[0.09]"
+          >
+            Clear focus
+          </button>
+        </div>
+      )}
+
       {/* Bulk action bar */}
       {selected.size > 0 && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
@@ -569,6 +633,7 @@ export default function ApprovalsPage() {
                 key={r.id}
                 request={r as any}
                 selected={selected.has(r.id)}
+                highlighted={approvalIdParam === r.id}
                 onSelect={toggleSelect}
                 onApprove={handleApprove}
                 onDeny={handleDeny}
@@ -588,7 +653,7 @@ export default function ApprovalsPage() {
         ) : (
           <div className="space-y-3">
             {history.map(r => (
-              <HistoryCard key={r.id} request={r} />
+              <HistoryCard key={r.id} request={r} highlighted={approvalIdParam === r.id} />
             ))}
           </div>
         )

@@ -20,13 +20,14 @@ interface DetailDrawerProps {
   onClose: () => void;
   onConfigure: (app: UnifiedApp) => void;
   onDisconnect: (app: UnifiedApp) => void;
+  initialTab?: DrawerTab;
 }
 
-export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect }: DetailDrawerProps) {
+export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, initialTab = 'overview' }: DetailDrawerProps) {
   const rawConnectorId = app.source === 'marketplace' ? app.appData?.id : app.integrationData?.id;
   const isSlack = isSlackRail(rawConnectorId);
 
-  const [tab, setTab] = useState<DrawerTab>('overview');
+  const [tab, setTab] = useState<DrawerTab>(initialTab);
   const [logs, setLogs] = useState<ConnectionLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [executions, setExecutions] = useState<ConnectorExecution[]>([]);
@@ -69,7 +70,7 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect }
   const loadExecutions = useCallback(async () => {
     if (!rawConnectorId) return;
     setExecutionsLoading(true);
-    const res = await api.integrations.getExecutionHistory(rawConnectorId, 12);
+    const res = await api.integrations.getGovernedActions({ service: rawConnectorId, limit: 12 });
     if (res.success) setExecutions((res.data as ConnectorExecution[]) || []);
     setExecutionsLoading(false);
   }, [rawConnectorId]);
@@ -106,6 +107,10 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect }
     }
     if (tab === 'actions') void loadCatalog();
   }, [tab, loadLogs, loadExecutions, loadCatalog]);
+
+  useEffect(() => {
+    setTab(initialTab);
+  }, [app.id, initialTab]);
 
   const testConnection = async () => {
     if (!app.integrationData?.id) return;

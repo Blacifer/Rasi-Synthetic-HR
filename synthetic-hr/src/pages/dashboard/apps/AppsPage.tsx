@@ -29,6 +29,8 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   // URL params
   const agentIdParam = searchParams.get('agentId');
   const domainParam = searchParams.get('domain');
+  const serviceParam = searchParams.get('service');
+  const drawerTabParam = searchParams.get('drawerTab') as 'overview' | 'agents' | 'history' | 'actions' | 'slack' | 'permissions' | null;
   const oauthConnected = searchParams.get('marketplace_connected') === 'true';
   const oauthApp = searchParams.get('marketplace_app');
   const intOauthStatus = searchParams.get('status');
@@ -157,6 +159,32 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
         title: 'Review unhealthy or underused connections',
         detail: 'Use My Apps to spot weak routing, test connection health, and keep the most useful capabilities connected.',
       };
+
+  useEffect(() => {
+    if (!serviceParam) return;
+    const target = connectedList.find((app) => {
+      const rawId = app.source === 'marketplace' ? app.appData?.id : app.integrationData?.id;
+      return rawId === serviceParam || app.appId === serviceParam;
+    });
+    if (!target) return;
+    setActiveTab('my');
+    setDrawerApp((current) => current?.id === target.id ? current : target);
+  }, [connectedList, serviceParam]);
+
+  const clearDeepLinkParams = useCallback(() => {
+    setSearchParams((params) => {
+      params.delete('service');
+      params.delete('drawerTab');
+      return params;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const closeDrawer = useCallback(() => {
+    setDrawerApp(null);
+    if (serviceParam || drawerTabParam) {
+      clearDeepLinkParams();
+    }
+  }, [clearDeepLinkParams, drawerTabParam, serviceParam]);
 
   return (
     <div className="flex h-full overflow-hidden bg-[#080f1a]">
@@ -309,22 +337,24 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
           <DetailDrawer
             app={drawerApp}
             agents={agents}
-            onClose={() => setDrawerApp(null)}
-            onConfigure={(app) => { setDrawerApp(null); setConnectTarget(app); }}
-            onDisconnect={async (app) => { await handleDisconnect(app); setDrawerApp(null); }}
+            initialTab={drawerTabParam || 'overview'}
+            onClose={closeDrawer}
+            onConfigure={(app) => { setDrawerApp(null); setConnectTarget(app); clearDeepLinkParams(); }}
+            onDisconnect={async (app) => { await handleDisconnect(app); setDrawerApp(null); clearDeepLinkParams(); }}
           />
         </div>
       )}
 
       {/* Detail drawer — mobile bottom sheet */}
       {drawerApp && (
-        <MobileBottomSheet onClose={() => setDrawerApp(null)}>
+        <MobileBottomSheet onClose={closeDrawer}>
           <DetailDrawer
             app={drawerApp}
             agents={agents}
-            onClose={() => setDrawerApp(null)}
-            onConfigure={(app) => { setDrawerApp(null); setConnectTarget(app); }}
-            onDisconnect={async (app) => { await handleDisconnect(app); setDrawerApp(null); }}
+            initialTab={drawerTabParam || 'overview'}
+            onClose={closeDrawer}
+            onConfigure={(app) => { setDrawerApp(null); setConnectTarget(app); clearDeepLinkParams(); }}
+            onDisconnect={async (app) => { await handleDisconnect(app); setDrawerApp(null); clearDeepLinkParams(); }}
           />
         </MobileBottomSheet>
       )}

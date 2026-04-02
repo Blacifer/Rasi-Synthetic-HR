@@ -23,6 +23,14 @@ export function HistoryTab({ app, executions, logs, executionsLoading, onRefresh
   const isClearTax = isClearTaxConnector(rawId);
   const isNaukri = isNaukriConnector(rawId);
   const isSlack = isSlackRail(rawId);
+  const blockedCount = executions.filter((execution) => execution.governance?.result === 'blocked').length;
+  const pendingCount = executions.filter((execution) => execution.governance?.result === 'pending').length;
+  const successCount = executions.filter((execution) => execution.governance?.result === 'succeeded' || (execution.governance == null && execution.success)).length;
+  const sourceCounts = executions.reduce<Record<string, number>>((acc, execution) => {
+    const source = execution.governance?.source || 'connector_console';
+    acc[source] = (acc[source] || 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-2">
@@ -32,6 +40,26 @@ export function HistoryTab({ app, executions, logs, executionsLoading, onRefresh
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {!executionsLoading && executions.length > 0 && (
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          {[
+            { label: 'Succeeded', value: successCount, tone: 'text-emerald-200 border-emerald-400/15 bg-emerald-500/8' },
+            { label: 'Pending', value: pendingCount, tone: 'text-amber-200 border-amber-400/15 bg-amber-500/8' },
+            { label: 'Blocked', value: blockedCount, tone: 'text-rose-200 border-rose-400/15 bg-rose-500/8' },
+            {
+              label: 'Primary source',
+              value: Object.entries(sourceCounts).sort((a, b) => b[1] - a[1])[0]?.[0]?.replace(/_/g, ' ') || 'console',
+              tone: 'text-slate-200 border-white/10 bg-white/[0.03]',
+            },
+          ].map((card) => (
+            <div key={card.label} className={`rounded-xl border px-3 py-2.5 ${card.tone}`}>
+              <p className="text-[10px] uppercase tracking-wider opacity-70">{card.label}</p>
+              <p className="mt-1 text-sm font-semibold">{card.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Domain evidence checklists */}
       {financeMode && (

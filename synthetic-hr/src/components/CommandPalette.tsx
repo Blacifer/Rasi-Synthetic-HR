@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { id: 'getting-started', label: 'Getting Started', icon: Sparkles },
   { id: 'conversations', label: 'Conversations', icon: MessageSquare },
   { id: 'costs', label: 'Costs', icon: DollarSign },
+  { id: 'governed-actions', label: 'Governed Actions', icon: ShieldCheck },
   { id: 'action-policies', label: 'Action Policies', icon: Shield },
   { id: 'approvals', label: 'Approvals', icon: CheckSquare },
   { id: 'audit-log', label: 'Audit Log', icon: ScrollText },

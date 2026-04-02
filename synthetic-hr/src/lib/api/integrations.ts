@@ -227,6 +227,20 @@ export const integrationsApi = {
     return authenticatedFetch(`/integrations/executions?${params.toString()}`, { method: 'GET' });
   },
 
+  async getGovernedActions(options?: {
+    service?: string;
+    decision?: 'executed' | 'pending_approval' | 'blocked';
+    source?: 'gateway' | 'connector_console' | 'runtime';
+    limit?: number;
+  }): Promise<ApiResponse<any[]>> {
+    const params = new URLSearchParams();
+    if (options?.service) params.set('service', options.service);
+    if (options?.decision) params.set('decision', options.decision);
+    if (options?.source) params.set('source', options.source);
+    params.set('limit', String(options?.limit ?? 25));
+    return authenticatedFetch(`/integrations/governed-actions?${params.toString()}`, { method: 'GET' });
+  },
+
   async upsertActions(items: Array<{ service: string; action: string; enabled: boolean }>): Promise<ApiResponse<any>> {
     return authenticatedFetch('/integrations/actions', {
       method: 'POST',
