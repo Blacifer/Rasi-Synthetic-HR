@@ -341,7 +341,7 @@ export default function GettingStartedPage(props: {
         <div>
           <h1 className="text-3xl font-bold text-white">Get To First Value</h1>
           <p className="text-slate-400 mt-1 max-w-2xl">
-            Connect one agent, connect one app, run one tracked test, and confirm that SyntheticHR is giving you usable visibility.
+            Set up one agent, connect one app, run one safe test, and confirm that SyntheticHR is showing you real activity you can act on.
           </p>
         </div>
         <div className="flex gap-2">
@@ -362,6 +362,36 @@ export default function GettingStartedPage(props: {
           >
             Skip for now
           </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="rounded-2xl border border-slate-700 bg-slate-900/30 p-4">
+          <div className="flex items-center gap-2 text-cyan-300">
+            <Sparkles className="h-4 w-4" />
+            <span className="text-sm font-semibold">What happens</span>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            You will create or pick one agent, connect one useful app, and send one test message through the governed runtime.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-700 bg-slate-900/30 p-4">
+          <div className="flex items-center gap-2 text-emerald-300">
+            <CheckCircle2 className="h-4 w-4" />
+            <span className="text-sm font-semibold">What success looks like</span>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            You finish when SyntheticHR shows a tracked request, a model observed, and a clear next place to operate from.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-700 bg-slate-900/30 p-4">
+          <div className="flex items-center gap-2 text-amber-300">
+            <ShieldCheck className="h-4 w-4" />
+            <span className="text-sm font-semibold">Keep it simple</span>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            Advanced setup is still available, but you do not need to think about keys, models, or gateway checks unless something fails.
+          </p>
         </div>
       </div>
 
@@ -415,11 +445,11 @@ export default function GettingStartedPage(props: {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-4 space-y-3">
-          <StepPill id="workspace" label="Know your setup" icon={ShieldCheck} done={!coverageLoading && !coverageError} />
-          <StepPill id="agent" label="Choose first agent" icon={Sparkles} done={Boolean(selectedAgentId) || hasAnyAgent} />
+          <StepPill id="workspace" label="Check workspace" icon={ShieldCheck} done={!coverageLoading && !coverageError} />
+          <StepPill id="agent" label="Pick first agent" icon={Sparkles} done={Boolean(selectedAgentId) || hasAnyAgent} />
           <StepPill id="apps" label="Connect an app" icon={ShoppingBag} done={installedAppCount > 0} />
           <StepPill id="test" label="Run one test" icon={Rocket} done={Boolean(testResult)} />
-          <StepPill id="verify" label="See first insight" icon={CheckCircle2} done={hasGatewayTraffic} />
+          <StepPill id="verify" label="Confirm visibility" icon={CheckCircle2} done={hasGatewayTraffic} />
         </div>
 
         <div className="lg:col-span-8">
@@ -427,7 +457,7 @@ export default function GettingStartedPage(props: {
             {step === 'workspace' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-white">Know your setup</h2>
+                  <h2 className="text-xl font-bold text-white">Check your workspace</h2>
                   <button
                     type="button"
                     onClick={loadCoverage}
@@ -448,26 +478,35 @@ export default function GettingStartedPage(props: {
                     {coverageError}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
-                      <div className="text-xs text-slate-400">What is running?</div>
-                      <div className="text-2xl font-bold text-white">{coverage?.agents?.total ?? props.agents.length}</div>
-                      <div className="text-xs text-slate-400 mt-1">Active agents: {coverage?.agents?.active ?? 0}</div>
-                    </div>
-                    <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
-                      <div className="text-xs text-slate-400">What is visible?</div>
-                      <div className={`text-2xl font-bold ${hasGatewayTraffic ? 'text-emerald-300' : 'text-slate-200'}`}>
-                        {hasGatewayTraffic ? 'Yes' : 'No'}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
+                        <div className="text-xs text-slate-400">What is running right now?</div>
+                        <div className="text-2xl font-bold text-white">{coverage?.agents?.total ?? props.agents.length}</div>
+                        <div className="text-xs text-slate-400 mt-1">Active agents: {coverage?.agents?.active ?? 0}</div>
                       </div>
-                      <div className="text-xs text-slate-400 mt-1">Coverage score: {coverage?.telemetry?.coverageScore ?? 0}</div>
+                      <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
+                        <div className="text-xs text-slate-400">Can SyntheticHR see traffic?</div>
+                        <div className={`text-2xl font-bold ${hasGatewayTraffic ? 'text-emerald-300' : 'text-slate-200'}`}>
+                          {hasGatewayTraffic ? 'Yes' : 'No'}
+                        </div>
+                        <div className="text-xs text-slate-400 mt-1">Coverage score: {coverage?.telemetry?.coverageScore ?? 0}</div>
+                      </div>
+                      <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
+                        <div className="text-xs text-slate-400">What still needs setup?</div>
+                        <div className="text-2xl font-bold text-white">{coverage?.apiKeys?.active ?? 0}</div>
+                        <div className="text-xs text-slate-400 mt-1">Active runtime keys · Used 30d: {coverage?.apiKeys?.recentlyUsed30d ?? 0}</div>
+                      </div>
                     </div>
-                    <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
-                      <div className="text-xs text-slate-400">What needs setup?</div>
-                      <div className="text-2xl font-bold text-white">{coverage?.apiKeys?.active ?? 0}</div>
-                      <div className="text-xs text-slate-400 mt-1">Active runtime keys · Used 30d: {coverage?.apiKeys?.recentlyUsed30d ?? 0}</div>
-                    </div>
-                  </div>
                 )}
+
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-4">
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">Recommended next step</div>
+                  <p className="mt-2 text-sm text-white">
+                    {hasAnyAgent
+                      ? 'You already have an agent. Move on to connecting one app so your first test feels useful.'
+                      : 'You do not need perfect setup yet. Create or pick one agent so the first test has a clear owner.'}
+                  </p>
+                </div>
 
                 <div className="flex gap-2">
                   <button
@@ -483,8 +522,8 @@ export default function GettingStartedPage(props: {
 
             {step === 'agent' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold text-white">Choose your first agent</h2>
-                <p className="text-slate-400">Pick an existing agent or create one quickly so your first test has a clear owner.</p>
+                <h2 className="text-xl font-bold text-white">Pick your first agent</h2>
+                <p className="text-slate-400">Use an existing agent or create a simple one now. You can tune prompts, policies, and model choices later.</p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-3">
@@ -557,7 +596,7 @@ export default function GettingStartedPage(props: {
 
                 <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <div className="text-sm font-semibold text-white">Model</div>
+                    <div className="text-sm font-semibold text-white">Model for the first test</div>
                     <button
                       type="button"
                       onClick={loadModels}
@@ -600,7 +639,7 @@ export default function GettingStartedPage(props: {
                 <div>
                   <h2 className="text-xl font-bold text-white">Connect an app</h2>
                   <p className="text-slate-400 mt-1 text-sm">
-                    Apps give your agents real capabilities — like processing refunds, classifying support tickets, or sourcing candidates. Pick a use case to get started.
+                    Pick one app or workflow to make the first test feel real. One useful connection is enough for now.
                   </p>
                 </div>
 
@@ -668,15 +707,15 @@ export default function GettingStartedPage(props: {
               <div className="space-y-4">
                 <h2 className="text-xl font-bold text-white">Run one tracked test</h2>
                 <p className="text-slate-400">
-                  Send one safe test message through the runtime so SyntheticHR can prove it is capturing real visibility.
+                  Send one safe test message through the runtime. This is where SyntheticHR proves it can see real activity and give you useful visibility.
                 </p>
 
                 <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <div className="text-sm font-semibold text-white">Secure test connection</div>
+                      <div className="text-sm font-semibold text-white">Prepare a safe test</div>
                       <div className="text-xs text-slate-400 mt-1">
-                        We use a short-lived key for this test and revoke it when setup is complete.
+                        We create a short-lived connection for this test and revoke it when setup is complete.
                       </div>
                     </div>
                     {apiKeySecret ? (
@@ -721,7 +760,7 @@ export default function GettingStartedPage(props: {
                   {showAdvancedSetup ? (
                     <div className="rounded-xl border border-slate-700/80 bg-black/20 p-4 space-y-3">
                       <p className="text-sm text-slate-300">
-                        Advanced setup lets you inspect the temporary key and manually test the gateway before sending a tracked request.
+                        Advanced setup lets you inspect the temporary connection and manually test the gateway before sending a tracked request.
                       </p>
                       <div className="flex flex-wrap gap-2">
                         <button
@@ -807,7 +846,7 @@ export default function GettingStartedPage(props: {
 
             {step === 'verify' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold text-white">See your first insight</h2>
+                <h2 className="text-xl font-bold text-white">Confirm your first insight</h2>
 
                 <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-2">
                   <div className="flex items-center justify-between">
@@ -832,6 +871,25 @@ export default function GettingStartedPage(props: {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">What happened</div>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">
+                      {hasGatewayTraffic
+                        ? 'SyntheticHR observed a real tracked request. You now have enough signal to use the dashboard and agents workspace with confidence.'
+                        : 'SyntheticHR has not observed a tracked request yet. Refresh once more or rerun the test so the system can capture first activity.'}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">What to do next</div>
+                    <p className="mt-2 text-sm leading-6 text-emerald-100">
+                      {hasGatewayTraffic
+                        ? 'Finish setup, then open Overview to see the system summary or Agents to keep operating your first agent.'
+                        : 'If visibility is still missing, open Agents after this and run one more test from the same agent to warm up the workspace.'}
+                    </p>
+                  </div>
+                </div>
+
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -844,17 +902,17 @@ export default function GettingStartedPage(props: {
                   </button>
                   <button
                     type="button"
-                    onClick={() => props.onNavigate('costs')}
-                    className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
-                  >
-                    Open costs
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => props.onNavigate('overview')}
                     className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
                   >
                     Open overview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => props.onNavigate('incidents')}
+                    className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-200 text-sm border border-slate-700"
+                  >
+                    Open incidents
                   </button>
                   <button
                     type="button"

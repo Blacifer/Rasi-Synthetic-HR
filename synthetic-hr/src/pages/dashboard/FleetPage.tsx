@@ -22,6 +22,26 @@ const WorkspaceSettingsPanel = lazy(async () => {
   const mod = await import('./fleet/WorkspaceSettingsPanel');
   return { default: mod.WorkspaceSettingsPanel };
 });
+const WorkspaceOverviewSection = lazy(async () => {
+  const mod = await import('./fleet/WorkspaceOverviewSection');
+  return { default: mod.WorkspaceOverviewSection };
+});
+const WorkspaceConversationsSection = lazy(async () => {
+  const mod = await import('./fleet/WorkspaceConversationsSection');
+  return { default: mod.WorkspaceConversationsSection };
+});
+const WorkspacePoliciesSection = lazy(async () => {
+  const mod = await import('./fleet/WorkspacePoliciesSection');
+  return { default: mod.WorkspacePoliciesSection };
+});
+const WorkspaceAnalyticsSection = lazy(async () => {
+  const mod = await import('./fleet/WorkspaceAnalyticsSection');
+  return { default: mod.WorkspaceAnalyticsSection };
+});
+const WorkspaceIntegrationsSection = lazy(async () => {
+  const mod = await import('./fleet/WorkspaceIntegrationsSection');
+  return { default: mod.WorkspaceIntegrationsSection };
+});
 const DeployAgentModal = lazy(async () => {
   const mod = await import('./fleet/DeployAgentModal');
   return { default: mod.DeployAgentModal };
@@ -1050,6 +1070,54 @@ export default function FleetPage({
   const activeWorkspaceAgent = workspaceAgentId ? agents.find((agent) => agent.id === workspaceAgentId) || null : null;
   const openIncidentCount = workspaceState.incidents.filter((incident) => incident.status !== 'resolved' && incident.status !== 'false_positive').length;
   const criticalIncidentCount = workspaceState.incidents.filter((incident) => incident.severity === 'critical').length;
+  const liveAgentCount = agents.filter((agent) => agent.publishStatus === 'live').length;
+  const attentionAgentCount = agents.filter((agent) => agent.risk_level === 'high' || (agent.risk_score ?? 0) >= 70).length;
+  const disconnectedAgentCount = agents.filter((agent) => (agent.connectedTargets?.length || 0) === 0).length;
+  const readyToDeployAgent = agents.find((agent) => agent.publishStatus !== 'live' && (agent.connectedTargets?.length || 0) > 0) || null;
+  const firstDisconnectedAgent = agents.find((agent) => (agent.connectedTargets?.length || 0) === 0) || null;
+  const firstLiveAgent = agents.find((agent) => agent.publishStatus === 'live') || null;
+
+  const handoffCard = (() => {
+    if (agents.length === 0 || activeWorkspaceAgent) return null;
+
+    if (readyToDeployAgent) {
+      return {
+        eyebrow: 'Recommended next step',
+        title: `Deploy ${readyToDeployAgent.name}`,
+        description: 'You already have an agent with a connected channel. Going live is the fastest way to move from setup into real operations.',
+        primaryLabel: 'Open deployment',
+        primaryAction: () => openWorkspace(readyToDeployAgent.id, 'deployment'),
+        secondaryLabel: 'Open workspace',
+        secondaryAction: () => openWorkspace(readyToDeployAgent.id, 'overview'),
+      };
+    }
+
+    if (firstDisconnectedAgent) {
+      return {
+        eyebrow: 'Recommended next step',
+        title: `Connect the first channel for ${firstDisconnectedAgent.name}`,
+        description: 'This agent is configured but still cold. Connect one channel or app so you can send the first real test and watch the workspace come alive.',
+        primaryLabel: 'Connect channel',
+        primaryAction: () => onPublishAgent?.(firstDisconnectedAgent, firstDisconnectedAgent.primaryPack || null),
+        secondaryLabel: 'Open workspace',
+        secondaryAction: () => openWorkspace(firstDisconnectedAgent.id, 'overview'),
+      };
+    }
+
+    if (firstLiveAgent) {
+      return {
+        eyebrow: 'Recommended next step',
+        title: `Operate ${firstLiveAgent.name}`,
+        description: 'You already have a live agent. Open its workspace to review recent conversations, confirm risk, and decide what to do next.',
+        primaryLabel: 'Open workspace',
+        primaryAction: () => openWorkspace(firstLiveAgent.id, 'overview'),
+        secondaryLabel: 'Review conversations',
+        secondaryAction: () => openWorkspace(firstLiveAgent.id, 'conversations'),
+      };
+    }
+
+    return null;
+  })();
 
   const filteredAgents = agents.filter(a => {
     const q = searchQuery.toLowerCase();
@@ -1126,42 +1194,97 @@ export default function FleetPage({
         </div>
       </div>
 
+      {agents.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Active agents</div>
+            <div className="mt-2 text-2xl font-semibold text-white">{agents.filter((agent) => agent.status === 'active').length}</div>
+            <div className="mt-1 text-xs text-slate-500">Currently running right now</div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Live agents</div>
+            <div className="mt-2 text-2xl font-semibold text-white">{liveAgentCount}</div>
+            <div className="mt-1 text-xs text-slate-500">Handling traffic on connected channels</div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Need attention</div>
+            <div className="mt-2 text-2xl font-semibold text-white">{attentionAgentCount}</div>
+            <div className="mt-1 text-xs text-slate-500">High-risk or elevated governance attention</div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Not connected</div>
+            <div className="mt-2 text-2xl font-semibold text-white">{disconnectedAgentCount}</div>
+            <div className="mt-1 text-xs text-slate-500">Ready for a first channel or deploy step</div>
+          </div>
+        </div>
+      )}
+
+      {handoffCard && (
+        <div className="rounded-2xl border border-cyan-400/20 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),rgba(8,47,73,0.45)] p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">{handoffCard.eyebrow}</p>
+              <h2 className="mt-2 text-xl font-semibold text-white">{handoffCard.title}</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-300">{handoffCard.description}</p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={handoffCard.primaryAction}
+                className="btn-primary px-4 py-2.5 text-sm"
+              >
+                {handoffCard.primaryLabel}
+              </button>
+              <button
+                onClick={handoffCard.secondaryAction}
+                className="btn-secondary px-4 py-2.5 text-sm"
+              >
+                {handoffCard.secondaryLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Search & Filter Bar */}
       {agents.length > 0 && (
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              id="fleet-search"
-              name="fleet-search"
-              type="text"
-              placeholder="Search agents by name, model, or description…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="input-field pl-9 py-2.5 text-sm focus:ring-blue-500/30"
-            />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-4">
+          <div className="flex flex-col lg:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                id="fleet-search"
+                name="fleet-search"
+                type="text"
+                placeholder="Search agents by name, model, or description…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="input-field pl-9 py-2.5 text-sm focus:ring-blue-500/30"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {(['all', 'active', 'paused', 'terminated'] as const).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setFilterStatus(s)}
+                  className={`px-3 py-2 rounded-xl text-xs font-semibold capitalize transition-all border ${filterStatus === s
+                    ? s === 'all' ? 'bg-white/[0.06] text-white border-white/10'
+                      : s === 'active' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                        : s === 'paused' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                          : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                    : 'text-slate-400 border-slate-700 hover:border-slate-600 hover:text-white'
+                    }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            {(['all', 'active', 'paused', 'terminated'] as const).map(s => (
-              <button
-                key={s}
-                onClick={() => setFilterStatus(s)}
-                className={`px-3 py-2 rounded-xl text-xs font-semibold capitalize transition-all border ${filterStatus === s
-                  ? s === 'all' ? 'bg-white/[0.06] text-white border-white/10'
-                    : s === 'active' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                      : s === 'paused' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                        : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
-                  : 'text-slate-400 border-slate-700 hover:border-slate-600 hover:text-white'
-                  }`}
-              >
-                {s}
-              </button>
-            ))}
+          <div className="flex flex-wrap gap-2">
             {Array.from(new Set(agents.map(a => a.agent_type))).map(type => (
               <button
                 key={type}
@@ -1174,6 +1297,12 @@ export default function FleetPage({
                 {type.replace('_', ' ')}
               </button>
             ))}
+          </div>
+          <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+            <span>{filteredAgents.length} agent{filteredAgents.length === 1 ? '' : 's'} shown</span>
+            {(searchQuery || filterStatus !== 'all' || filterType !== 'all') ? (
+              <button onClick={() => { setSearchQuery(''); setFilterStatus('all'); setFilterType('all'); }} className="text-cyan-400 transition hover:text-cyan-300">Clear filters</button>
+            ) : null}
           </div>
         </div>
       )}
@@ -1189,14 +1318,22 @@ export default function FleetPage({
           </div>
           <h2 className="text-xl font-semibold text-white">No governed agents yet</h2>
           <p className="mx-auto mt-2 max-w-sm text-sm text-slate-400">
-            Define your first agent — give it a name, model, and purpose — then connect it to the gateway to start capturing live telemetry, spend, and incidents.
+            Create one agent, connect one channel, and run one safe test. That is enough to unlock live telemetry, spend visibility, and incident monitoring.
           </p>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
-          >
-            <Plus className="h-4 w-4" /> Define your first agent
-          </button>
+          <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <button
+              onClick={() => onOpenOperationsPage?.('getting-started')}
+              className="btn-primary px-4 py-2.5 text-sm"
+            >
+              <Rocket className="h-4 w-4" /> Start guided setup
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
+            >
+              <Plus className="h-4 w-4" /> Create first agent
+            </button>
+          </div>
         </div>
       ) : filteredAgents.length === 0 ? (
         <div className="rounded-2xl border border-slate-700/60 bg-slate-800/30 p-10 text-center">
@@ -1213,6 +1350,33 @@ export default function FleetPage({
           animate="show"
         >
           {filteredAgents.map((agent) => {
+            const connectedTargetCount = agent.connectedTargets?.length || 0;
+            const providerLabel = (() => {
+              const prefix = (agent.model_name || '').split('/')[0].toLowerCase();
+              const labels: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', meta: 'Meta', mistral: 'Mistral', openrouter: 'OpenRouter' };
+              return labels[prefix] || prefix || 'Unknown';
+            })();
+            const nextActionLabel = agent.publishStatus === 'live'
+              ? 'Open workspace'
+              : connectedTargetCount > 0
+                ? 'Deploy agent'
+                : 'Connect channel';
+            const nextAction = () => {
+              if (agent.publishStatus === 'live') {
+                openWorkspace(agent.id);
+                return;
+              }
+              if (connectedTargetCount > 0) {
+                void openDeploy(agent);
+                return;
+              }
+              onPublishAgent?.(agent, agent.primaryPack || null);
+            };
+            const whatIsHappening = agent.publishStatus === 'live'
+              ? `${agent.name} is live and can be supervised from its workspace.`
+              : connectedTargetCount > 0
+                ? `${agent.name} is connected and almost ready. The next step is to deploy it live.`
+                : `${agent.name} is configured but still needs its first channel before it can operate.`;
             return (
               <motion.div
                 key={agent.id}
@@ -1226,9 +1390,9 @@ export default function FleetPage({
               >
                 {/* Main card row */}
                 <div className="p-5">
-                  <div className="flex items-start justify-between">
+                  <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-5">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-1.5 flex-wrap">
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <h3 className="text-base font-semibold text-white">{agent.name}</h3>
                         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${agent.status === 'active' ? 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/20' :
                           agent.status === 'paused' ? 'bg-amber-400/10 text-amber-400 border border-amber-400/20' :
@@ -1246,15 +1410,10 @@ export default function FleetPage({
                           </span>
                           {agent.status}
                         </span>
-                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${agent.risk_level === 'low' ? 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/20' :
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${agent.risk_level === 'low' ? 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/20' :
                           agent.risk_level === 'medium' ? 'bg-amber-400/10 text-amber-400 border border-amber-400/20' :
                             'bg-red-400/10 text-red-400 border border-red-400/20'
                           }`}>Risk {agent.risk_score}/100</span>
-                        {agent.budget_limit > 0 && (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-400/10 text-blue-400 border border-blue-400/20">
-                            Budget ₹{agent.budget_limit.toLocaleString()}
-                          </span>
-                        )}
                         {agent.publishStatus === 'live' ? (
                           <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-400/10 text-emerald-300 border border-emerald-400/20">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />Live
@@ -1272,141 +1431,134 @@ export default function FleetPage({
                             Not live yet
                           </button>
                         )}
-                        {(() => {
-                          const method = (agent as any).metadata?.deploy_method as string | undefined;
-                          if (!method) return null;
-                          const methodLabels: Record<string, { label: string; cls: string }> = {
-                            website: { label: '🌐 Website', cls: 'bg-teal-500/10 text-teal-300 border-teal-400/20' },
-                            api: { label: '</> API', cls: 'bg-blue-500/10 text-blue-300 border-blue-400/20' },
-                            terminal: { label: '>_ Terminal', cls: 'bg-purple-500/10 text-purple-300 border-purple-400/20' },
-                          };
-                          const meta = methodLabels[method];
-                          if (!meta) return null;
-                          return <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${meta.cls}`}>{meta.label}</span>;
-                        })()}
                       </div>
-                      <p className="text-slate-400 text-sm mb-2.5">{agent.description}</p>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                        <span>Type: <span className="text-slate-300">{agent.agent_type}</span></span>
-                        <span>Provider: <span className="text-slate-300">{(() => {
-                          const prefix = (agent.model_name || '').split('/')[0].toLowerCase();
-                          const labels: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', meta: 'Meta', mistral: 'Mistral', openrouter: 'OpenRouter' };
-                          return labels[prefix] || prefix || 'Unknown';
-                        })()}</span></span>
-                        <span>Model: <span className="text-slate-300 font-mono">{agent.model_name}</span></span>
-                        <span className="w-full sm:w-auto" />
-                        <span>Conversations: <span className="text-slate-300">{agent.conversations}</span></span>
-                        <span>Connected targets: <span className="text-slate-300">{agent.connectedTargets?.length || 0}</span></span>
+                      <p className="text-slate-300 text-sm">{whatIsHappening}</p>
+                      <p className="text-slate-500 text-sm mt-1">{agent.description}</p>
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Model</div>
+                          <div className="mt-2 text-sm font-medium text-white truncate">{providerLabel}</div>
+                          <div className="mt-1 text-xs text-slate-500 font-mono truncate">{agent.model_name}</div>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Activity</div>
+                          <div className="mt-2 text-sm font-medium text-white">{agent.conversations.toLocaleString()} conversations</div>
+                          <div className="mt-1 text-xs text-slate-500">{connectedTargetCount} connected target{connectedTargetCount === 1 ? '' : 's'}</div>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Controls</div>
+                          <div className="mt-2 text-sm font-medium text-white">
+                            {agent.budget_limit > 0 ? `₹${agent.budget_limit.toLocaleString()} budget cap` : 'No budget cap set'}
+                          </div>
+                          <div className="mt-1 text-xs text-slate-500 capitalize">{agent.agent_type.replace('_', ' ')}</div>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                         {agent.primaryPack ? (
                           <span>Domain: <span className="text-slate-300">{agent.primaryPack}</span></span>
                         ) : null}
+                        {(() => {
+                          const method = (agent as any).metadata?.deploy_method as string | undefined;
+                          if (!method) return null;
+                          const methodLabels: Record<string, string> = {
+                            website: 'Website',
+                            api: 'API',
+                            terminal: 'Terminal',
+                          };
+                          return <span>Deploy method: <span className="text-slate-300">{methodLabels[method] || method}</span></span>;
+                        })()}
                       </div>
                     </div>
 
-                    {/* Action buttons — always visible */}
-                    <div className="flex items-center gap-1 ml-4 shrink-0">
+                    <div className="xl:w-64 shrink-0 space-y-3">
                       <button
-                        onClick={() => onPublishAgent?.(agent, agent.primaryPack || null)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-blue-500/15 text-blue-200 border border-blue-400/30 hover:bg-blue-500/20"
-                        title={agent.connectedTargets?.length ? 'Add another channel (Slack, email, web…)' : 'Connect a channel so your agent can send and receive messages'}
+                        onClick={nextAction}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all bg-blue-500/20 text-blue-100 border border-blue-400/30 hover:bg-blue-500/25"
                       >
-                        <Link2 className="w-3.5 h-3.5" />
-                        {agent.connectedTargets?.length ? 'Add channel' : 'Publish'}
+                        {agent.publishStatus === 'live' ? <Eye className="w-4 h-4" /> : connectedTargetCount > 0 ? <Rocket className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+                        {nextActionLabel}
                       </button>
-
-                      <button
-                        onClick={() => openWorkspace(agent.id)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-white/5 text-slate-200 border border-white/10 hover:bg-white/10"
-                        title="Open agent workspace"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        Workspace
-                      </button>
-
-                      {/* Deploy */}
-                      {(() => {
-                        const isNew = agent.created_at
-                          ? Date.now() - new Date(agent.created_at).getTime() < 24 * 60 * 60 * 1000
-                          : false;
-                        const isNotLive = agent.publishStatus !== 'live';
-                        return (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => openWorkspace(agent.id)}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all bg-white/5 text-slate-200 border border-white/10 hover:bg-white/10"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          Workspace
+                        </button>
+                        {agent.publishStatus !== 'live' ? (
                           <button
                             onClick={() => void openDeploy(agent)}
-                            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                              isNotLive
-                                ? 'bg-slate-700/60 text-slate-300 border border-slate-600 hover:bg-slate-700 hover:text-white'
-                                : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25'
-                            }`}
-                            title="Deploy this agent"
+                            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all bg-white/5 text-slate-200 border border-white/10 hover:bg-white/10"
                           >
-                            {isNew && isNotLive && (
-                              <span className="absolute -inset-px rounded-lg border border-slate-400/50 animate-pulse pointer-events-none" />
-                            )}
                             <Rocket className="w-3.5 h-3.5" />
                             Deploy
                           </button>
-                        );
-                      })()}
-
-                      {/* Kill Switch — emergency stop for active agents */}
-                      {agent.status === 'active' && (
-                        <button
-                          onClick={() => handleConfirmAction(
-                            'Activate Kill Switch',
-                            `This will immediately stop ${agent.name} from processing any new requests. The agent can be reactivated at any time.`,
-                            'danger',
-                            async () => {
-                              await runAgentAction(agent.id, `pause:${agent.id}`, () => api.agents.pause(agent.id, 'Kill switch activated — emergency stop'), `Kill switch activated for ${agent.name}.`);
-                            }
-                          )}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-400 border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 transition-all"
-                          title="Kill Switch — immediately stop this agent"
-                          disabled={actionBusy === `pause:${agent.id}`}
-                        >
-                          {actionBusy === `pause:${agent.id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
-                          Kill Switch
-                        </button>
-                      )}
-
-                      {/* Pause / Activate */}
-                      {agent.status !== 'terminated' && (
-                        agent.status === 'active' ? (
-                          <button
-                            onClick={() => handleConfirmAction(
-                              'Pause Agent',
-                              `Are you sure you want to pause ${agent.name}?`,
-                              'warning',
-                              async () => {
-                                await runAgentAction(agent.id, `pause:${agent.id}`, () => api.agents.pause(agent.id, 'Paused from fleet list'), `${agent.name} paused.`);
-                              }
-                            )}
-                            className="p-2 text-slate-400 hover:text-amber-400 transition-colors rounded-lg hover:bg-amber-400/10"
-                            title="Pause Agent"
-                            disabled={actionBusy === `pause:${agent.id}`}
-                          >
-                            {actionBusy === `pause:${agent.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <ZapOff className="w-4 h-4" />}
-                          </button>
                         ) : (
                           <button
-                            onClick={() => void runAgentAction(agent.id, `resume:${agent.id}`, () => api.agents.resume(agent.id, 'Resumed from fleet list'), `${agent.name} resumed.`)}
-                            className="p-2 text-slate-400 hover:text-emerald-400 transition-colors rounded-lg hover:bg-emerald-400/10"
-                            title="Activate Agent"
-                            disabled={actionBusy === `resume:${agent.id}`}
+                            onClick={() => onPublishAgent?.(agent, agent.primaryPack || null)}
+                            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all bg-white/5 text-slate-200 border border-white/10 hover:bg-white/10"
                           >
-                            {actionBusy === `resume:${agent.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                            <Link2 className="w-3.5 h-3.5" />
+                            Add channel
                           </button>
-                        )
-                      )}
-
-                      {/* Delete */}
-                      <button
-                        onClick={() => deleteAgent(agent.id)}
-                        className="p-2 text-slate-400 hover:text-red-400 transition-colors rounded-lg hover:bg-red-400/10"
-                        title="Delete Agent"
-                        aria-label={`Delete agent ${agent.name}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        {agent.status !== 'terminated' && (
+                          agent.status === 'active' ? (
+                            <button
+                              onClick={() => handleConfirmAction(
+                                'Pause Agent',
+                                `Are you sure you want to pause ${agent.name}?`,
+                                'warning',
+                                async () => {
+                                  await runAgentAction(agent.id, `pause:${agent.id}`, () => api.agents.pause(agent.id, 'Paused from fleet list'), `${agent.name} paused.`);
+                                }
+                              )}
+                              className="flex-1 p-2 text-slate-400 hover:text-amber-400 transition-colors rounded-lg hover:bg-amber-400/10 border border-white/10"
+                              title="Pause Agent"
+                              disabled={actionBusy === `pause:${agent.id}`}
+                            >
+                              {actionBusy === `pause:${agent.id}` ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : <ZapOff className="w-4 h-4 mx-auto" />}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => void runAgentAction(agent.id, `resume:${agent.id}`, () => api.agents.resume(agent.id, 'Resumed from fleet list'), `${agent.name} resumed.`)}
+                              className="flex-1 p-2 text-slate-400 hover:text-emerald-400 transition-colors rounded-lg hover:bg-emerald-400/10 border border-white/10"
+                              title="Activate Agent"
+                              disabled={actionBusy === `resume:${agent.id}`}
+                            >
+                              {actionBusy === `resume:${agent.id}` ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : <Play className="w-4 h-4 mx-auto" />}
+                            </button>
+                          )
+                        )}
+                        {agent.status === 'active' && (
+                          <button
+                            onClick={() => handleConfirmAction(
+                              'Activate Kill Switch',
+                              `This will immediately stop ${agent.name} from processing any new requests. The agent can be reactivated at any time.`,
+                              'danger',
+                              async () => {
+                                await runAgentAction(agent.id, `pause:${agent.id}`, () => api.agents.pause(agent.id, 'Kill switch activated — emergency stop'), `Kill switch activated for ${agent.name}.`);
+                              }
+                            )}
+                            className="flex-1 p-2 text-red-400 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-all rounded-lg"
+                            title="Kill Switch — immediately stop this agent"
+                            disabled={actionBusy === `pause:${agent.id}`}
+                          >
+                            {actionBusy === `pause:${agent.id}` ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : <Ban className="w-4 h-4 mx-auto" />}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => deleteAgent(agent.id)}
+                          className="p-2 text-slate-400 hover:text-red-400 transition-colors rounded-lg hover:bg-red-400/10 border border-white/10"
+                          title="Delete Agent"
+                          aria-label={`Delete agent ${agent.name}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1616,669 +1768,85 @@ export default function FleetPage({
                 </div>
               );
             })() : workspaceTab === 'overview' ? (
-              <><div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 lg:col-span-2">
-                  <h3 className="text-sm font-semibold text-white">Publish status</h3>
-                  <p className="text-sm text-slate-400 mt-1">
-                    {activeWorkspaceAgent.publishStatus === 'live'
-                      ? 'This agent is live on connected systems and can be supervised from RASI.'
-                      : activeWorkspaceAgent.publishStatus === 'ready'
-                        ? 'This agent has channels prepared but still needs at least one active connection.'
-                        : 'This agent is not connected yet. Publish it to a real channel to start operating it.'}
-                  </p>
-                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Conversations</div>
-                      <div className="text-2xl font-semibold text-white mt-2">{activeWorkspaceAgent.conversations.toLocaleString()}</div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">CSAT</div>
-                      <div className="text-2xl font-semibold text-white mt-2">{activeWorkspaceAgent.satisfaction}%</div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Last sync</div>
-                      <div className="text-sm font-medium text-white mt-2">
-                        {activeWorkspaceAgent.lastIntegrationSyncAt ? new Date(activeWorkspaceAgent.lastIntegrationSyncAt).toLocaleString() : 'Not connected yet'}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Live channels</div>
-                          <div className="text-sm text-slate-400 mt-1">Connected systems this agent is currently attached to.</div>
-                        </div>
-                        <Link2 className="w-4 h-4 text-blue-200" />
-                      </div>
-                      <div className="mt-4 space-y-3">
-                        {(activeWorkspaceAgent.connectedTargets || []).length === 0 ? (
-                          <div className="text-sm text-slate-400">No connected channels yet.</div>
-                        ) : (
-                          (activeWorkspaceAgent.connectedTargets || []).slice(0, 3).map((target) => (
-                            <div key={target.integrationId} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/30 px-3 py-2">
-                              <div>
-                                <div className="text-sm font-medium text-white">{target.integrationName}</div>
-                                <div className="text-xs text-slate-500 mt-1">{target.packId} • {target.lastSyncAt ? new Date(target.lastSyncAt).toLocaleString() : 'No sync yet'}</div>
-                              </div>
-                              <span className={`text-[11px] px-2 py-0.5 rounded-full border ${
-                                target.status === 'connected'
-                                  ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
-                                  : 'border-amber-400/20 bg-amber-400/10 text-amber-100'
-                              }`}>
-                                {target.status}
-                              </span>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Recent conversations</div>
-                          <div className="text-sm text-slate-400 mt-1">Latest customer or operator interactions for this agent.</div>
-                        </div>
-                        {workspaceState.loadingConversations ? <Loader2 className="w-4 h-4 animate-spin text-slate-400" /> : <MessageSquare className="w-4 h-4 text-slate-300" />}
-                      </div>
-                      <div className="mt-4 space-y-3">
-                        {workspaceState.conversationsError ? (
-                          <div className="text-sm text-rose-200">{workspaceState.conversationsError}</div>
-                        ) : workspaceState.conversations.length === 0 ? (
-                          <div className="text-sm text-slate-400">No recent conversations yet.</div>
-                        ) : (
-                          workspaceState.conversations.slice(0, 3).map((conversation) => (
-                            <button
-                              key={conversation.id}
-                              onClick={() => onOpenOperationsPage?.('conversations', { agentId: activeWorkspaceAgent.id })}
-                              className="w-full text-left rounded-xl border border-white/10 bg-slate-950/30 px-3 py-2 hover:bg-slate-950/50 transition-colors"
-                            >
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="text-sm font-medium text-white truncate">{conversation.topic}</div>
-                                <span className="text-[11px] text-slate-500">{new Date(conversation.timestamp).toLocaleString()}</span>
-                              </div>
-                              <div className="text-xs text-slate-400 mt-1 line-clamp-2">{conversation.preview}</div>
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Risk signals</div>
-                          <div className="text-sm text-slate-400 mt-1">Current operational risk, driven by incidents and controls.</div>
-                        </div>
-                        {workspaceState.loadingIncidents ? <Loader2 className="w-4 h-4 animate-spin text-slate-400" /> : <AlertTriangle className="w-4 h-4 text-amber-300" />}
-                      </div>
-                      <div className="mt-4 grid grid-cols-2 gap-3">
-                        <div className="rounded-xl border border-white/10 bg-slate-950/30 px-3 py-3">
-                          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Open incidents</div>
-                          <div className="text-2xl font-semibold text-white mt-2">{openIncidentCount}</div>
-                        </div>
-                        <div className="rounded-xl border border-white/10 bg-slate-950/30 px-3 py-3">
-                          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Critical</div>
-                          <div className="text-2xl font-semibold text-white mt-2">{criticalIncidentCount}</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Latest incident</div>
-                      {workspaceState.incidentsError ? (
-                        <div className="text-sm text-rose-200 mt-3">{workspaceState.incidentsError}</div>
-                      ) : workspaceState.incidents.length === 0 ? (
-                        <div className="text-sm text-slate-400 mt-3">No incidents recorded for this agent.</div>
-                      ) : (
-                        <div className="mt-3 rounded-xl border border-white/10 bg-slate-950/30 px-3 py-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="text-sm font-medium text-white">{workspaceState.incidents[0].title}</div>
-                            <span className={`text-[11px] px-2 py-0.5 rounded-full border ${
-                              workspaceState.incidents[0].severity === 'critical'
-                                ? 'border-rose-400/20 bg-rose-400/10 text-rose-100'
-                                : workspaceState.incidents[0].severity === 'high'
-                                  ? 'border-orange-400/20 bg-orange-400/10 text-orange-100'
-                                  : workspaceState.incidents[0].severity === 'medium'
-                                    ? 'border-amber-400/20 bg-amber-400/10 text-amber-100'
-                                    : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
-                            }`}>
-                              {workspaceState.incidents[0].severity}
-                            </span>
-                          </div>
-                          <div className="text-xs text-slate-500 mt-2">{new Date(workspaceState.incidents[0].createdAt).toLocaleString()} • {workspaceState.incidents[0].status}</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                  <h3 className="text-sm font-semibold text-white">Next best action</h3>
-                  <p className="text-sm text-slate-400 mt-1">
-                    Keep setup simple: choose where this agent should work, connect the provider, then supervise everything from here.
-                  </p>
-                  <button
-                    onClick={() => onPublishAgent?.(activeWorkspaceAgent, activeWorkspaceAgent.primaryPack || null)}
-                    className="mt-4 w-full rounded-xl bg-blue-500/20 border border-blue-400/30 px-4 py-3 text-sm font-semibold text-blue-100 hover:bg-blue-500/25"
-                  >
-                    {activeWorkspaceAgent.connectedTargets?.length ? 'Connect another channel' : 'Publish this agent'}
-                  </button>
-                </div>
-              </div>
-
-              {suggestedApps.length > 0 && (
-                <div className="mt-4 rounded-2xl border border-violet-400/15 bg-violet-500/[0.04] p-5">
-                  <div className="flex items-center justify-between gap-3 mb-4">
-                    <div className="flex items-center gap-2">
-                      <ShoppingBag className="w-4 h-4 text-violet-300" />
-                      <h3 className="text-sm font-semibold text-white">Suggested Apps</h3>
-                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-violet-500/20 border border-violet-400/20 text-violet-300">
-                        For this agent
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => onOpenOperationsPage?.('marketplace')}
-                      className="text-xs font-semibold text-violet-300 hover:text-violet-100 transition-colors inline-flex items-center gap-1"
-                    >
-                      Browse all
-                      <Zap className="w-3 h-3" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {suggestedApps.map((app) => (
-                      <div
-                        key={app.id}
-                        className="rounded-xl border border-white/10 bg-white/[0.03] p-4 flex flex-col gap-2"
-                      >
-                        <div className="flex items-center gap-2">
-                          {app.logoUrl ? (
-                            <img src={app.logoUrl} alt={app.name} className="w-6 h-6 rounded object-contain" />
-                          ) : (
-                            <div className="w-6 h-6 rounded bg-white/10 flex items-center justify-center">
-                              <ShoppingBag className="w-3 h-3 text-slate-400" />
-                            </div>
-                          )}
-                          <span className="text-sm font-medium text-white truncate">{app.name}</span>
-                        </div>
-                        <p className="text-xs text-slate-400 line-clamp-2">{app.description}</p>
-                        {app.setupTimeMinutes && (
-                          <span className="text-[11px] text-slate-500">⏱ {app.setupTimeMinutes} min setup</span>
-                        )}
-                        <button
-                          onClick={() => onOpenOperationsPage?.('marketplace')}
-                          className="mt-auto pt-2 text-xs font-semibold text-violet-300 hover:text-violet-100 transition-colors text-left inline-flex items-center gap-1"
-                        >
-                          Add to workspace →
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>) : null}
+              <Suspense fallback={lazyFallback}>
+                <WorkspaceOverviewSection
+                  activeWorkspaceAgent={activeWorkspaceAgent}
+                  conversations={workspaceState.conversations}
+                  conversationsError={workspaceState.conversationsError}
+                  incidents={workspaceState.incidents}
+                  incidentsError={workspaceState.incidentsError}
+                  openIncidentCount={openIncidentCount}
+                  criticalIncidentCount={criticalIncidentCount}
+                  suggestedApps={suggestedApps}
+                  onPublishAgent={onPublishAgent}
+                  onOpenOperationsPage={onOpenOperationsPage}
+                  onOpenWorkspaceTab={(tab) => setWorkspaceTab(tab)}
+                />
+              </Suspense>
+            ) : null}
 
             {workspaceTab === 'conversations' ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-4">
-                  <h3 className="text-sm font-semibold text-white">Recent conversations</h3>
-                  <button
-                    onClick={() => onOpenOperationsPage?.('conversations', { agentId: activeWorkspaceAgent.id })}
-                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10 inline-flex items-center gap-1.5"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    Open full inbox
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 gap-3">
-                  {workspaceState.loadingConversations ? (
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-slate-300 inline-flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading recent conversations...
-                    </div>
-                  ) : workspaceState.conversationsError ? (
-                    <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-5 text-rose-100">
-                      {workspaceState.conversationsError}
-                    </div>
-                  ) : workspaceState.conversations.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-5 text-sm text-slate-400">
-                      No conversations recorded for this agent yet.
-                    </div>
-                  ) : (
-                    workspaceState.conversations.map((conversation) => (
-                      <div key={conversation.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="text-sm font-semibold text-white truncate">{conversation.topic}</h4>
-                              <span className="text-[11px] px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-slate-300">
-                                {conversation.status}
-                              </span>
-                              <span className="text-[11px] px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-slate-300">
-                                {conversation.platform}
-                              </span>
-                            </div>
-                            <div className="mt-2 text-xs text-slate-500 inline-flex items-center gap-1">
-                              <Clock3 className="w-3.5 h-3.5" />
-                              {new Date(conversation.timestamp).toLocaleString()} • {conversation.user}
-                            </div>
-                            <p className="mt-3 text-sm text-slate-300 line-clamp-3">{conversation.preview}</p>
-                          </div>
-                          <button
-                            onClick={() => onOpenOperationsPage?.('conversations', { agentId: activeWorkspaceAgent.id })}
-                            className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10"
-                          >
-                            Review
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+              <Suspense fallback={lazyFallback}>
+                <WorkspaceConversationsSection
+                  agentId={activeWorkspaceAgent.id}
+                  conversations={workspaceState.conversations}
+                  conversationsError={workspaceState.conversationsError}
+                  loadingConversations={workspaceState.loadingConversations}
+                  onOpenOperationsPage={onOpenOperationsPage}
+                />
+              </Suspense>
             ) : null}
 
             {workspaceTab === 'integrations' ? (
-              <div className="space-y-4">
-                {/* Header */}
-                <div className="flex items-center justify-between gap-4">
-                  <h3 className="text-sm font-semibold text-white">Where this agent works</h3>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => onOpenOperationsPage?.(`apps?agentId=${activeWorkspaceAgent.id}`)}
-                      className="rounded-xl bg-violet-500/15 border border-violet-400/25 px-3 py-1.5 text-xs font-semibold text-violet-200 hover:bg-violet-500/25 inline-flex items-center gap-1.5"
-                    >
-                      <ShoppingBag className="w-3.5 h-3.5" />
-                      Connect data sources
-                    </button>
-                    <button
-                      onClick={() => void openAddIntegrationPanel(activeWorkspaceAgent)}
-                      className="rounded-xl bg-blue-500/20 border border-blue-400/30 px-3 py-1.5 text-xs font-semibold text-blue-100 hover:bg-blue-500/25 inline-flex items-center gap-1.5"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Connect a channel
-                    </button>
-                  </div>
-                </div>
-
-                {/* Publish checklist */}
-                {activeWorkspaceAgent.publishStatus !== 'live' && (() => {
-                  const checklist = getPublishChecklist(activeWorkspaceAgent);
-                  const allGreen = checklist.every((c) => c.ok);
-                  return (
-                    <div className={`rounded-2xl border p-4 ${allGreen ? 'border-emerald-400/20 bg-emerald-400/[0.06]' : 'border-amber-400/20 bg-amber-400/[0.06]'}`}>
-                      <p className={`text-xs font-semibold uppercase tracking-[0.16em] mb-3 ${allGreen ? 'text-emerald-300' : 'text-amber-300'}`}>
-                        {allGreen ? 'Ready to go live' : 'Before going live'}
-                      </p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {checklist.map((item) => (
-                          <div key={item.label} className="flex items-center gap-2">
-                            {item.ok
-                              ? <CheckCircle className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                              : <XCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
-                            <span className={`text-xs ${item.ok ? 'text-slate-300' : 'text-slate-400'}`}>{item.label}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Connected targets */}
-                {(activeWorkspaceAgent.connectedTargets || []).length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6">
-                    <div className="flex items-start gap-3">
-                      <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-slate-200 mb-1">What is publishing?</p>
-                        <p className="text-xs text-slate-400 mb-3">Publishing connects your agent to a channel — like Slack or email — so it can send and receive real messages. Think of it as giving your agent a "phone number" to reach your team or customers.</p>
-                        <button
-                          onClick={() => onPublishAgent?.(activeWorkspaceAgent, activeWorkspaceAgent.primaryPack || null)}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/15 border border-blue-400/30 text-blue-300 text-xs font-semibold hover:bg-blue-500/25 transition-colors"
-                        >
-                          <Link2 className="w-3.5 h-3.5" />
-                          Connect a channel
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {(activeWorkspaceAgent.connectedTargets || []).map((target) => {
-                      const actionsForService = availableIntegrations.find((i) => i.id === target.integrationId)?.capabilities?.writes || [];
-                      const isExpanded = expandedActions.has(target.integrationId);
-                      return (
-                        <div key={target.integrationId} className="rounded-2xl border border-white/10 bg-white/[0.03]">
-                          {/* Card header */}
-                          <div className="flex items-center justify-between gap-3 p-4">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${target.status === 'connected' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                              <div>
-                                <h4 className="font-semibold text-white text-sm">{target.integrationName}</h4>
-                                <p className="text-xs text-slate-500 mt-0.5">
-                                  {target.packId} · {target.lastSyncAt ? `synced ${new Date(target.lastSyncAt).toLocaleDateString()}` : 'no sync yet'}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
-                                target.status === 'connected'
-                                  ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
-                                  : 'border-amber-400/20 bg-amber-400/10 text-amber-200'
-                              }`}>{target.status}</span>
-                              <button
-                                onClick={() => setExpandedActions((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(target.integrationId)) { next.delete(target.integrationId); }
-                                  else {
-                                    next.add(target.integrationId);
-                                    void api.integrations.getActionCatalog().then((res) => {
-                                      if (res.success && Array.isArray(res.data)) setActionCatalog(res.data as any[]);
-                                    });
-                                    void api.integrations.getAll().then((res) => {
-                                      if (res.success && Array.isArray(res.data)) setAvailableIntegrations((res.data as any[]).filter((i: any) => i.status === 'connected'));
-                                    });
-                                  }
-                                  return next;
-                                })}
-                                className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-400 hover:text-white hover:bg-white/10 inline-flex items-center gap-1"
-                              >
-                                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                                Actions
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Action mapper — expandable */}
-                          {isExpanded && (
-                            <div className="border-t border-white/10 px-4 py-3">
-                              {actionsForService.length === 0 ? (
-                                <p className="text-xs text-slate-500">No configurable actions for this integration.</p>
-                              ) : (
-                                <div className="space-y-2">
-                                  <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500 mb-2">Enabled actions</p>
-                                  {actionsForService.map((write: { id: string; label: string; risk: string }) => {
-                                    const catalogEntry = actionCatalog.find((a) => a.service === target.integrationId && a.action === write.id);
-                                    const enabled = catalogEntry ? catalogEntry.enabled : false;
-                                    const key = `${target.integrationId}:${write.id}`;
-                                    const riskColors: Record<string, string> = { low: 'text-slate-400', medium: 'text-amber-400', high: 'text-rose-400', money: 'text-orange-400' };
-                                    return (
-                                      <div key={write.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/30 px-3 py-2">
-                                        <div>
-                                          <span className="text-xs text-white">{write.label}</span>
-                                          <span className={`ml-2 text-[10px] ${riskColors[write.risk] || 'text-slate-500'}`}>{write.risk} risk</span>
-                                        </div>
-                                        <button
-                                          onClick={() => void toggleIntegrationAction(target.integrationId, write.id, enabled)}
-                                          disabled={savingAction === key}
-                                          className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${enabled ? 'bg-cyan-500' : 'bg-slate-700'} ${savingAction === key ? 'opacity-50' : ''}`}
-                                        >
-                                          <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0'}`} />
-                                        </button>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Card footer actions */}
-                          <div className="border-t border-white/10 px-4 py-3 flex items-center gap-2">
-                            <button
-                              onClick={() => {
-                                if (!window.confirm(`Disconnecting ${target.integrationName} will stop this agent from sending and receiving messages through it. Continue?`)) return;
-                                void runAgentAction(
-                                  activeWorkspaceAgent.id,
-                                  `disconnect:${target.integrationId}`,
-                                  async () => {
-                                    const disconnect = await api.integrations.disconnect(target.integrationId);
-                                    if (!disconnect.success) return disconnect;
-                                    await removeIntegration(activeWorkspaceAgent, target.integrationId);
-                                    return { success: true, data: { id: activeWorkspaceAgent.id } };
-                                  },
-                                  `${target.integrationName} disconnected.`
-                                );
-                              }}
-                              className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-1.5 text-xs font-semibold text-rose-100 hover:bg-rose-400/15"
-                              disabled={actionBusy === `disconnect:${target.integrationId}`}
-                            >
-                              {actionBusy === `disconnect:${target.integrationId}` ? 'Disconnecting…' : 'Disconnect'}
-                            </button>
-                            {activeWorkspaceAgent.publishStatus !== 'live' ? (
-                              <button
-                                onClick={() => void runAgentAction(
-                                  activeWorkspaceAgent.id,
-                                  `live:${activeWorkspaceAgent.id}`,
-                                  () => api.agents.goLive(activeWorkspaceAgent.id),
-                                  `${activeWorkspaceAgent.name} is now live.`
-                                )}
-                                className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/15 inline-flex items-center gap-1.5"
-                                disabled={actionBusy === `live:${activeWorkspaceAgent.id}`}
-                              >
-                                <Play className="w-3 h-3" />
-                                {actionBusy === `live:${activeWorkspaceAgent.id}` ? 'Going live…' : 'Go live'}
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Add Integration slide-over panel */}
-                {showAddIntegration && (
-                  <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowAddIntegration(false)}>
-                    <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-white/10">
-                        <div>
-                          <p className="font-semibold text-white text-sm">Connect a channel</p>
-                          <p className="text-xs text-slate-400 mt-0.5">Assign a connected provider to this agent</p>
-                        </div>
-                        <button onClick={() => setShowAddIntegration(false)} className="text-slate-400 hover:text-white">
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <div className="p-4 max-h-80 overflow-y-auto">
-                        {addIntegrationLoading ? (
-                          <div className="flex items-center justify-center py-8 gap-2 text-slate-400">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span className="text-sm">Loading integrations…</span>
-                          </div>
-                        ) : availableIntegrations.length === 0 ? (
-                          <div className="py-6 px-2 text-center space-y-3">
-                            <p className="text-sm text-slate-300 font-medium">No providers connected yet</p>
-                            <p className="text-xs text-slate-400 leading-relaxed">Connect Slack, email, or another service first — then come back here to assign it to this agent.</p>
-                            <button
-                              onClick={() => { setShowAddIntegration(false); onPublishAgent?.(activeWorkspaceAgent, activeWorkspaceAgent.primaryPack || null); }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/15 border border-blue-400/30 text-blue-300 text-xs font-semibold hover:bg-blue-500/25 transition-colors"
-                            >
-                              <Link2 className="w-3.5 h-3.5" />
-                              Go to Integration Hub →
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            {availableIntegrations.map((integration) => {
-                              const alreadyAssigned = (activeWorkspaceAgent.integrationIds || []).includes(integration.id);
-                              return (
-                                <div key={integration.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
-                                  <div>
-                                    <p className="text-sm font-medium text-white">{integration.name}</p>
-                                    <p className="text-xs text-slate-500 mt-0.5 uppercase tracking-wider">{integration.category}</p>
-                                  </div>
-                                  {alreadyAssigned ? (
-                                    <span className="text-xs text-emerald-400 font-medium">Assigned</span>
-                                  ) : (
-                                    <button
-                                      onClick={() => void assignIntegration(activeWorkspaceAgent, integration.id)}
-                                      className="rounded-lg bg-cyan-500/20 border border-cyan-400/30 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/30"
-                                    >
-                                      Assign
-                                    </button>
-                                  )}
-                                </div>
-                              );
-                            })}
-                            <div className="pt-2 border-t border-white/10 text-center">
-                              <button
-                                onClick={() => { setShowAddIntegration(false); onPublishAgent?.(activeWorkspaceAgent, activeWorkspaceAgent.primaryPack || null); }}
-                                className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
-                              >
-                                Don't see what you need? <span className="underline">Connect a new provider →</span>
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <Suspense fallback={lazyFallback}>
+                <WorkspaceIntegrationsSection
+                  activeWorkspaceAgent={activeWorkspaceAgent}
+                  availableIntegrations={availableIntegrations}
+                  setAvailableIntegrations={setAvailableIntegrations}
+                  addIntegrationLoading={addIntegrationLoading}
+                  showAddIntegration={showAddIntegration}
+                  setShowAddIntegration={setShowAddIntegration}
+                  expandedActions={expandedActions}
+                  setExpandedActions={setExpandedActions}
+                  actionCatalog={actionCatalog}
+                  setActionCatalog={setActionCatalog}
+                  savingAction={savingAction}
+                  actionBusy={actionBusy}
+                  getPublishChecklist={getPublishChecklist}
+                  openAddIntegrationPanel={openAddIntegrationPanel}
+                  assignIntegration={assignIntegration}
+                  removeIntegration={removeIntegration}
+                  toggleIntegrationAction={toggleIntegrationAction}
+                  runAgentAction={runAgentAction}
+                  onPublishAgent={onPublishAgent}
+                  onOpenOperationsPage={onOpenOperationsPage}
+                />
+              </Suspense>
             ) : null}
 
             {workspaceTab === 'policies' ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-4">
-                  <h3 className="text-sm font-semibold text-white">Persona and policy controls</h3>
-                  <button
-                    onClick={() => onOpenOperationsPage?.('persona', { agentId: activeWorkspaceAgent.id })}
-                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10"
-                  >
-                    Open full editor
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                    <label className="block">
-                      <div className="text-sm font-semibold text-white">System prompt</div>
-                      <div className="text-sm text-slate-400 mt-1">Primary instructions that define how this agent should behave.</div>
-                      <textarea
-                        value={policyDraft.systemPrompt}
-                        onChange={(e) => setPolicyDraft((current) => ({ ...current, systemPrompt: e.target.value }))}
-                        rows={12}
-                        className="mt-4 w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                        placeholder="Describe the role, tone, escalation triggers, and hard constraints for this agent."
-                      />
-                    </label>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                    <label className="block">
-                      <div className="text-sm font-semibold text-white">Operational policy</div>
-                      <div className="text-sm text-slate-400 mt-1">Plain-English rules for approvals, refunds, escalations, or anything this agent must never do.</div>
-                      <textarea
-                        value={policyDraft.operationalPolicy}
-                        onChange={(e) => setPolicyDraft((current) => ({ ...current, operationalPolicy: e.target.value }))}
-                        rows={12}
-                        className="mt-4 w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                        placeholder="Example: Refunds above $100 require human approval. Escalate legal threats immediately. Never promise timelines not in policy."
-                      />
-                    </label>
-                  </div>
-                </div>
-                <div className="flex justify-end">
-                  <button
-                    onClick={() => void saveWorkspacePolicies()}
-                    disabled={policySaving}
-                    className="rounded-xl bg-blue-500/20 border border-blue-400/30 px-4 py-2 text-sm font-semibold text-blue-100 hover:bg-blue-500/25 disabled:opacity-60 inline-flex items-center gap-2"
-                  >
-                    {policySaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
-                    Save policy changes
-                  </button>
-                </div>
-              </div>
+              <Suspense fallback={lazyFallback}>
+                <WorkspacePoliciesSection
+                  agentId={activeWorkspaceAgent.id}
+                  policyDraft={policyDraft}
+                  setPolicyDraft={setPolicyDraft}
+                  policySaving={policySaving}
+                  saveWorkspacePolicies={saveWorkspacePolicies}
+                  onOpenOperationsPage={onOpenOperationsPage}
+                />
+              </Suspense>
             ) : null}
 
             {workspaceTab === 'analytics' ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-4">
-                  <h3 className="text-sm font-semibold text-white">Usage and effectiveness</h3>
-                  <button
-                    onClick={() => onOpenOperationsPage?.('costs', { agentId: activeWorkspaceAgent.id })}
-                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10 inline-flex items-center gap-1.5"
-                  >
-                    <BarChart3 className="w-3.5 h-3.5" />
-                    Open analytics
-                  </button>
-                </div>
-                {workspaceState.loadingAnalytics ? (
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-slate-300 inline-flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Loading analytics...
-                  </div>
-                ) : workspaceState.analyticsError ? (
-                  <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-5 text-rose-100">
-                    {workspaceState.analyticsError}
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                        <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Total spend</div>
-                        <div className="mt-3 text-2xl font-semibold text-white">${(workspaceState.analytics?.totalCost || 0).toFixed(2)}</div>
-                      </div>
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                        <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Requests</div>
-                        <div className="mt-3 text-2xl font-semibold text-white">{(workspaceState.analytics?.totalRequests || 0).toLocaleString()}</div>
-                      </div>
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                        <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Tokens</div>
-                        <div className="mt-3 text-2xl font-semibold text-white">{(workspaceState.analytics?.totalTokens || 0).toLocaleString()}</div>
-                      </div>
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                        <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Avg cost / request</div>
-                        <div className="mt-3 text-2xl font-semibold text-white">${(workspaceState.analytics?.avgCostPerRequest || 0).toFixed(4)}</div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                        <div className="text-sm font-semibold text-white">7-day trend</div>
-                        <div className="text-sm text-slate-400 mt-1">Recent daily spend and request activity for this agent.</div>
-                        <div className="mt-4 space-y-3">
-                          {(workspaceState.analytics?.trend || []).length === 0 ? (
-                            <div className="text-sm text-slate-400">No recent trend data available.</div>
-                          ) : (
-                            (workspaceState.analytics?.trend || []).map((point) => (
-                              <div key={point.date} className="grid grid-cols-[120px_1fr_auto] items-center gap-3">
-                                <div className="text-xs text-slate-500">{point.date}</div>
-                                <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
-                                  <div
-                                    className="h-full rounded-full bg-cyan-400"
-                                    style={{ width: `${Math.min(100, (point.cost / Math.max(...((workspaceState.analytics?.trend || []).map((item) => item.cost || 0)), 1)) * 100)}%` }}
-                                  />
-                                </div>
-                                <div className="text-xs text-slate-300">${point.cost.toFixed(2)} • {point.requests} req</div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                        <div className="text-sm font-semibold text-white">Efficiency snapshot</div>
-                        <div className="text-sm text-slate-400 mt-1">Quick read on cost posture and usage intensity.</div>
-                        <div className="mt-4 space-y-3">
-                          <div className="rounded-xl border border-white/10 bg-slate-950/30 px-4 py-3">
-                            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Daily average spend</div>
-                            <div className="text-lg font-semibold text-white mt-2">${(workspaceState.analytics?.dailyAverage || 0).toFixed(2)}</div>
-                          </div>
-                          <div className="rounded-xl border border-white/10 bg-slate-950/30 px-4 py-3">
-                            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Budget usage</div>
-                            <div className="text-lg font-semibold text-white mt-2">
-                              {activeWorkspaceAgent.budget_limit > 0
-                                ? `${Math.min(100, Math.round(((activeWorkspaceAgent.current_spend || 0) / activeWorkspaceAgent.budget_limit) * 100))}% of budget`
-                                : 'No budget cap set'}
-                            </div>
-                          </div>
-                          <div className="rounded-xl border border-white/10 bg-slate-950/30 px-4 py-3">
-                            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Customer satisfaction</div>
-                            <div className="text-lg font-semibold text-white mt-2">{activeWorkspaceAgent.satisfaction}%</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
+              <Suspense fallback={lazyFallback}>
+                <WorkspaceAnalyticsSection
+                  activeWorkspaceAgent={activeWorkspaceAgent}
+                  analytics={workspaceState.analytics}
+                  analyticsError={workspaceState.analyticsError}
+                  loadingAnalytics={workspaceState.loadingAnalytics}
+                  onOpenOperationsPage={onOpenOperationsPage}
+                />
+              </Suspense>
             ) : null}
 
             {workspaceTab === 'compliance' ? (

@@ -1318,12 +1318,11 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
           {/* Setup progress bar — slim sticky bar shown during onboarding */}
           {showSetupProgress && (() => {
             const steps = [
-              true,                                                                                          // workspace ready
-              (coverageStatus?.apiKeys?.total ?? 0) > 0,                                                   // api key created
+              true,                                                                                          // workspace checked
               agents.length > 0,                                                                             // agent created
               integrationRows.some(r => r.status === 'connected' || r.lifecycleStatus === 'connected'),    // app connected
               coverageStatus?.telemetry?.gatewayObserved === true,                                         // test request sent
-              coverageStatus?.telemetry?.gatewayObserved === true,                                         // coverage verified
+              coverageStatus?.telemetry?.gatewayObserved === true,                                         // insight confirmed
             ];
             const done = steps.filter(Boolean).length;
             const total = steps.length;

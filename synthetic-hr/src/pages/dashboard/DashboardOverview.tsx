@@ -188,6 +188,8 @@ export default function DashboardOverview({
 
   // Morning Briefing — show once per calendar day per org
   const orgScope = user?.organizationName || 'workspace';
+  const onboardingCompletedKey = `synthetic_hr_onboarding_completed:${orgScope}`;
+  const onboardingCompleted = typeof window !== 'undefined' ? Boolean(localStorage.getItem(onboardingCompletedKey)) : false;
   const briefingKey = `${STORAGE_KEYS.MORNING_BRIEFING_DATE}:${orgScope}`;
   const todayStr = new Date().toISOString().slice(0, 10);
   const [showBriefing, setShowBriefing] = useState<boolean>(() => {
@@ -300,7 +302,7 @@ const hasData = agents.length > 0;
       <div className="space-y-8">
         <div>
           <h1 className="text-3xl font-bold text-white">Overview</h1>
-          <p className="mt-2 text-slate-400">Your command center wakes up after the first governed agent is added.</p>
+          <p className="mt-2 text-slate-400">Your command center becomes useful after the first agent is connected and one tracked request has been observed.</p>
         </div>
 
         <div className="rounded-[28px] border border-white/10 bg-white/[0.04] backdrop-blur-xl p-12 text-center shadow-[0_18px_60px_rgba(2,6,23,0.25)]">
@@ -309,15 +311,24 @@ const hasData = agents.length > 0;
           </div>
           <h2 className="mb-4 text-2xl font-bold text-white">No governed agents yet</h2>
           <p className="mx-auto mb-8 max-w-md text-slate-400">
-            Add your first agent to unlock live risk, spend, reliability, and incident telemetry across the overview.
+            Start guided setup to connect one agent, connect one app, run one safe test, and unlock live risk, spend, reliability, and incident telemetry.
           </p>
-          <button
-            onClick={onAddAgent}
-            className="btn-primary"
-          >
-            <Bot className="h-5 w-5" />
-            Add your first agent
-          </button>
+          <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <button
+              onClick={() => onNavigate?.('getting-started')}
+              className="btn-primary"
+            >
+              <Sparkles className="h-5 w-5" />
+              Start guided setup
+            </button>
+            <button
+              onClick={onAddAgent}
+              className="btn-secondary"
+            >
+              <Bot className="h-5 w-5" />
+              Add your first agent
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -448,6 +459,15 @@ const hasData = agents.length > 0;
   ];
 
   const actionQueue = [
+    !onboardingCompleted
+      ? {
+        id: 'setup-guided',
+        title: 'Finish guided setup',
+        description: 'Connect one app, run one test, and confirm the first tracked request so the workspace starts with real signal.',
+        tone: 'info' as const,
+        action: () => onNavigate?.('getting-started'),
+      }
+      : null,
     severeIncidents.length > 0
       ? {
         id: 'incidents-critical',
@@ -476,6 +496,12 @@ const hasData = agents.length > 0;
       }
       : null,
   ].filter(Boolean) as Array<{ id: string; title: string; description: string; tone: 'warn' | 'risk' | 'info'; action: () => void }>;
+  const primaryAction = actionQueue[0] ?? null;
+  const primaryActionLabel = primaryAction?.tone === 'risk'
+    ? 'Urgent'
+    : primaryAction?.tone === 'warn'
+      ? 'Needs attention'
+      : 'Recommended next step';
 
   const healthLabel = heroTone === 'risk' ? 'INCIDENT ACTIVE' : heroTone === 'warn' ? 'MONITORING' : 'SYSTEM HEALTHY';
   const healthClasses = heroTone === 'risk'
@@ -507,6 +533,34 @@ const hasData = agents.length > 0;
 
   return (
     <div className="space-y-8">
+      {primaryAction && (
+        <section className="rounded-[28px] border border-cyan-500/20 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_45%),rgba(8,47,73,0.45)] p-5 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-300">{primaryActionLabel}</p>
+              <h2 className="mt-2 text-xl font-bold text-white">{primaryAction.title}</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-300">{primaryAction.description}</p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={primaryAction.action}
+                className="btn-primary px-4 py-2.5 text-sm"
+              >
+                {primaryAction.title}
+              </button>
+              {!onboardingCompleted && (
+                <button
+                  onClick={() => onNavigate?.('agents')}
+                  className="btn-secondary px-4 py-2.5 text-sm"
+                >
+                  Open agents
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Ambient system health bar */}
       <motion.div
         className="h-0.5 rounded-full -mt-2 mb-0"
