@@ -4,6 +4,7 @@ import { SupabaseRestError, supabaseRest } from './supabase-rest';
 type Requirement = {
   table: string;
   columns: string[];
+  optionalColumns?: string[];
 };
 
 type CompatibilityResult = {
@@ -30,7 +31,8 @@ const REQUIRED_CONTRACTS: Requirement[] = [
   },
   {
     table: 'connector_action_executions',
-    columns: ['id', 'organization_id', 'connector_id', 'action', 'success', 'idempotency_key', 'requested_by', 'policy_snapshot', 'created_at'],
+    columns: ['id', 'organization_id', 'connector_id', 'action', 'success', 'created_at'],
+    optionalColumns: ['idempotency_key', 'requested_by', 'policy_snapshot', 'before_state', 'after_state', 'remediation'],
   },
   {
     table: 'connector_retry_queue',
@@ -67,6 +69,7 @@ async function checkTableColumn(table: string, column: string): Promise<{ ok: tr
 
 export async function verifySchemaCompatibility(): Promise<CompatibilityResult> {
   const missing: CompatibilityResult['missing'] = [];
+  const optionalMissing: CompatibilityResult['missing'] = [];
 
   for (const requirement of REQUIRED_CONTRACTS) {
     // Quick table existence probe first.
@@ -84,8 +87,8 @@ export async function verifySchemaCompatibility(): Promise<CompatibilityResult> 
       continue;
     }
 
-    const checks = await Promise.all(requirement.columns.map((column) => checkTableColumn(requirement.table, column)));
-    checks.forEach((check, idx) => {
+    const requiredChecks = await Promise.all(requirement.columns.map((column) => checkTableColumn(requirement.table, column)));
+    requiredChecks.forEach((check, idx) => {
       if (!check.ok) {
         missing.push({
           table: requirement.table,
@@ -93,6 +96,30 @@ export async function verifySchemaCompatibility(): Promise<CompatibilityResult> 
           reason: check.reason,
         });
       }
+    });
+
+    const optionalColumns = requirement.optionalColumns || [];
+    if (optionalColumns.length > 0) {
+      const optionalChecks = await Promise.all(optionalColumns.map((column) => checkTableColumn(requirement.table, column)));
+      optionalChecks.forEach((check, idx) => {
+        if (!check.ok) {
+          optionalMissing.push({
+            table: requirement.table,
+            column: optionalColumns[idx],
+            reason: check.reason,
+          });
+        }
+      });
+    }
+  }
+
+  if (optionalMissing.length > 0) {
+    logger.warn('Schema compatibility optional columns are missing (backward-compatible mode)', {
+      missing_optional_contracts: optionalMissing.map((item) => ({
+        table: item.table,
+        column: item.column,
+        reason: item.reason,
+      })),
     });
   }
 
@@ -121,4 +148,3 @@ export async function runSchemaCompatibilityCheck(): Promise<void> {
     `Schema compatibility check failed for ${result.missing.length} contract item(s). Apply latest DB migrations before starting API.`,
   );
 }
-
