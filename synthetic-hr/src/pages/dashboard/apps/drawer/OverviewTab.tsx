@@ -213,6 +213,40 @@ export function OverviewTab({ app, agentNames, onConfigure: _onConfigure, onDisc
       {/* Integration-specific: token expiry + checklist */}
       {app.source === 'integration' && row && (
         <>
+          <div className={cn(
+            'rounded-xl border px-4 py-3',
+            app.status === 'error' || app.status === 'expired'
+              ? 'border-rose-400/20 bg-rose-500/[0.05]'
+              : app.status === 'syncing'
+                ? 'border-amber-400/20 bg-amber-500/[0.05]'
+                : 'border-emerald-400/15 bg-emerald-500/[0.04]'
+          )}>
+            <p className="text-xs font-semibold text-slate-400 mb-1">Reliability state</p>
+            <p className={cn(
+              'text-xs',
+              app.status === 'error' || app.status === 'expired'
+                ? 'text-rose-300'
+                : app.status === 'syncing'
+                  ? 'text-amber-300'
+                  : 'text-emerald-300'
+            )}>
+              {app.status === 'error'
+                ? 'Degraded'
+                : app.status === 'expired'
+                  ? 'Credentials expired'
+                  : app.status === 'syncing'
+                    ? 'Syncing'
+                    : 'Healthy'}
+              {row.lastErrorMsg ? ` · ${row.lastErrorMsg}` : ''}
+            </p>
+            <p className="mt-2 text-[11px] text-slate-300">
+              {app.status === 'error' || app.status === 'expired'
+                ? 'Resolve the connector issue before trusting blocked or retried actions to complete cleanly.'
+                : app.status === 'syncing'
+                  ? 'Wait for sync to settle before treating retries or delayed actions as final.'
+                  : 'Connection health is stable. Governed action outcomes are more likely to reflect policy, not rail instability.'}
+            </p>
+          </div>
           {row.tokenExpiresAt && (
             <div className={cn('rounded-xl border px-4 py-3', row.tokenExpired || row.tokenExpiresSoon ? 'border-amber-400/20 bg-amber-500/[0.05]' : 'border-white/8 bg-white/[0.02]')}>
               <p className="text-xs font-semibold text-slate-400 mb-1">Token Expiry</p>

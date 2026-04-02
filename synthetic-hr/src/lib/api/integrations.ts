@@ -266,6 +266,7 @@ export const integrationsApi = {
     service: string;
     status: string;
     last_error_msg: string | null;
+    last_error_at?: string | null;
     last_tested_at: string | null;
     last_test_result: string | null;
   }>>> {

@@ -199,6 +199,13 @@ export default function GovernedActionsPage({
 }) {
   const [actions, setActions] = useState<GovernedAction[]>([]);
   const [approvalsById, setApprovalsById] = useState<Record<string, ApprovalRequest>>({});
+  const [healthByService, setHealthByService] = useState<Record<string, {
+    status: string;
+    last_error_msg: string | null;
+    last_error_at?: string | null;
+    last_tested_at: string | null;
+    last_test_result: string | null;
+  }>>({});
   const [loading, setLoading] = useState(true);
   const [actingApprovalId, setActingApprovalId] = useState<string | null>(null);
   const [decisionNotes, setDecisionNotes] = useState<Record<string, string>>({});
@@ -208,7 +215,7 @@ export default function GovernedActionsPage({
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [actionsRes, approvalsRes] = await Promise.all([
+    const [actionsRes, approvalsRes, healthRes] = await Promise.all([
       api.integrations.getGovernedActions({
         ...(decision !== 'all' ? { decision } : {}),
         ...(source !== 'all' ? { source } : {}),
@@ -216,6 +223,7 @@ export default function GovernedActionsPage({
         limit: 100,
       }),
       api.approvals.list({ status: 'pending', limit: 200 }),
+      api.integrations.getHealthSummary(),
     ]);
     if (actionsRes.success) {
       setActions((actionsRes.data as GovernedAction[]) || []);
@@ -227,6 +235,13 @@ export default function GovernedActionsPage({
       setApprovalsById(next);
     } else {
       setApprovalsById({});
+    }
+    if (healthRes.success) {
+      setHealthByService(
+        Object.fromEntries(((healthRes.data as Array<any>) || []).map((item) => [item.service, item])),
+      );
+    } else {
+      setHealthByService({});
     }
     setLoading(false);
   }, [decision, service, source]);
@@ -392,6 +407,7 @@ export default function GovernedActionsPage({
             const approvalId = item.approval_id;
             const jobId = governance?.job_id ?? null;
             const approval = approvalId ? approvalsById[approvalId] : undefined;
+            const health = healthByService[item.connector_id];
             const approvalRole = approval?.required_role || governance?.required_role || 'viewer';
             const roleAllowed = approvalRole in ROLE_ORDER && currentRole
               ? ROLE_ORDER[currentRole as keyof typeof ROLE_ORDER] >= ROLE_ORDER[approvalRole as keyof typeof ROLE_ORDER]
@@ -406,6 +422,8 @@ export default function GovernedActionsPage({
                 : approvalExpired
                   ? 'Approval request expired'
                   : null;
+            const degraded = health?.status === 'error' || health?.status === 'expired' || health?.last_test_result === 'error';
+            const syncing = health?.status === 'syncing';
             const structuredReasons = buildStructuredReasons({
               item,
               approval,
@@ -429,6 +447,19 @@ export default function GovernedActionsPage({
                   <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${toneClasses(result)}`}>
                     {result.replace(/_/g, ' ')}
                   </span>
+                  {degraded ? (
+                    <span className="rounded-full border border-rose-400/20 bg-rose-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-rose-200">
+                      degraded rail
+                    </span>
+                  ) : syncing ? (
+                    <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200">
+                      syncing
+                    </span>
+                  ) : health?.last_test_result === 'ok' ? (
+                    <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-200">
+                      healthy rail
+                    </span>
+                  ) : null}
                   {governance?.source ? (
                     <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300">
                       {governance.source === 'connector_console' ? 'console' : governance.source}
@@ -479,6 +510,28 @@ export default function GovernedActionsPage({
                         </p>
                       </div>
                     </div>
+                    {health ? (
+                      <div className="mt-3 rounded-xl border border-white/8 bg-black/20 px-3 py-3">
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Reliability state</p>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          <p className="text-sm text-slate-300">Connection state: <span className="text-white">{health.status}</span></p>
+                          <p className="text-sm text-slate-300">Last test: <span className="text-white">{health.last_test_result || 'not run'}</span></p>
+                          {health.last_tested_at ? (
+                            <p className="text-sm text-slate-300">Last tested: <span className="text-white">{fmtRelative(health.last_tested_at)}</span></p>
+                          ) : null}
+                          {health.last_error_at ? (
+                            <p className="text-sm text-slate-300">Last failure: <span className="text-white">{fmtRelative(health.last_error_at)}</span></p>
+                          ) : null}
+                        </div>
+                        {health.last_error_msg ? (
+                          <p className="mt-2 text-sm text-rose-200">{health.last_error_msg}</p>
+                        ) : degraded ? (
+                          <p className="mt-2 text-sm text-rose-200">The integration is degraded, so execution risk is higher even if governance allows this action.</p>
+                        ) : syncing ? (
+                          <p className="mt-2 text-sm text-amber-200">The integration is still syncing. Retry-sensitive actions may need a short wait.</p>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {structuredReasons.length > 0 ? (
                       <div className="mt-3 grid gap-2">
                         {structuredReasons.map((reason) => (
