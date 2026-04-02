@@ -290,6 +290,18 @@ export default function GovernedActionsPage({
     setActingApprovalId(null);
   }, [decisionNotes, load]);
 
+  const handleApprovalEscalation = useCallback(async (approvalId: string) => {
+    setActingApprovalId(approvalId);
+    const res = await api.approvals.escalate(approvalId);
+    if (res.success) {
+      toast.success('Approval escalated');
+      await load();
+    } else {
+      toast.error(res.error || 'Failed to escalate approval');
+    }
+    setActingApprovalId(null);
+  }, [load]);
+
   return (
     <div className="space-y-6">
       <PageHero
@@ -552,6 +564,13 @@ export default function GovernedActionsPage({
                             className="rounded-xl border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/15 disabled:opacity-60"
                           >
                             {actingApprovalId === approval.id ? 'Working…' : 'Deny here'}
+                          </button>
+                          <button
+                            onClick={() => void handleApprovalEscalation(approval.id)}
+                            disabled={actingApprovalId === approval.id || approvalExpired}
+                            className="rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15 disabled:opacity-60"
+                          >
+                            {actingApprovalId === approval.id ? 'Working…' : 'Escalate'}
                           </button>
                           <button
                             onClick={() => onNavigate(buildApprovalRoute(approval.id, item.connector_id))}
