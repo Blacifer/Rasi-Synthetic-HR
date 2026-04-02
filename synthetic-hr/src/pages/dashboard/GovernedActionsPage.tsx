@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, RefreshCw, ShieldCheck, TimerReset } from 'lucide-react';
 import { PageHero } from '../../components/dashboard/PageHero';
 import { api } from '../../lib/api-client';
+import type { ApprovalRequest } from '../../lib/api/approvals';
+import { toast } from '../../lib/toast';
 
 type GovernedAction = {
   id: string;
@@ -13,6 +15,29 @@ type GovernedAction = {
   approval_required: boolean;
   approval_id: string | null;
   requested_by?: string | null;
+  policy_snapshot?: {
+    constraints?: {
+      threshold_amount?: number | null;
+      threshold_count?: number | null;
+      threshold_required_role?: string | null;
+      allowed_domains?: string[] | null;
+      max_rows?: number | null;
+    } | null;
+    constraint_evaluation?: {
+      dualApproval?: boolean;
+      requiredRole?: string | null;
+      approvalReasons?: string[];
+      thresholdTriggered?: boolean;
+      thresholdType?: string | null;
+      thresholdAmount?: number | null;
+      thresholdCount?: number | null;
+      domainRestricted?: boolean;
+      blockedDomains?: string[];
+      maxRowsExceeded?: boolean;
+      observedRows?: number | null;
+      maxRows?: number | null;
+    } | null;
+  } | null;
   created_at: string;
   governance?: {
     source: 'gateway' | 'connector_console' | 'runtime';
@@ -29,6 +54,13 @@ type GovernedAction = {
   } | null;
 };
 
+const ROLE_ORDER: Record<'viewer' | 'manager' | 'admin' | 'super_admin', number> = {
+  viewer: 0,
+  manager: 1,
+  admin: 2,
+  super_admin: 3,
+};
+
 function fmtRelative(value: string) {
   const date = new Date(value);
   const diffMinutes = Math.max(0, Math.round((Date.now() - date.getTime()) / 60000));
@@ -37,6 +69,95 @@ function fmtRelative(value: string) {
   const diffHours = Math.round(diffMinutes / 60);
   if (diffHours < 24) return `${diffHours}h ago`;
   return `${Math.round(diffHours / 24)}d ago`;
+}
+
+function fmtDeadline(value: string) {
+  const date = new Date(value);
+  const diffMinutes = Math.round((date.getTime() - Date.now()) / 60000);
+  if (diffMinutes <= 0) return 'expired';
+  if (diffMinutes < 60) return `${diffMinutes}m left`;
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h left`;
+  return `${Math.round(diffHours / 24)}d left`;
+}
+
+function fmtCompactNumber(value: number) {
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+}
+
+function buildStructuredReasons(args: {
+  item: GovernedAction;
+  approval?: ApprovalRequest;
+  assignedElsewhere: boolean;
+  roleAllowed: boolean;
+  approvalExpired: boolean;
+}) {
+  const { item, approval, assignedElsewhere, roleAllowed, approvalExpired } = args;
+  const evaluation = item.policy_snapshot?.constraint_evaluation;
+  const reasons: Array<{ tone: 'amber' | 'rose' | 'cyan'; label: string; detail: string }> = [];
+
+  if (item.governance?.decision === 'blocked') {
+    reasons.push({
+      tone: 'rose',
+      label: 'Policy block',
+      detail: item.governance?.block_reasons?.[0] || item.error_message || 'This action was stopped by a governance rule.',
+    });
+  }
+  if (approval) {
+    reasons.push({
+      tone: 'amber',
+      label: 'Approval gate',
+      detail: `Requires ${approval.required_role} or higher before execution can continue.`,
+    });
+  }
+  if (assignedElsewhere) {
+    reasons.push({
+      tone: 'amber',
+      label: 'Assigned reviewer',
+      detail: `This request is assigned to ${truncateMiddle(approval?.assigned_to || '')}.`,
+    });
+  }
+  if (!roleAllowed && approval?.required_role) {
+    reasons.push({
+      tone: 'amber',
+      label: 'Role restriction',
+      detail: `Your current role is below ${approval.required_role}.`,
+    });
+  }
+  if (approvalExpired) {
+    reasons.push({
+      tone: 'rose',
+      label: 'Expired approval',
+      detail: 'The approval window has closed and needs to be recreated or escalated.',
+    });
+  }
+  if (evaluation?.thresholdTriggered) {
+    const thresholdValue = evaluation.thresholdAmount ?? evaluation.thresholdCount;
+    reasons.push({
+      tone: 'cyan',
+      label: 'Threshold hit',
+      detail: thresholdValue != null
+        ? `A ${evaluation.thresholdType || 'configured'} threshold triggered at ${thresholdValue}.`
+        : 'A configured amount or count threshold triggered extra governance.',
+    });
+  }
+  if (evaluation?.domainRestricted) {
+    reasons.push({
+      tone: 'rose',
+      label: 'Domain restriction',
+      detail: evaluation.blockedDomains?.length
+        ? `Blocked destination: ${evaluation.blockedDomains.slice(0, 2).join(', ')}`
+        : 'Destination domain policy prevented this action.',
+    });
+  }
+  if (evaluation?.maxRowsExceeded) {
+    reasons.push({
+      tone: 'cyan',
+      label: 'Blast radius limit',
+      detail: `Observed ${evaluation.observedRows ?? 'n/a'} rows against a limit of ${evaluation.maxRows ?? 'n/a'}.`,
+    });
+  }
+  return reasons;
 }
 
 function toneClasses(result?: string | null) {
@@ -69,27 +190,43 @@ function buildJobRoute(jobId: string, decision?: 'executed' | 'pending_approval'
 
 export default function GovernedActionsPage({
   onNavigate,
+  currentUserId,
+  currentRole,
 }: {
   onNavigate: (page: string) => void;
+  currentUserId?: string | null;
+  currentRole?: string | null;
 }) {
   const [actions, setActions] = useState<GovernedAction[]>([]);
+  const [approvalsById, setApprovalsById] = useState<Record<string, ApprovalRequest>>({});
   const [loading, setLoading] = useState(true);
+  const [actingApprovalId, setActingApprovalId] = useState<string | null>(null);
+  const [decisionNotes, setDecisionNotes] = useState<Record<string, string>>({});
   const [decision, setDecision] = useState<'all' | 'executed' | 'pending_approval' | 'blocked'>('all');
   const [source, setSource] = useState<'all' | 'gateway' | 'connector_console' | 'runtime'>('all');
   const [service, setService] = useState('all');
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await api.integrations.getGovernedActions({
-      ...(decision !== 'all' ? { decision } : {}),
-      ...(source !== 'all' ? { source } : {}),
-      ...(service !== 'all' ? { service } : {}),
-      limit: 100,
-    });
-    if (res.success) {
-      setActions((res.data as GovernedAction[]) || []);
+    const [actionsRes, approvalsRes] = await Promise.all([
+      api.integrations.getGovernedActions({
+        ...(decision !== 'all' ? { decision } : {}),
+        ...(source !== 'all' ? { source } : {}),
+        ...(service !== 'all' ? { service } : {}),
+        limit: 100,
+      }),
+      api.approvals.list({ status: 'pending', limit: 200 }),
+    ]);
+    if (actionsRes.success) {
+      setActions((actionsRes.data as GovernedAction[]) || []);
     } else {
       setActions([]);
+    }
+    if (approvalsRes.success) {
+      const next = Object.fromEntries(((approvalsRes.data as ApprovalRequest[]) || []).map((item) => [item.id, item]));
+      setApprovalsById(next);
+    } else {
+      setApprovalsById({});
     }
     setLoading(false);
   }, [decision, service, source]);
@@ -132,6 +269,26 @@ export default function GovernedActionsPage({
           title: 'Use this page as your control ledger',
           detail: 'Track what executed, what got stopped, and what is waiting on human approval across your connected apps.',
         };
+
+  const handleApprovalDecision = useCallback(async (approvalId: string, nextDecision: 'approve' | 'deny') => {
+    setActingApprovalId(approvalId);
+    const note = decisionNotes[approvalId]?.trim() || undefined;
+    const res = nextDecision === 'approve'
+      ? await api.approvals.approve(approvalId, note)
+      : await api.approvals.deny(approvalId, note);
+    if (res.success) {
+      toast.success(nextDecision === 'approve' ? 'Approval recorded' : 'Approval denied');
+      setDecisionNotes((current) => {
+        const next = { ...current };
+        delete next[approvalId];
+        return next;
+      });
+      await load();
+    } else {
+      toast.error(res.error || `Failed to ${nextDecision} approval`);
+    }
+    setActingApprovalId(null);
+  }, [decisionNotes, load]);
 
   return (
     <div className="space-y-6">
@@ -222,6 +379,30 @@ export default function GovernedActionsPage({
             const result = governance?.result || (item.success ? 'succeeded' : 'failed');
             const approvalId = item.approval_id;
             const jobId = governance?.job_id ?? null;
+            const approval = approvalId ? approvalsById[approvalId] : undefined;
+            const approvalRole = approval?.required_role || governance?.required_role || 'viewer';
+            const roleAllowed = approvalRole in ROLE_ORDER && currentRole
+              ? ROLE_ORDER[currentRole as keyof typeof ROLE_ORDER] >= ROLE_ORDER[approvalRole as keyof typeof ROLE_ORDER]
+              : true;
+            const assignedElsewhere = Boolean(approval?.assigned_to && currentUserId && approval.assigned_to !== currentUserId);
+            const approvalExpired = Boolean(approval?.expires_at && new Date(approval.expires_at) <= new Date());
+            const inlineDecisionDisabled = actingApprovalId === approval?.id || assignedElsewhere || !roleAllowed || approvalExpired;
+            const inlineDecisionReason = assignedElsewhere
+              ? 'Assigned to another reviewer'
+              : !roleAllowed
+                ? `Requires ${approvalRole} or higher`
+                : approvalExpired
+                  ? 'Approval request expired'
+                  : null;
+            const structuredReasons = buildStructuredReasons({
+              item,
+              approval,
+              assignedElsewhere,
+              roleAllowed,
+              approvalExpired,
+            });
+            const constraints = item.policy_snapshot?.constraints;
+            const evaluation = item.policy_snapshot?.constraint_evaluation;
             const reasons = governance?.block_reasons?.length
               ? governance.block_reasons
               : governance?.approval_reasons?.length
@@ -259,6 +440,8 @@ export default function GovernedActionsPage({
                       <span>Decision: {governance?.decision?.replace(/_/g, ' ') || 'executed'}</span>
                       <span>Role: {governance?.required_role || 'n/a'}</span>
                       <span>Duration: {item.duration_ms ? `${item.duration_ms} ms` : 'n/a'}</span>
+                      {approval?.assigned_to ? <span>Assigned reviewer: {truncateMiddle(approval.assigned_to)}</span> : null}
+                      {approval?.expires_at ? <span>Expires: {fmtDeadline(approval.expires_at)}</span> : null}
                     </div>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-2">
@@ -284,6 +467,101 @@ export default function GovernedActionsPage({
                         </p>
                       </div>
                     </div>
+                    {structuredReasons.length > 0 ? (
+                      <div className="mt-3 grid gap-2">
+                        {structuredReasons.map((reason) => (
+                          <div
+                            key={`${item.id}-${reason.label}`}
+                            className={
+                              reason.tone === 'rose'
+                                ? 'rounded-xl border border-rose-400/15 bg-rose-500/8 px-3 py-2'
+                                : reason.tone === 'cyan'
+                                  ? 'rounded-xl border border-cyan-400/15 bg-cyan-500/8 px-3 py-2'
+                                  : 'rounded-xl border border-amber-400/15 bg-amber-500/8 px-3 py-2'
+                            }
+                          >
+                            <p className="text-[10px] uppercase tracking-[0.16em] text-slate-300/90">{reason.label}</p>
+                            <p className="mt-1 text-sm text-slate-100">{reason.detail}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    {(constraints || evaluation?.thresholdTriggered || evaluation?.maxRowsExceeded || evaluation?.domainRestricted) ? (
+                      <div className="mt-3 rounded-xl border border-white/8 bg-black/20 px-3 py-3">
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Constraint context</p>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          {constraints?.threshold_amount != null ? (
+                            <p className="text-sm text-slate-300">Amount threshold: <span className="text-white">{fmtCompactNumber(constraints.threshold_amount)}</span></p>
+                          ) : null}
+                          {constraints?.threshold_count != null ? (
+                            <p className="text-sm text-slate-300">Count threshold: <span className="text-white">{fmtCompactNumber(constraints.threshold_count)}</span></p>
+                          ) : null}
+                          {constraints?.max_rows != null ? (
+                            <p className="text-sm text-slate-300">Max rows: <span className="text-white">{fmtCompactNumber(constraints.max_rows)}</span></p>
+                          ) : null}
+                          {constraints?.threshold_required_role ? (
+                            <p className="text-sm text-slate-300">Escalates to: <span className="text-white">{constraints.threshold_required_role}</span></p>
+                          ) : null}
+                          {evaluation?.observedRows != null ? (
+                            <p className="text-sm text-slate-300">Observed rows: <span className="text-white">{fmtCompactNumber(evaluation.observedRows)}</span></p>
+                          ) : null}
+                          {constraints?.allowed_domains?.length ? (
+                            <p className="text-sm text-slate-300">Allowed domains: <span className="text-white">{constraints.allowed_domains.slice(0, 2).join(', ')}</span></p>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+                    {approval ? (
+                      <div className="mt-3 rounded-xl border border-amber-400/15 bg-amber-500/8 px-3 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200">
+                            Approval queue
+                          </span>
+                          <span className="text-xs text-amber-100/80">Needs {approval.required_role} or higher</span>
+                          {approval.risk_score != null ? (
+                            <span className="text-xs text-amber-100/80">Risk {Math.round(approval.risk_score * 100)}%</span>
+                          ) : null}
+                          {approvalExpired ? (
+                            <span className="rounded-full border border-rose-400/20 bg-rose-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-rose-200">
+                              Expired
+                            </span>
+                          ) : null}
+                        </div>
+                        {inlineDecisionReason ? (
+                          <p className="mt-2 text-xs text-amber-100/85">{inlineDecisionReason}</p>
+                        ) : (
+                          <p className="mt-2 text-xs text-amber-100/70">You can review this request directly from the ledger.</p>
+                        )}
+                        <textarea
+                          value={decisionNotes[approval.id] || ''}
+                          onChange={(event) => setDecisionNotes((current) => ({ ...current, [approval.id]: event.target.value }))}
+                          placeholder="Optional review note…"
+                          className="mt-3 min-h-[84px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500"
+                        />
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            onClick={() => void handleApprovalDecision(approval.id, 'approve')}
+                            disabled={inlineDecisionDisabled}
+                            className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15 disabled:opacity-60"
+                          >
+                            {actingApprovalId === approval.id ? 'Approving…' : 'Approve here'}
+                          </button>
+                          <button
+                            onClick={() => void handleApprovalDecision(approval.id, 'deny')}
+                            disabled={inlineDecisionDisabled}
+                            className="rounded-xl border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/15 disabled:opacity-60"
+                          >
+                            {actingApprovalId === approval.id ? 'Working…' : 'Deny here'}
+                          </button>
+                          <button
+                            onClick={() => onNavigate(buildApprovalRoute(approval.id, item.connector_id))}
+                            className="rounded-xl border border-white/12 bg-white/[0.05] px-3 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/[0.09]"
+                          >
+                            Open full approval
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                     {reasons.length > 0 ? (
                       <div className="mt-3 rounded-xl border border-white/8 bg-black/20 px-3 py-2">
                         <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Why</p>

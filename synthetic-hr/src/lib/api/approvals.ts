@@ -13,6 +13,9 @@ export type ApprovalRequest = {
   requested_by: string;
   status: 'pending' | 'approved' | 'denied' | 'expired' | 'cancelled';
   required_role: 'viewer' | 'manager' | 'admin' | 'super_admin';
+  assigned_to?: string | null;
+  risk_score?: number | null;
+  sla_deadline?: string | null;
   reviewer_id?: string | null;
   reviewer_note?: string | null;
   expires_at: string;

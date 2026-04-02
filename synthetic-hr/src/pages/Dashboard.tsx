@@ -1612,7 +1612,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="integrations" element={<Navigate to="/dashboard/apps" replace />} />
                   <Route path="conversations" element={<ConversationsPage agents={enrichedAgents} onNavigate={navigateTo} initialAgentId={fleetWorkspaceAgentId} />} />
                   <Route path="incidents" element={<IncidentsPage incidents={incidents} setIncidents={saveIncidents} agents={enrichedAgents} onNavigate={navigateTo} isLoading={loading} />} />
-                  <Route path="governed-actions" element={<GovernedActionsPage onNavigate={navigateTo} />} />
+                  <Route path="governed-actions" element={<GovernedActionsPage onNavigate={navigateTo} currentUserId={user?.id} currentRole={role} />} />
                   <Route path="approvals" element={<ApprovalsPage />} />
                   <Route path="costs" element={<CostsPage agents={enrichedAgents} incidents={incidents} onNavigate={navigateTo} />} />
                   <Route path="api-access" element={<ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="keys" onNavigate={navigateTo} />} />
