@@ -1790,6 +1790,137 @@ router.get('/:service/workspace-preview', requirePermission('connectors.read'), 
     preview.suggested_next_action = preview.events.length > 0
       ? 'Review meetings and profile details before enabling agents to draft or schedule collaboration actions.'
       : 'Reconnect with broader Microsoft Graph scopes if you want inbox and calendar work to happen fully inside Rasi.';
+  } else if (aliases.includes('zendesk')) {
+    const subdomain = String(credentials.subdomain || '').replace(/\.zendesk\.com$/i, '');
+    const email = String(credentials.email || '');
+    const apiToken = String(credentials.apiToken || credentials.api_token || '');
+    if (!subdomain || !email || !apiToken) {
+      return res.status(400).json({ success: false, error: 'Zendesk credentials are incomplete for workspace preview' });
+    }
+
+    const auth = Buffer.from(`${email}/token:${apiToken}`).toString('base64');
+    const headers = { Authorization: `Basic ${auth}`, Accept: 'application/json' };
+    const [meRes, ticketsRes] = await Promise.allSettled([
+      fetch(`https://${subdomain}.zendesk.com/api/v2/users/me.json`, { headers }),
+      fetch(`https://${subdomain}.zendesk.com/api/v2/tickets/recent.json`, { headers }),
+    ]);
+
+    if (meRes.status === 'fulfilled') {
+      const body: any = await meRes.value.json().catch(() => null);
+      if (meRes.value.ok && body?.user) {
+        preview.profile = {
+          email: body.user.email ?? null,
+          name: body.user.name ?? null,
+          role: body.user.role ?? null,
+        };
+      }
+    }
+
+    if (ticketsRes.status === 'fulfilled') {
+      const body: any = await ticketsRes.value.json().catch(() => null);
+      if (ticketsRes.value.ok && Array.isArray(body?.tickets)) {
+        preview.conversations = body.tickets.slice(0, 8).map((ticket: any) => ({
+          id: String(ticket.id),
+          subject: ticket.subject || 'Untitled ticket',
+          status: ticket.status || 'open',
+          priority: ticket.priority || null,
+          updated_at: ticket.updated_at || null,
+          requester_id: ticket.requester_id || null,
+        }));
+        preview.metrics = {
+          open_count: body.tickets.filter((ticket: any) => ticket.status !== 'closed' && ticket.status !== 'solved').length,
+          total_loaded: body.tickets.length,
+        };
+      } else if (!ticketsRes.value.ok) {
+        preview.notes.push('Recent Zendesk tickets could not be loaded with the current credentials.');
+      }
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.conversations) && preview.conversations.length > 0
+      ? 'Review urgent tickets and decide which replies should stay human-approved before enabling agent responses.'
+      : 'Connect a Zendesk admin token with ticket access if you want live support inbox data inside Rasi.';
+  } else if (aliases.includes('freshdesk')) {
+    const subdomain = String(credentials.subdomain || '').replace(/\.freshdesk\.com$/i, '');
+    const apiKey = String(credentials.apiKey || credentials.api_key || '');
+    if (!subdomain || !apiKey) {
+      return res.status(400).json({ success: false, error: 'Freshdesk credentials are incomplete for workspace preview' });
+    }
+
+    const auth = Buffer.from(`${apiKey}:X`).toString('base64');
+    const headers = { Authorization: `Basic ${auth}`, Accept: 'application/json' };
+    const ticketsRes = await fetch(`https://${subdomain}.freshdesk.com/api/v2/tickets?per_page=8&order_by=updated_at&order_type=desc`, { headers });
+    const body: any = await ticketsRes.json().catch(() => null);
+    if (ticketsRes.ok && Array.isArray(body)) {
+      preview.conversations = body.map((ticket: any) => ({
+        id: String(ticket.id),
+        subject: ticket.subject || 'Untitled ticket',
+        status: String(ticket.status || ''),
+        priority: String(ticket.priority || ''),
+        updated_at: ticket.updated_at || null,
+        requester_id: ticket.requester_id || null,
+      }));
+      preview.metrics = {
+        open_count: body.filter((ticket: any) => ![4, 5, 'resolved', 'closed'].includes(ticket.status)).length,
+        total_loaded: body.length,
+      };
+    } else {
+      preview.notes.push('Recent Freshdesk tickets could not be loaded with the current credentials.');
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.conversations) && preview.conversations.length > 0
+      ? 'Triage recent Freshdesk tickets and confirm which ones should allow agent-written responses.'
+      : 'Reconnect Freshdesk with ticket-read permissions if you want live support inbox data inside Rasi.';
+  } else if (aliases.includes('intercom')) {
+    const accessToken = String(credentials.accessToken || credentials.access_token || '');
+    if (!accessToken) {
+      return res.status(400).json({ success: false, error: 'Intercom credentials are incomplete for workspace preview' });
+    }
+
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      'Intercom-Version': '2.10',
+    };
+    const [adminsRes, conversationsRes] = await Promise.allSettled([
+      fetch('https://api.intercom.io/admins', { headers }),
+      fetch('https://api.intercom.io/conversations?per_page=8', { headers }),
+    ]);
+
+    if (adminsRes.status === 'fulfilled') {
+      const body: any = await adminsRes.value.json().catch(() => null);
+      const admin = Array.isArray(body?.admins) ? body.admins[0] : null;
+      if (adminsRes.value.ok && admin) {
+        preview.profile = {
+          email: admin.email ?? null,
+          name: admin.name ?? null,
+          type: admin.type ?? 'admin',
+        };
+      }
+    }
+
+    if (conversationsRes.status === 'fulfilled') {
+      const body: any = await conversationsRes.value.json().catch(() => null);
+      if (conversationsRes.value.ok && Array.isArray(body?.conversations)) {
+        preview.conversations = body.conversations.map((conversation: any) => ({
+          id: String(conversation.id),
+          subject: conversation.title || conversation.source?.subject || 'Conversation',
+          status: conversation.state || 'open',
+          priority: conversation.priority || null,
+          updated_at: conversation.updated_at ? new Date(Number(conversation.updated_at) * 1000).toISOString() : null,
+          requester_id: conversation.source?.author?.id || null,
+        }));
+        preview.metrics = {
+          open_count: body.conversations.filter((conversation: any) => conversation.state !== 'closed').length,
+          total_loaded: body.conversations.length,
+        };
+      } else if (!conversationsRes.value.ok) {
+        preview.notes.push('Recent Intercom conversations could not be loaded with the current token.');
+      }
+    }
+
+    preview.suggested_next_action = Array.isArray(preview.conversations) && preview.conversations.length > 0
+      ? 'Review open Intercom conversations and decide which replies should require human approval.'
+      : 'Reconnect Intercom with conversation-read access if you want live support inbox data inside Rasi.';
   } else {
     return res.status(400).json({ success: false, error: 'Workspace preview is not supported for this integration' });
   }

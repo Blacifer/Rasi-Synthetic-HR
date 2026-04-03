@@ -58,17 +58,27 @@ interface SupportWorkspaceTabProps {
 export function SupportWorkspaceTab({ app, agentNames }: SupportWorkspaceTabProps) {
   const [busy, setBusy] = useState(false);
   const [tickets, setTickets] = useState<SupportTicketHub[]>([]);
+  const [workspacePreview, setWorkspacePreview] = useState<any | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
     try {
-      const res = await api.hubs.support.listTickets({ limit: 50 });
-      if (res.success && res.data) setTickets(res.data);
-      else toast.error(res.error || 'Failed to load support inbox');
+      const [ticketsRes, previewRes] = await Promise.all([
+        api.hubs.support.listTickets({ limit: 50 }),
+        app.connected && app.primaryServiceId && ['zendesk', 'freshdesk', 'intercom'].includes(String(app.primaryServiceId).toLowerCase())
+          ? api.integrations.getWorkspacePreview(app.primaryServiceId)
+          : Promise.resolve(null),
+      ]);
+
+      if (ticketsRes.success && ticketsRes.data) setTickets(ticketsRes.data);
+      else toast.error(ticketsRes.error || 'Failed to load support inbox');
+
+      if (previewRes?.success && previewRes.data) setWorkspacePreview(previewRes.data);
+      else setWorkspacePreview(null);
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [app.connected, app.primaryServiceId]);
 
   useEffect(() => {
     void load();
@@ -140,6 +150,9 @@ export function SupportWorkspaceTab({ app, agentNames }: SupportWorkspaceTabProp
           </div>
         </div>
         {agentNames.length > 0 && <p className="mt-3 text-xs text-slate-500">Linked agents: <span className="text-slate-300">{agentNames.join(', ')}</span></p>}
+        {workspacePreview?.suggested_next_action ? (
+          <p className="mt-2 text-xs text-cyan-300">Next: {workspacePreview.suggested_next_action}</p>
+        ) : null}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
@@ -194,6 +207,64 @@ export function SupportWorkspaceTab({ app, agentNames }: SupportWorkspaceTabProp
         </div>
 
         <div className="space-y-4">
+          {workspacePreview ? (
+            <div className="rounded-2xl border border-white/8 bg-white/[0.02]">
+              <div className="border-b border-white/8 px-4 py-3">
+                <h4 className="text-sm font-semibold text-white">Connected app feed</h4>
+              </div>
+              <div className="space-y-3 px-4 py-4">
+                {workspacePreview.profile ? (
+                  <div className="rounded-xl border border-white/8 bg-[#121826] p-3">
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Connection profile</p>
+                    <p className="mt-2 text-sm font-medium text-white">{workspacePreview.profile.name || workspacePreview.profile.email || 'Connected account'}</p>
+                    {workspacePreview.profile.email ? <p className="text-xs text-slate-400">{workspacePreview.profile.email}</p> : null}
+                  </div>
+                ) : null}
+
+                {workspacePreview.metrics ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-white/8 bg-[#121826] p-3">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Provider open</p>
+                      <p className="mt-2 text-xl font-semibold text-white">{workspacePreview.metrics.open_count ?? 0}</p>
+                    </div>
+                    <div className="rounded-xl border border-white/8 bg-[#121826] p-3">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Loaded</p>
+                      <p className="mt-2 text-xl font-semibold text-white">{workspacePreview.metrics.total_loaded ?? 0}</p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {Array.isArray(workspacePreview.conversations) && workspacePreview.conversations.length > 0 ? (
+                  <div className="rounded-xl border border-white/8 bg-[#121826]">
+                    <div className="border-b border-white/8 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Provider conversations</p>
+                    </div>
+                    <div className="divide-y divide-white/6">
+                      {workspacePreview.conversations.slice(0, 5).map((conversation: any) => (
+                        <div key={conversation.id} className="px-3 py-3">
+                          <div className="flex items-center gap-2">
+                            <Headset className="h-4 w-4 text-cyan-300" />
+                            <p className="truncate text-sm font-medium text-white">{conversation.subject}</p>
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                            <span className={cx('rounded-full border px-2 py-0.5 uppercase', statusBadge(conversation.status || 'open'))}>{conversation.status || 'open'}</span>
+                            {conversation.updated_at ? <span>{new Date(conversation.updated_at).toLocaleString()}</span> : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {Array.isArray(workspacePreview.notes) && workspacePreview.notes.length > 0 ? (
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-200">
+                    {workspacePreview.notes.join(' ')}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           <div className="rounded-2xl border border-white/8 bg-white/[0.02]">
             <div className="border-b border-white/8 px-4 py-3">
               <h4 className="text-sm font-semibold text-white">Draft replies</h4>
