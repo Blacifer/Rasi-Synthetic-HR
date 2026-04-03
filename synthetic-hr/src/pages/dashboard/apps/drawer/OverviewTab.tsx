@@ -24,6 +24,28 @@ export function OverviewTab({ app, agentNames, onConfigure: _onConfigure, onDisc
     <div className="space-y-5">
       {app.description && <p className="text-sm text-slate-300 leading-relaxed">{app.description}</p>}
 
+      <div className="rounded-xl border border-cyan-400/15 bg-cyan-500/[0.04] p-4">
+        <p className="text-[10px] uppercase tracking-wider text-cyan-300">What this app lets agents do</p>
+        <p className="mt-1 text-xs text-slate-300">
+          {app.connected
+            ? 'Connected agents can use governed capabilities from this app through Rasi. Read actions can run directly; higher-risk write actions pause for approval when policy requires it.'
+            : 'Connect this app once, then assign which agents can use it and supervise every governed action from Rasi.'}
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-lg border border-white/8 bg-black/10 px-3 py-2">
+            <p className="text-[10px] text-slate-500">Capabilities</p>
+            <p className="text-sm font-semibold text-white">{app.agentCapabilities?.length || 0}</p>
+          </div>
+          <div className="rounded-lg border border-white/8 bg-black/10 px-3 py-2">
+            <p className="text-[10px] text-slate-500">Linked agents</p>
+            <p className="text-sm font-semibold text-white">{agentNames.length}</p>
+          </div>
+        </div>
+        {app.secureCredentialHandling === 'server_injected' && (
+          <p className="mt-3 text-[11px] text-slate-400">Credentials stay server-side. Agents never receive raw OAuth tokens or API keys.</p>
+        )}
+      </div>
+
       {/* Governance grid */}
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
@@ -191,11 +213,11 @@ export function OverviewTab({ app, agentNames, onConfigure: _onConfigure, onDisc
       )}
 
       {/* Actions unlocked */}
-      {app.actionsUnlocked && app.actionsUnlocked.length > 0 && (
+      {app.agentCapabilities && app.agentCapabilities.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Zap className="w-3 h-3 text-amber-300" /> Actions Unlocked</p>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Zap className="w-3 h-3 text-amber-300" /> Agent Capabilities</p>
           <div className="flex flex-wrap gap-1.5">
-            {app.actionsUnlocked.map((a) => <span key={a} className="text-xs px-2 py-1 rounded-lg border border-amber-400/15 bg-amber-500/8 text-amber-200">{a}</span>)}
+            {app.agentCapabilities.map((a) => <span key={a} className="text-xs px-2 py-1 rounded-lg border border-amber-400/15 bg-amber-500/8 text-amber-200">{a}</span>)}
           </div>
         </div>
       )}

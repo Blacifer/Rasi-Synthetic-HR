@@ -6,7 +6,8 @@ export type AppConnectionType = 'native_connector' | 'oauth_connector' | 'mcp_se
 export type TrustTier = 'observe-only' | 'controlled-write' | 'high-trust-operational';
 export type Maturity = 'connected' | 'read-ready' | 'action-ready' | 'governed';
 export type GuardrailStatus = 'not_applicable' | 'missing' | 'partial' | 'applied';
-export type DrawerTab = 'overview' | 'agents' | 'history' | 'actions' | 'slack' | 'permissions';
+export type HealthState = 'healthy' | 'degraded' | 'not_connected' | 'unsupported' | 'unknown';
+export type DrawerTab = 'overview' | 'agents' | 'capabilities' | 'approvals' | 'history' | 'slack' | 'permissions';
 
 export interface RequiredField {
   name: string;
@@ -20,6 +21,13 @@ export interface GovernanceSummary {
   readCount: number;
   actionCount: number;
   enabledActionCount: number;
+}
+
+export interface CapabilityPolicy {
+  capability: string;
+  requires_human_approval: boolean;
+  risk_level: 'low' | 'medium' | 'high';
+  enabled: boolean;
 }
 
 export interface UnifiedApp {
@@ -54,6 +62,23 @@ export interface UnifiedApp {
   wave1GuardrailsTotal?: number;
   appData?: MarketplaceApp;
   integrationData?: any;
+  rawCatalogData?: any;
+  linkedAgentCount?: number;
+  supportsHealthTest?: boolean;
+  healthStatus?: HealthState;
+  healthTestMode?: 'direct' | 'adapter' | 'unsupported' | 'none' | string;
+  logoUrl?: string | null;
+  logoFallback?: string | null;
+  agentCapabilities?: string[];
+  capabilityPolicies?: CapabilityPolicy[];
+  mcpTools?: Array<{
+    name: string;
+    description?: string;
+    input_schema?: Record<string, any>;
+    transport?: string;
+    connector_id?: string;
+  }>;
+  secureCredentialHandling?: 'server_injected';
 }
 
 export interface ConnectionLog {

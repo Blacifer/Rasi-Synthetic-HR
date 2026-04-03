@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import type { MarketplaceApp } from '../../../lib/api-client';
+import type { UnifiedConnectorEntry } from '../../../lib/api/connectors';
 import type { UnifiedApp, TrustTier, Maturity, GuardrailStatus } from './types';
 import { LOGO_DOMAINS } from './constants';
 
@@ -38,7 +39,14 @@ export function appColor(id: string, raw?: string): string {
 // ─── Logo URL ───────────────────────────────────────────────────────────────
 
 export function getLogoUrl(appId: string): string | null {
-  const domain = LOGO_DOMAINS[appId.toLowerCase()];
+  const normalized = appId.toLowerCase();
+  const candidates = [
+    normalized,
+    normalized.replace(/_/g, '-'),
+    normalized.replace(/-/g, '_'),
+    normalized.replace(/_/g, '-').replace(/-ai$/i, ''),
+  ];
+  const domain = candidates.map((key) => LOGO_DOMAINS[key]).find(Boolean);
   return domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : null;
 }
 
@@ -128,8 +136,104 @@ export function fromIntegration(row: any): UnifiedApp {
   };
 }
 
+function deriveTrustTier(category: string, capabilityPolicies: Array<{ requires_human_approval: boolean }> = []): TrustTier {
+  if (category === 'finance' || category === 'it' || category === 'compliance') return 'high-trust-operational';
+  if (capabilityPolicies.some((item) => item.requires_human_approval)) return 'controlled-write';
+  return capabilityPolicies.length > 0 ? 'controlled-write' : 'observe-only';
+}
+
+function deriveMaturity(connected: boolean, capabilityPolicies: Array<{ enabled: boolean; requires_human_approval: boolean }> = []): Maturity {
+  if (!connected) return 'connected';
+  const enabledCount = capabilityPolicies.filter((item) => item.enabled).length;
+  const governedCount = capabilityPolicies.filter((item) => item.enabled && item.requires_human_approval).length;
+  if (governedCount > 0) return 'governed';
+  if (enabledCount > 0) return 'action-ready';
+  return 'read-ready';
+}
+
+export function fromUnifiedConnectorEntry(entry: UnifiedConnectorEntry): UnifiedApp {
+  const statusRaw = entry.connection_status || entry.connectionStatus || (entry.is_connected || entry.installed ? 'connected' : 'disconnected');
+  const status =
+    statusRaw === 'connected' ? 'connected'
+    : statusRaw === 'syncing' ? 'syncing'
+    : statusRaw === 'error' ? 'error'
+    : statusRaw === 'expired' ? 'expired'
+    : 'disconnected';
+  const capabilityPolicies = entry.capability_policies || [];
+  const connected = Boolean(entry.is_connected ?? entry.installed);
+  const appId = entry.app_key || entry.id;
+  const authType = entry.auth_type || entry.authType || 'api_key';
+  return {
+    id: `${entry.source}:${appId}`,
+    appId,
+    name: entry.display_name || entry.name,
+    description: entry.description || '',
+    category: entry.category || 'productivity',
+    source: entry.source,
+    connectionType: entry.connection_type || (authType === 'oauth2' || authType === 'oauth' ? 'oauth_connector' : 'native_connector'),
+    logoLetter: entry.logoLetter || entry.logo_fallback || (entry.display_name || entry.name || '?')[0].toUpperCase(),
+    colorHex: appColor(appId, entry.colorHex),
+    badge: entry.badge,
+    installCount: entry.installCount || 0,
+    comingSoon: Boolean(entry.comingSoon),
+    connected,
+    status,
+    lastErrorMsg: entry.lastErrorMsg,
+    authType: authType === 'free' ? 'free' : authType === 'oauth' || authType === 'oauth2' ? 'oauth2' : 'api_key',
+    requiredFields: entry.requiredFields,
+    permissions: entry.permissions || [],
+    actionsUnlocked: capabilityPolicies.map((item) => item.capability),
+    setupTimeMinutes: entry.setupTimeMinutes,
+    developer: entry.developer,
+    featured: Boolean(entry.featured),
+    trustTier: deriveTrustTier(entry.category, capabilityPolicies),
+    maturity: deriveMaturity(connected, capabilityPolicies),
+    governanceSummary: {
+      readCount: capabilityPolicies.filter((item) => !item.requires_human_approval).length,
+      actionCount: capabilityPolicies.length,
+      enabledActionCount: capabilityPolicies.filter((item) => item.enabled).length,
+    },
+    appData: entry.source === 'marketplace' ? ({
+      id: appId,
+      name: entry.display_name || entry.name,
+      developer: entry.developer || '',
+      category: entry.category,
+      description: entry.description,
+      permissions: entry.permissions || [],
+      relatedAgentIds: [],
+      actionsUnlocked: capabilityPolicies.map((item) => item.capability),
+      setupTimeMinutes: entry.setupTimeMinutes || 0,
+      bundleIds: entry.bundles || [],
+      installMethod: authType === 'free' ? 'free' : authType === 'oauth' || authType === 'oauth2' ? 'oauth2' : 'api_key',
+      requiredFields: entry.requiredFields,
+      installCount: entry.installCount || 0,
+      featured: Boolean(entry.featured),
+      badge: entry.badge,
+      colorHex: entry.colorHex || appColor(appId),
+      logoLetter: entry.logoLetter || (entry.display_name || entry.name || '?')[0].toUpperCase(),
+      installed: connected,
+      connectionStatus: status,
+      lastErrorMsg: entry.lastErrorMsg,
+      comingSoon: Boolean(entry.comingSoon),
+      connectionSource: entry.source,
+    } as MarketplaceApp) : undefined,
+    integrationData: entry.source === 'integration' ? entry : undefined,
+    rawCatalogData: entry,
+    linkedAgentCount: entry.linked_agent_count ?? entry.agentCount ?? 0,
+    supportsHealthTest: Boolean(entry.supports_health_test),
+    healthStatus: (entry.health_status as any) || 'unknown',
+    healthTestMode: entry.health_test_mode || 'unsupported',
+    logoUrl: entry.logo_url || getLogoUrl(appId),
+    logoFallback: entry.logo_fallback || (entry.display_name || entry.name || '?')[0].toUpperCase(),
+    agentCapabilities: entry.agent_capabilities || capabilityPolicies.map((item) => item.capability),
+    capabilityPolicies,
+    mcpTools: entry.mcp_tools || [],
+    secureCredentialHandling: entry.credential_handling,
+  };
+}
+
 export function getAppServiceId(app: UnifiedApp) {
-  return app.integrationData?.id || app.appData?.id || app.appId;
+  return app.rawCatalogData?.app_key || app.rawCatalogData?.id || app.integrationData?.id || app.appData?.id || app.appId;
 }
 
 // ─── Date formatting ────────────────────────────────────────────────────────

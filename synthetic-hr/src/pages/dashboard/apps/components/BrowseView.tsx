@@ -36,7 +36,7 @@ function BrowseCard({ app, popLabel, onConnect, onManage }: {
           : 'border-white/8 bg-white/[0.02] hover:bg-white/[0.06] hover:border-white/15 cursor-pointer',
       )}
     >
-      <AppLogo appId={app.appId} logoLetter={app.logoLetter} colorHex={app.colorHex} size="sm" />
+      <AppLogo appId={app.appId} logoLetter={app.logoLetter} colorHex={app.colorHex} logoUrl={app.logoUrl} size="sm" />
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-1">
           <div className="min-w-0">
@@ -57,11 +57,11 @@ function BrowseCard({ app, popLabel, onConnect, onManage }: {
         </div>
         <p className="text-xs text-slate-500 mt-1.5 leading-relaxed line-clamp-2">{app.description}</p>
         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-          {app.connectionType && (
-            <span className="text-[10px] text-slate-600">
-              {app.connectionType === 'oauth_connector' ? 'OAuth setup' : app.connectionType === 'mcp_server' ? 'MCP-ready' : 'Direct setup'}
-            </span>
-          )}
+              {app.connectionType && (
+                <span className="text-[10px] text-slate-600">
+                  {app.connectionType === 'oauth_connector' ? 'OAuth setup' : app.connectionType === 'mcp_server' ? 'Agent tools ready' : 'Direct setup'}
+                </span>
+              )}
           {app.trustTier && (
             <span className="text-[9px] px-1 py-0.5 rounded border border-white/10 text-slate-500 font-medium">{app.trustTier}</span>
           )}
@@ -256,7 +256,7 @@ export function BrowseView({ apps, agents, featured: featuredProp, initialCatego
                   onClick={() => onConnect(a)}
                   className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/8 bg-white/[0.04] hover:bg-white/[0.08] transition-all"
                 >
-                  <AppLogo appId={a.appId} logoLetter={a.logoLetter} colorHex={a.colorHex} size="sm" />
+                    <AppLogo appId={a.appId} logoLetter={a.logoLetter} colorHex={a.colorHex} logoUrl={a.logoUrl} size="sm" />
                   <div className="text-left">
                     <p className="text-xs font-semibold text-white">{a.name}</p>
                   </div>

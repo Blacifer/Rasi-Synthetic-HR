@@ -13,6 +13,7 @@ import { HistoryTab } from './HistoryTab';
 import { ActionsTab } from './ActionsTab';
 import { SlackTab } from './SlackTab';
 import { PermissionsTab } from './PermissionsTab';
+import { ApprovalsTab } from './ApprovalsTab';
 
 interface DetailDrawerProps {
   app: UnifiedApp;
@@ -68,19 +69,31 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
   const loadCatalog = useCallback(async () => {
     if (!rawConnectorId) return;
     setCatalogLoading(true);
+    if (app.capabilityPolicies?.length) {
+      setCatalog(app.capabilityPolicies.map((item) => ({
+        action: item.capability,
+        label: item.capability.replace(/_/g, ' '),
+        enabled: item.enabled,
+        requireApproval: item.requires_human_approval,
+        risk: item.risk_level,
+        policySummary: item.requires_human_approval ? 'Approval required before execution' : 'Direct execution allowed',
+      })));
+      setCatalogLoading(false);
+      return;
+    }
     const res = await api.integrations.getActionCatalog();
     if (res.success) {
       setCatalog(((res.data as any[]) || []).filter((a) => !rawConnectorId || a.service === rawConnectorId || !a.service));
     }
     setCatalogLoading(false);
-  }, [rawConnectorId]);
+  }, [app.capabilityPolicies, rawConnectorId]);
 
   useEffect(() => {
-    if (tab === 'history') {
-      void loadLogs();
-      void loadExecutions();
-    }
-    if (tab === 'actions') void loadCatalog();
+      if (tab === 'history') {
+        void loadLogs();
+        void loadExecutions();
+      }
+    if (tab === 'capabilities') void loadCatalog();
   }, [tab, loadLogs, loadExecutions, loadCatalog]);
 
   useEffect(() => {
@@ -91,8 +104,14 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
     if (!rawConnectorId) return;
     setTesting(true); setTestResult(null);
     try {
-      const res = await api.integrations.test(rawConnectorId);
-      setTestResult({ ok: !!res.success, msg: res.success ? 'Connection is healthy' : ((res as any).error || 'Test failed') });
+      if (!app.supportsHealthTest) {
+        setTestResult({ ok: true, msg: 'Health test is not available yet for this app' });
+      } else {
+        const res = app.source === 'marketplace'
+          ? await api.marketplace.testConnection(rawConnectorId)
+          : await api.integrations.test(rawConnectorId);
+        setTestResult({ ok: !!res.success, msg: res.success ? 'Connection is healthy' : ((res as any).error || 'Test failed') });
+      }
     } catch { setTestResult({ ok: false, msg: 'Test failed' }); }
     setTesting(false);
   };
@@ -136,9 +155,10 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
 
   const TABS: Array<{ id: DrawerTab; label: string }> = [
     { id: 'overview', label: 'Overview' },
-    ...(app.connected ? [{ id: 'agents' as DrawerTab, label: `Agents (${linkedAgentIds.size})` }] : []),
+    ...(app.connected ? [{ id: 'agents' as DrawerTab, label: `Linked Agents (${linkedAgentIds.size})` }] : []),
+    ...(app.connected ? [{ id: 'capabilities' as DrawerTab, label: `Capabilities (${app.agentCapabilities?.length || catalog.length || 0})` }] : []),
+    ...(app.connected ? [{ id: 'approvals' as DrawerTab, label: 'HITL Approvals' }] : []),
     ...(app.connected ? [{ id: 'history' as DrawerTab, label: 'Execution History' }] : []),
-    ...(rawConnectorId ? [{ id: 'actions' as DrawerTab, label: 'Actions' }] : []),
     ...(isSlack && app.connected ? [{ id: 'slack' as DrawerTab, label: 'Slack Inbox' }] : []),
     ...(app.connected && app.actionsUnlocked && app.actionsUnlocked.length > 0 ? [{ id: 'permissions' as DrawerTab, label: 'Permissions' }] : []),
   ];
@@ -153,13 +173,13 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
 
         {/* Header */}
         <div className="flex items-start gap-4 p-5 border-b border-white/8 shrink-0">
-          <AppLogo appId={app.appId} logoLetter={app.logoLetter} colorHex={app.colorHex} size="lg" />
+          <AppLogo appId={app.appId} logoLetter={app.logoLetter} colorHex={app.colorHex} logoUrl={app.logoUrl} size="lg" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-base font-bold text-white">{app.name}</p>
               {app.connectionType && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-white/10 bg-white/5 text-slate-500 font-medium">
-                  {app.connectionType === 'oauth_connector' ? 'OAuth setup' : app.connectionType === 'mcp_server' ? 'MCP-ready' : 'Direct setup'}
+                  {app.connectionType === 'oauth_connector' ? 'OAuth setup' : app.connectionType === 'mcp_server' ? 'Agent tools ready' : 'Direct setup'}
                 </span>
               )}
             </div>
@@ -178,9 +198,9 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
                   {app.status === 'expired' ? 'Token expired' : 'Error'}
                 </span>
               )}
-              {app.actionsUnlocked && app.actionsUnlocked.length > 0 && (
+              {app.agentCapabilities && app.agentCapabilities.length > 0 && (
                 <span className="flex items-center gap-1 text-xs text-slate-500">
-                  <Zap className="w-3 h-3 text-amber-400" />{app.actionsUnlocked.length} actions
+                  <Zap className="w-3 h-3 text-amber-400" />{app.agentCapabilities.length} capabilities
                 </span>
               )}
             </div>
@@ -204,7 +224,7 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
               {rawConnectorId && (
                 <button
                   onClick={() => void testConnection()}
-                  disabled={testing}
+                  disabled={testing || !app.supportsHealthTest}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 text-slate-200 text-xs font-medium hover:bg-white/10 transition-colors disabled:opacity-50"
                 >
                   {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
@@ -286,7 +306,7 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
               onRefresh={() => { void loadLogs(); void loadExecutions(); }}
             />
           )}
-          {tab === 'actions' && (
+          {tab === 'capabilities' && (
             <ActionsTab
               app={app}
               catalog={catalog}
@@ -295,6 +315,9 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
               onToggleAction={(item) => void toggleAction(item)}
               onSeedWave1={() => void seedWave1Policies()}
             />
+          )}
+          {tab === 'approvals' && rawConnectorId && (
+            <ApprovalsTab serviceId={rawConnectorId} />
           )}
           {tab === 'slack' && rawConnectorId && (
             <SlackTab serviceId={rawConnectorId} />

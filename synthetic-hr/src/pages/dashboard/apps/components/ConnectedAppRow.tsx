@@ -25,7 +25,7 @@ export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisco
       onClick={() => onClick(app)}
       className="flex items-center gap-3 py-3 px-4 rounded-2xl border border-white/8 bg-white/[0.02] hover:bg-white/[0.05] transition-colors cursor-pointer"
     >
-      <AppLogo appId={app.appId} logoLetter={app.logoLetter} colorHex={app.colorHex} size="sm" />
+      <AppLogo appId={app.appId} logoLetter={app.logoLetter} colorHex={app.colorHex} logoUrl={app.logoUrl} size="sm" />
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
@@ -54,7 +54,13 @@ export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisco
             <span className="w-2 h-2 rounded-full bg-rose-400 shrink-0" title="Health check failed" />
           )}
           {healthResult == null && (
-            <span className="w-2 h-2 rounded-full bg-amber-400/50 shrink-0" title="Not yet tested" />
+            <span
+              className={cn(
+                'w-2 h-2 rounded-full shrink-0',
+                app.supportsHealthTest === false ? 'bg-slate-500/60' : 'bg-amber-400/50',
+              )}
+              title={app.supportsHealthTest === false ? 'Health test unavailable' : 'Not yet tested'}
+            />
           )}
         </div>
         {agentNames.length > 0 && (

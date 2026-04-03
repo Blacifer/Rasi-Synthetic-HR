@@ -1,10 +1,16 @@
 import { createHash, createSign } from 'crypto';
 import { Router } from 'express';
 import { supabase, supabaseAdmin } from '../lib/supabase';
+import { eq as eqFilter, supabaseRestAsService } from '../lib/supabase-rest';
 import { logger } from '../lib/logger';
+import { authenticateToken } from '../middleware/auth';
 import { requirePermission } from '../middleware/rbac';
+import { executeConnectorAction } from '../lib/connectors/action-executor';
 import { decryptSecret } from '../lib/integrations/encryption';
+import { getAdapter } from '../lib/integrations/adapters';
 import { buildGovernedActionSnapshot } from '../lib/governed-actions';
+import { runPreflightGate } from '../lib/preflight-gate';
+import { appendAuditChainEvent } from '../lib/trust-audit-chain';
 
 const router = Router();
 
@@ -3707,12 +3713,6 @@ router.delete('/scrapers/:id', requirePermission('connectors.manage'), async (re
 import { PARTNER_APP_CATALOG, getInstalledAppHealth } from './marketplace';
 import { PHASE1_INTEGRATIONS } from '../lib/integrations/spec-registry';
 import { ACTION_REGISTRY } from '../lib/connectors/action-registry';
-import { executeConnectorAction } from '../lib/connectors/action-executor';
-import { runPreflightGate } from '../lib/preflight-gate';
-import { appendAuditChainEvent } from '../lib/trust-audit-chain';
-import { eq as eqFilter, supabaseRestAsService } from '../lib/supabase-rest';
-import { authenticateToken } from '../middleware/auth';
-
 // GET /api/connectors/catalog/unified — merged catalog (marketplace + spec-driven)
 // with per-org install status and agent-usage counts.
 router.get('/catalog/unified', authenticateToken, async (req, res) => {
@@ -3724,6 +3724,19 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
 
     // Load installed status for all integrations in this org
     const healthMap = await getInstalledAppHealth(orgId);
+    const openApiSpecs = (await supabaseRestAsService('integration_openapi_specs', new URLSearchParams({
+      organization_id: eqFilter(orgId),
+      select: 'service_id,capability_map',
+      order: 'created_at.desc',
+    })).catch(() => [])) as Array<{ service_id: string; capability_map?: { capabilities?: Array<Record<string, any>> } | null }>;
+    const openApiCapabilityMap = new Map(
+      (openApiSpecs || []).map((row) => [row.service_id, row.capability_map?.capabilities || []]),
+    );
+    const actionPolicies = (await supabaseRestAsService('action_policies', new URLSearchParams({
+      organization_id: eqFilter(orgId),
+      select: 'service,action,enabled,require_approval',
+    })).catch(() => [])) as Array<{ service: string; action: string; enabled?: boolean | null; require_approval?: boolean | null }>;
+    const policyMap = new Map(actionPolicies.map((row) => [`${row.service}:${row.action}`, row]));
 
     // Load agents to compute agentCount per connector
     const agents = (await supabaseRestAsService('ai_agents', new URLSearchParams({
@@ -3740,6 +3753,108 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
       }
     }
 
+    const toRiskLevel = (risk?: string | null) => {
+      if (risk === 'money' || risk === 'high') return 'high';
+      if (risk === 'medium') return 'medium';
+      return 'low';
+    };
+
+    const normalizeCapability = (value: string) =>
+      value
+        .replace(/__/g, '.')
+        .replace(/[.\s-]+/g, '_')
+        .replace(/[^\w]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '')
+        .toLowerCase();
+
+    const buildCapabilityData = (serviceId: string, args: {
+      reads?: string[];
+      writes?: Array<Record<string, any>>;
+      tools?: Array<any>;
+      openApiCapabilities?: Array<Record<string, any>>;
+    }) => {
+      const items = new Map<string, { capability: string; requires_human_approval: boolean; risk_level: 'low' | 'medium' | 'high'; enabled: boolean }>();
+      for (const read of args.reads || []) {
+        const capability = normalizeCapability(read);
+        const policy = policyMap.get(`${serviceId}:${capability}`) || policyMap.get(`${serviceId}:${read}`);
+        items.set(capability, {
+          capability,
+          requires_human_approval: Boolean(policy?.require_approval ?? false),
+          risk_level: 'low',
+          enabled: Boolean(policy?.enabled ?? true),
+        });
+      }
+      for (const write of args.writes || []) {
+        const rawId = String(write.id || write.operation_id || '');
+        const capability = normalizeCapability(rawId || write.label || 'execute');
+        const policy = policyMap.get(`${serviceId}:${rawId}`) || policyMap.get(`${serviceId}:${capability}`);
+        items.set(capability, {
+          capability,
+          requires_human_approval: Boolean(policy?.require_approval ?? write.approvalDefault ?? true),
+          risk_level: toRiskLevel(write.risk),
+          enabled: Boolean(policy?.enabled ?? true),
+        });
+      }
+      for (const tool of args.tools || []) {
+        const fnName = String(tool?.function?.name || '');
+        const rawAction = fnName.split('__').pop() || fnName;
+        const capability = normalizeCapability(rawAction);
+        if (items.has(capability)) continue;
+        const policy = policyMap.get(`${serviceId}:${rawAction}`) || policyMap.get(`${serviceId}:${capability}`);
+        const text = `${fnName} ${tool?.function?.description || ''}`.toLowerCase();
+        const writeLike = /(create|update|delete|send|post|refund|approve|revoke|assign|terminate)/.test(text);
+        items.set(capability, {
+          capability,
+          requires_human_approval: Boolean(policy?.require_approval ?? writeLike),
+          risk_level: writeLike ? 'medium' : 'low',
+          enabled: Boolean(policy?.enabled ?? true),
+        });
+      }
+      for (const openApi of args.openApiCapabilities || []) {
+        const rawAction = String(openApi.operation_id || '');
+        const capability = normalizeCapability(rawAction);
+        const policy = policyMap.get(`${serviceId}:${rawAction}`) || policyMap.get(`${serviceId}:${capability}`);
+        items.set(capability, {
+          capability,
+          requires_human_approval: Boolean(policy?.require_approval ?? openApi.requires_approval_default ?? openApi.operation !== 'read'),
+          risk_level: toRiskLevel(openApi.risk),
+          enabled: Boolean(policy?.enabled ?? true),
+        });
+      }
+      return Array.from(items.values());
+    };
+
+    const buildMcpTools = (serviceId: string, args: {
+      tools?: Array<any>;
+      openApiCapabilities?: Array<Record<string, any>>;
+    }) => {
+      const built = new Map<string, any>();
+      for (const tool of args.tools || []) {
+        const functionDef = tool?.function;
+        if (!functionDef?.name) continue;
+        built.set(functionDef.name, {
+          name: functionDef.name,
+          description: functionDef.description,
+          input_schema: functionDef.parameters || { type: 'object', properties: {}, required: [] },
+          transport: 'server_injected_credentials',
+          connector_id: serviceId,
+        });
+      }
+      for (const capability of args.openApiCapabilities || []) {
+        const name = `${serviceId}__${String(capability.operation_id || '').replace(/[^\w]+/g, '_')}`;
+        if (built.has(name)) continue;
+        built.set(name, {
+          name,
+          description: capability.label || capability.operation_id,
+          input_schema: capability.schema || { type: 'object', properties: {}, required: [] },
+          transport: 'server_injected_credentials',
+          connector_id: serviceId,
+        });
+      }
+      return Array.from(built.values());
+    };
+
     // Get catalog ids already covered by marketplace
     const marketplaceIds = new Set(PARTNER_APP_CATALOG.map((a) => a.id));
 
@@ -3749,12 +3864,23 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
     for (const app of PARTNER_APP_CATALOG) {
       if (domain && app.category !== domain) continue;
       const health = healthMap.get(app.id);
+      const registryTools = ACTION_REGISTRY[app.id]?.tools || [];
+      const capabilityPolicies = buildCapabilityData(app.id, {
+        reads: (app.permissions || []).map((permission) => String(permission).replace(/^Read:\s*/i, '')),
+        writes: (app.actionsUnlocked || []).map((label) => ({ id: label, label, approvalDefault: true, risk: 'medium' })),
+        tools: registryTools,
+        openApiCapabilities: openApiCapabilityMap.get(app.id) as Array<Record<string, any>> | undefined,
+      });
       entries.push({
         id: app.id,
+        app_key: app.id,
+        display_name: app.name,
         name: app.name,
         category: app.category,
         description: app.description,
         authType: app.installMethod,
+        auth_type: app.installMethod,
+        connection_type: openApiCapabilityMap.has(app.id) ? 'mcp_server' : (app.installMethod === 'oauth2' ? 'oauth_connector' : 'native_connector'),
         requiredFields: app.requiredFields,
         badge: app.badge,
         comingSoon: !!app.comingSoon,
@@ -3770,11 +3896,26 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
         relatedAgentIds: app.relatedAgentIds,
         source: 'marketplace' as const,
         installed: !!health,
+        is_connected: !!health,
         connectionStatus: health?.status ?? null,
+        connection_status: health?.status ?? null,
+        health_status: !health ? 'not_connected' : (health.status === 'connected' ? 'healthy' : health.status === 'syncing' ? 'degraded' : 'degraded'),
+        supports_health_test: app.installMethod !== 'free',
+        health_test_mode: app.installMethod !== 'free' ? 'direct' : 'none',
+        logo_url: null,
+        logo_fallback: app.logoLetter,
         lastSyncAt: health?.last_sync_at ?? null,
         lastErrorMsg: health?.last_error_msg ?? null,
         agentCount: agentCountMap.get(app.id) || 0,
+        linked_agent_count: agentCountMap.get(app.id) || 0,
         hasActions: ACTION_REGISTRY.hasOwnProperty(app.id),
+        supports_governed_actions: capabilityPolicies.length > 0,
+        supports_permissions: capabilityPolicies.length > 0,
+        supports_agent_linking: true,
+        agent_capabilities: capabilityPolicies.map((item) => item.capability),
+        capability_policies: capabilityPolicies,
+        mcp_tools: buildMcpTools(app.id, { tools: registryTools, openApiCapabilities: openApiCapabilityMap.get(app.id) as Array<Record<string, any>> | undefined }),
+        credential_handling: 'server_injected',
       });
     }
 
@@ -3784,12 +3925,23 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
       const catLower = (spec.category || '').toLowerCase();
       if (domain && catLower !== domain) continue;
       const health = healthMap.get(spec.id);
+      const registryTools = ACTION_REGISTRY[spec.id]?.tools || [];
+      const capabilityPolicies = buildCapabilityData(spec.id, {
+        reads: spec.capabilities?.reads || [],
+        writes: (spec.capabilities?.writes || []) as Array<Record<string, any>>,
+        tools: registryTools,
+        openApiCapabilities: openApiCapabilityMap.get(spec.id) as Array<Record<string, any>> | undefined,
+      });
+      const supportsHealthTest = spec.id === 'internal' || Boolean(getAdapter(spec.id));
       entries.push({
         id: spec.id,
+        app_key: spec.id,
+        display_name: spec.name,
         name: spec.name,
         category: catLower,
         description: spec.description || '',
         authType: spec.authType,
+        auth_type: spec.authType,
         requiredFields: spec.apiKeyConfig?.requiredFields,
         badge: spec.tags?.[0],
         comingSoon: spec.status === 'COMING_SOON',
@@ -3805,17 +3957,72 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
         relatedAgentIds: [],
         source: 'integration' as const,
         installed: !!health,
+        is_connected: !!health,
         connectionStatus: health?.status ?? null,
+        connection_status: health?.status ?? null,
+        health_status: !health ? 'not_connected' : (health.status === 'connected' ? 'healthy' : health.status === 'syncing' ? 'degraded' : 'degraded'),
+        supports_health_test: supportsHealthTest,
+        health_test_mode: supportsHealthTest ? 'adapter' : 'unsupported',
+        connection_type: openApiCapabilityMap.has(spec.id) ? 'mcp_server' : (spec.authType === 'oauth2' ? 'oauth_connector' : 'native_connector'),
+        logo_url: null,
+        logo_fallback: (spec.name || '?')[0].toUpperCase(),
         lastSyncAt: health?.last_sync_at ?? null,
         lastErrorMsg: health?.last_error_msg ?? null,
         agentCount: agentCountMap.get(spec.id) || 0,
+        linked_agent_count: agentCountMap.get(spec.id) || 0,
         hasActions: ACTION_REGISTRY.hasOwnProperty(spec.id),
+        supports_governed_actions: capabilityPolicies.length > 0,
+        supports_permissions: capabilityPolicies.length > 0,
+        supports_agent_linking: true,
+        agent_capabilities: capabilityPolicies.map((item) => item.capability),
+        capability_policies: capabilityPolicies,
+        mcp_tools: buildMcpTools(spec.id, { tools: registryTools, openApiCapabilities: openApiCapabilityMap.get(spec.id) as Array<Record<string, any>> | undefined }),
+        credential_handling: 'server_injected',
       });
     }
 
     return res.json({ success: true, data: entries });
   } catch (err: any) {
     logger.error('Failed to load unified connector catalog', { error: err.message });
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/:connectorId/mcp-tools', authenticateToken, async (req, res) => {
+  try {
+    const orgId = (req as any).user?.organization_id;
+    if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+    const { connectorId } = req.params;
+    const registryTools = ACTION_REGISTRY[connectorId]?.tools || [];
+    const openApiRows = (await supabaseRestAsService('integration_openapi_specs', new URLSearchParams({
+      organization_id: eqFilter(orgId),
+      service_id: eqFilter(connectorId),
+      select: 'capability_map',
+      order: 'created_at.desc',
+      limit: '1',
+    })).catch(() => [])) as Array<{ capability_map?: { capabilities?: Array<Record<string, any>> } | null }>;
+    const openApiCapabilities = openApiRows?.[0]?.capability_map?.capabilities || [];
+    const tools = [
+      ...registryTools.map((tool) => ({
+        name: tool.function.name,
+        description: tool.function.description,
+        input_schema: tool.function.parameters || { type: 'object', properties: {}, required: [] },
+        transport: 'server_injected_credentials',
+        connector_id: connectorId,
+      })),
+      ...openApiCapabilities
+        .filter((capability) => !registryTools.some((tool) => tool.function.name === `${connectorId}__${String(capability.operation_id || '').replace(/[^\w]+/g, '_')}`))
+        .map((capability) => ({
+          name: `${connectorId}__${String(capability.operation_id || '').replace(/[^\w]+/g, '_')}`,
+          description: capability.label || capability.operation_id,
+          input_schema: capability.schema || { type: 'object', properties: {}, required: [] },
+          transport: 'server_injected_credentials',
+          connector_id: connectorId,
+        })),
+    ];
+    return res.json({ success: true, data: tools });
+  } catch (err: any) {
+    logger.error('Failed to load MCP tools for connector', { connectorId: req.params.connectorId, error: err.message });
     return res.status(500).json({ success: false, error: err.message });
   }
 });

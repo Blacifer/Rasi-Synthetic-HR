@@ -2,25 +2,25 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '../../../../lib/api-client';
 import type { AIAgent } from '../../../../types';
 import type { UnifiedApp } from '../types';
-import { fromIntegration, getAppServiceId } from '../helpers';
+import { fromUnifiedConnectorEntry, getAppServiceId } from '../helpers';
 import { FEATURED_IDS, CATEGORIES } from '../constants';
 
 export function useAppsData(agents: AIAgent[] = []) {
-  const [rawIntegrations, setRawIntegrations] = useState<any[]>([]);
+  const [rawCatalog, setRawCatalog] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const intsRes = await api.integrations.getAppsInventory();
-      if (intsRes.success && Array.isArray(intsRes.data)) setRawIntegrations(intsRes.data);
+      const catalogRes = await api.unifiedConnectors.getCatalog();
+      if (catalogRes.success && Array.isArray(catalogRes.data)) setRawCatalog(catalogRes.data);
     } catch { /* silent */ }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { void loadData(); }, [loadData]);
 
-  const allApps = useMemo<UnifiedApp[]>(() => rawIntegrations.map(fromIntegration), [rawIntegrations]);
+  const allApps = useMemo<UnifiedApp[]>(() => rawCatalog.map(fromUnifiedConnectorEntry), [rawCatalog]);
 
   const connectedList = useMemo(() => allApps.filter((app) => app.connected), [allApps]);
   const browseList = useMemo(() => allApps, [allApps]);
@@ -50,7 +50,20 @@ export function useAppsData(agents: AIAgent[] = []) {
 
   // Optimistic update helpers
   const markConnected = useCallback((connectorId: string) => {
-    setRawIntegrations((p) => p.map((i) => connectorId === `int:${i.id}` ? { ...i, lifecycleStatus: 'connected', status: 'connected' } : i));
+    setRawCatalog((prev) =>
+      prev.map((entry) => {
+        const entryId = entry.app_key || entry.id;
+        if (entryId !== connectorId) return entry;
+        return {
+          ...entry,
+          installed: true,
+          is_connected: true,
+          connectionStatus: 'connected',
+          connection_status: 'connected',
+          health_status: entry.supports_health_test ? 'healthy' : entry.health_status,
+        };
+      }),
+    );
   }, []);
 
   return {

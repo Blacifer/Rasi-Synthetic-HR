@@ -5,7 +5,7 @@ import { api } from '../../../lib/api-client';
 import { toast } from '../../../lib/toast';
 import { cn } from '../../../lib/utils';
 import type { AIAgent } from '../../../types';
-import type { UnifiedApp } from './types';
+import type { UnifiedApp, DrawerTab } from './types';
 import { useAppsData } from './hooks/useAppsData';
 import { useAppActions } from './hooks/useAppActions';
 import { StatsBar } from './components/StatsBar';
@@ -31,7 +31,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   const agentIdParam = searchParams.get('agentId');
   const domainParam = searchParams.get('domain');
   const serviceParam = searchParams.get('service');
-  const drawerTabParam = searchParams.get('drawerTab') as 'overview' | 'agents' | 'history' | 'actions' | 'slack' | 'permissions' | null;
+  const drawerTabParam = searchParams.get('drawerTab') as DrawerTab | null;
   const oauthConnected = searchParams.get('marketplace_connected') === 'true';
   const oauthApp = searchParams.get('marketplace_app');
   const intOauthStatus = searchParams.get('status');
@@ -78,14 +78,20 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   const testAll = async () => {
     if (connectedList.length === 0) { toast.info('No connected apps to test'); return; }
     setTestingAll(true);
-    let ok = 0; let fail = 0;
+    let ok = 0; let fail = 0; let skipped = 0;
     for (const app of connectedList) {
-      const res = await api.integrations.test(app.appId);
+      if (!app.supportsHealthTest) {
+        skipped++;
+        continue;
+      }
+      const res = app.source === 'marketplace'
+        ? await api.marketplace.testConnection(app.appId)
+        : await api.integrations.test(app.appId);
       const result: 'ok' | 'error' = res.success ? 'ok' : 'error';
       if (res.success) ok++; else fail++;
       setHealthMap((prev) => new Map(prev).set(app.appId, result));
     }
-    toast.success(`Health check done — ${ok} healthy, ${fail} failed`);
+    toast.success(`Health check done — ${ok} healthy, ${fail} failed, ${skipped} skipped`);
     setTestingAll(false);
   };
 
@@ -225,8 +231,8 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
               { label: 'Refresh', onClick: () => void reload(), variant: 'secondary' as const, icon: <RefreshCw className="w-4 h-4" /> },
             ]}
             stats={[
-              { label: 'Connected', value: `${connectedList.length}`, detail: 'Capabilities already wired in' },
-              { label: 'Governed actions', value: `${governedCount}`, detail: 'Apps with governed controls enabled' },
+              { label: 'Connected', value: `${connectedList.length}`, detail: 'Apps ready for agents or operators' },
+              { label: 'Governed apps', value: `${governedCount}`, detail: 'Connected apps with governed capabilities' },
               { label: 'Health issues', value: `${errorCount}`, detail: 'Connections needing attention' },
             ]}
           />

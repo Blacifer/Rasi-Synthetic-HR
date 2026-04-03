@@ -5,6 +5,7 @@ interface AppLogoProps {
   appId: string;
   logoLetter: string;
   colorHex: string;
+  logoUrl?: string | null;
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
@@ -15,9 +16,9 @@ const SIZE_CLASSES = {
   xl:  { outer: 'w-14 h-14 rounded-2xl',font: '1.125rem' },
 };
 
-export function AppLogo({ appId, logoLetter, colorHex, size = 'md' }: AppLogoProps) {
+export function AppLogo({ appId, logoLetter, colorHex, logoUrl, size = 'md' }: AppLogoProps) {
   const [failed, setFailed] = useState(false);
-  const url = getLogoUrl(appId);
+  const url = logoUrl || getLogoUrl(appId);
   const { outer, font } = SIZE_CLASSES[size];
 
   if (url && !failed) {

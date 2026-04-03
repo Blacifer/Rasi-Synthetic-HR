@@ -12,7 +12,18 @@ interface UseAppActionsOptions {
 export function useAppActions({ reload, markConnected, onPostConnect }: UseAppActionsOptions) {
   const handleConnect = useCallback(async (app: UnifiedApp, creds: Record<string, string>) => {
     try {
-      if (app.authType === 'oauth2') {
+      if (app.source === 'marketplace') {
+        const res = await api.marketplace.install(app.appId, creds);
+        const data = res.data as any;
+        if (!res.success) {
+          toast.error((res as any).error || 'Connection failed');
+          return;
+        }
+        if (data?.authUrl) {
+          window.location.href = data.authUrl;
+          return;
+        }
+      } else if (app.authType === 'oauth2') {
         const res = await api.integrations.initOAuth(app.appId, '/dashboard/apps', creds, false);
         if (res.success && (res.data as any)?.url) {
           window.location.href = (res.data as any).url;
@@ -22,10 +33,13 @@ export function useAppActions({ reload, markConnected, onPostConnect }: UseAppAc
         return;
       } else {
         const res = await api.integrations.connect(app.appId, creds);
-        if (!res.success) { toast.error((res as any).error || 'Connection failed'); return; }
+        if (!res.success) {
+          toast.error((res as any).error || 'Connection failed');
+          return;
+        }
       }
       toast.success(`${app.name} connected`);
-      markConnected(app.id);
+      markConnected(app.appId);
       onPostConnect?.(app);
     } catch (e: any) {
       toast.error(e?.message || 'Connection failed');
@@ -34,7 +48,9 @@ export function useAppActions({ reload, markConnected, onPostConnect }: UseAppAc
 
   const handleDisconnect = useCallback(async (app: UnifiedApp) => {
     try {
-      const res = await api.integrations.disconnect(app.appId);
+      const res = app.source === 'marketplace'
+        ? await api.marketplace.uninstall(app.appId)
+        : await api.integrations.disconnect(app.appId);
       if (!res.success) throw new Error((res as any).error);
       toast.success(`${app.name} disconnected`);
       void reload();
@@ -45,6 +61,22 @@ export function useAppActions({ reload, markConnected, onPostConnect }: UseAppAc
 
   const handleConfigure = useCallback(async (app: UnifiedApp, creds: Record<string, string>) => {
     try {
+      if (app.source === 'marketplace') {
+        if (app.authType === 'oauth2') {
+          const res = await api.marketplace.install(app.appId, creds);
+          const data = res.data as any;
+          if (res.success && data?.authUrl) {
+            window.location.href = data.authUrl;
+            return;
+          }
+          throw new Error((res as any).error || 'Reauthorization failed');
+        }
+        const res = await api.marketplace.updateCredentials(app.appId, creds);
+        if (!res.success) throw new Error((res as any).error);
+        toast.success(`${app.name} credentials updated`);
+        void reload();
+        return;
+      }
       if (app.authType === 'oauth2') {
         const res = await api.integrations.initOAuth(app.appId, '/dashboard/apps', creds, false);
         if (res.success && (res.data as any)?.url) {
@@ -63,8 +95,13 @@ export function useAppActions({ reload, markConnected, onPostConnect }: UseAppAc
   }, [reload]);
 
   const handleTest = useCallback(async (app: UnifiedApp) => {
+    if (!app.supportsHealthTest) {
+      return { success: true, skipped: true, unsupported: true } as any;
+    }
     try {
-      const res = await api.integrations.test(app.appId);
+      const res = app.source === 'marketplace'
+        ? await api.marketplace.testConnection(app.appId)
+        : await api.integrations.test(app.appId);
       if (res.success) {
         toast.success(`${app.name}: connection healthy`);
       } else {
@@ -78,7 +115,7 @@ export function useAppActions({ reload, markConnected, onPostConnect }: UseAppAc
   }, []);
 
   const handleRefresh = useCallback(async (app: UnifiedApp) => {
-    if (app.authType !== 'oauth2') return;
+    if (app.source === 'marketplace' || app.authType !== 'oauth2') return;
     try {
       const res = await api.integrations.refresh(app.appId);
       if (res.success) {
@@ -94,9 +131,12 @@ export function useAppActions({ reload, markConnected, onPostConnect }: UseAppAc
 
   const handleInitOAuth = useCallback(async (app: UnifiedApp) => {
     try {
-      const res = await api.integrations.initOAuth(app.appId, '/dashboard/apps', {}, false);
-      if (res.success && (res.data as any)?.url) {
-        window.location.href = (res.data as any).url;
+      const res = app.source === 'marketplace'
+        ? await api.marketplace.install(app.appId)
+        : await api.integrations.initOAuth(app.appId, '/dashboard/apps', {}, false);
+      const url = (res.data as any)?.url || (res.data as any)?.authUrl;
+      if (res.success && url) {
+        window.location.href = url;
       } else {
         toast.error((res as any).error || 'OAuth init failed');
       }

@@ -33,7 +33,7 @@ export function ConnectModal({ app, onConnect, onDisconnect, onClose }: ConnectM
         {/* Header */}
         <div className="flex items-start justify-between p-5 border-b border-white/8">
           <div className="flex items-center gap-3">
-            <AppLogo appId={app.appId} logoLetter={app.logoLetter} colorHex={app.colorHex} size="md" />
+            <AppLogo appId={app.appId} logoLetter={app.logoLetter} colorHex={app.colorHex} logoUrl={app.logoUrl} size="md" />
             <div>
               <p className="font-bold text-white text-sm">{app.name}</p>
               {app.developer && <p className="text-xs text-slate-500">{app.developer}</p>}
@@ -66,11 +66,11 @@ export function ConnectModal({ app, onConnect, onDisconnect, onClose }: ConnectM
           )}
 
           {/* What you can do */}
-          {(app.actionsUnlocked?.length || app.permissions?.length) ? (
+          {(app.agentCapabilities?.length || app.permissions?.length) ? (
             <div className="space-y-2">
               <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">What you can do</p>
               <ul className="space-y-1.5">
-                {app.actionsUnlocked?.slice(0, 4).map((a) => (
+                {(app.agentCapabilities || app.actionsUnlocked || []).slice(0, 4).map((a) => (
                   <li key={a} className="flex items-start gap-2 text-xs text-slate-300">
                     <Zap className="w-3 h-3 text-amber-400 mt-0.5 shrink-0" />{a}
                   </li>

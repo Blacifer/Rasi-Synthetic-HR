@@ -8,21 +8,32 @@ import type { ApiResponse } from './_helpers';
 export type UnifiedConnectorEntry = {
   /** Unique connector identifier, e.g. "salesforce", "zendesk" */
   id: string;
+  app_key?: string;
+  display_name?: string;
   name: string;
   description: string;
   category: string;
   logo: string;
-  authType: 'oauth' | 'api_key' | 'none';
+  authType: 'oauth' | 'oauth2' | 'api_key' | 'free' | 'none';
+  auth_type?: 'oauth' | 'oauth2' | 'api_key' | 'free' | 'none';
   /** Whether this connector has an OAuth install flow (marketplace) */
   hasOAuth: boolean;
   /** Whether this org has installed/connected this connector */
   installed: boolean;
+  is_connected?: boolean;
   /** Connection status for installed connectors */
   connectionStatus: 'connected' | 'error' | 'expired' | 'syncing' | 'disconnected' | null;
+  connection_status?: 'connected' | 'error' | 'expired' | 'syncing' | 'disconnected' | null;
+  health_status?: 'healthy' | 'degraded' | 'not_connected' | 'unsupported' | string | null;
+  supports_health_test?: boolean;
+  health_test_mode?: 'direct' | 'adapter' | 'unsupported' | 'none' | string | null;
   /** Number of org agents linked to this connector */
   agentCount: number;
+  linked_agent_count?: number;
   /** Last sync timestamp for installed connectors */
   lastSync: string | null;
+  lastSyncAt?: string | null;
+  lastErrorMsg?: string | null;
   /** Underlying integration record id (if installed via integrations system) */
   integrationId: string | null;
   /** Underlying marketplace app id (if installed via marketplace) */
@@ -31,6 +42,39 @@ export type UnifiedConnectorEntry = {
   bundles: string[];
   /** Source system: "marketplace" or "integration" */
   source: 'marketplace' | 'integration';
+  comingSoon?: boolean;
+  featured?: boolean;
+  badge?: string;
+  requiredFields?: Array<{ name: string; label: string; type: 'text' | 'password'; placeholder?: string; required: boolean }>;
+  permissions?: string[];
+  actionsUnlocked?: string[];
+  installCount?: number;
+  setupTimeMinutes?: number;
+  developer?: string;
+  logoLetter?: string;
+  colorHex?: string;
+  connection_type?: 'native_connector' | 'oauth_connector' | 'mcp_server';
+  supports_governed_actions?: boolean;
+  supports_permissions?: boolean;
+  supports_agent_linking?: boolean;
+  linked_agent_ids?: string[];
+  agent_capabilities?: string[];
+  capability_policies?: Array<{
+    capability: string;
+    requires_human_approval: boolean;
+    risk_level: 'low' | 'medium' | 'high';
+    enabled: boolean;
+  }>;
+  mcp_tools?: Array<{
+    name: string;
+    description?: string;
+    input_schema?: Record<string, any>;
+    transport?: string;
+    connector_id?: string;
+  }>;
+  logo_url?: string | null;
+  logo_fallback?: string | null;
+  credential_handling?: 'server_injected';
 };
 
 export type ConnectorAction = {
@@ -76,6 +120,18 @@ export const unifiedConnectorsApi = {
    */
   async getActions(connectorId: string): Promise<ApiResponse<ConnectorAction[]>> {
     return authenticatedFetch(`/connectors/${encodeURIComponent(connectorId)}/actions`, {
+      method: 'GET',
+    });
+  },
+
+  async getMcpTools(connectorId: string): Promise<ApiResponse<Array<{
+    name: string;
+    description?: string;
+    input_schema?: Record<string, any>;
+    transport?: string;
+    connector_id?: string;
+  }>>> {
+    return authenticatedFetch(`/connectors/${encodeURIComponent(connectorId)}/mcp-tools`, {
       method: 'GET',
     });
   },
