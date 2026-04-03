@@ -1,7 +1,7 @@
-import { Bot, BriefcaseBusiness, Gavel, HandCoins, Loader2, MessageSquare, Shield, X, Zap, CheckCircle2 } from 'lucide-react';
+import { Bot, BriefcaseBusiness, Gavel, HandCoins, Loader2, MessageSquare, Shield, X, Zap, CheckCircle2, Settings2 } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import type { UnifiedApp } from '../types';
-import { trustTierTone, maturityTone, guardrailTone, fmtDate, financeConnectorMode, getAppServiceId, getSetupModeSummary, isTallyConnector, isClearTaxConnector, isNaukriConnector, isSlackRail } from '../helpers';
+import { trustTierTone, maturityTone, guardrailTone, fmtDate, financeConnectorMode, getAppServiceId, getSetupModeLabel, getSetupModeSummary, isTallyConnector, isClearTaxConnector, isNaukriConnector, isSlackRail } from '../helpers';
 
 interface OverviewTabProps {
   app: UnifiedApp;
@@ -19,6 +19,7 @@ export function OverviewTab({ app, agentNames, onConfigure: _onConfigure, onDisc
   const isNaukri = isNaukriConnector(rawId);
   const isSlack = isSlackRail(rawId);
   const row = app.integrationData;
+  const advancedModes = (app.advancedSetupModes || []).filter((mode) => mode !== app.primarySetupMode);
 
   return (
     <div className="space-y-5">
@@ -90,6 +91,30 @@ export function OverviewTab({ app, agentNames, onConfigure: _onConfigure, onDisc
           </div>
         )}
       </div>
+
+      {advancedModes.length > 0 && (
+        <div className="rounded-xl border border-indigo-400/15 bg-indigo-500/[0.04] p-4">
+          <div className="flex items-start gap-3">
+            <Settings2 className="w-4 h-4 text-indigo-300 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white">Advanced setup</p>
+              <p className="text-xs text-slate-300 mt-1">
+                This app has one primary connection path in the catalog. Alternate connection methods stay here so operators can switch setup strategy without creating duplicate app cards.
+              </p>
+              <div className="flex flex-wrap gap-2 mt-3">
+                <span className="text-[10px] px-2 py-1 rounded-md border border-emerald-400/20 bg-emerald-500/10 text-emerald-200 font-medium">
+                  Primary: {getSetupModeLabel(app.primarySetupMode, app.connectionType)}
+                </span>
+                {advancedModes.map((mode) => (
+                  <span key={mode} className="text-[10px] px-2 py-1 rounded-md border border-white/10 bg-black/10 text-slate-300 font-medium">
+                    Alternate: {getSetupModeLabel(mode, app.connectionType)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Domain-specific guidance boxes */}
       {financeMode && (

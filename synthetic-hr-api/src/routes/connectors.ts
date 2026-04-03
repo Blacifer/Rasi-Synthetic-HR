@@ -3864,6 +3864,10 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
       'microsoft-365': 'microsoft-365',
       'zoho_people': 'zoho-people',
       'zoho-people': 'zoho-people',
+      'zoho_learn': 'zoho-learn',
+      'zoho-learn': 'zoho-learn',
+      'zoho_recruit': 'zoho-recruit',
+      'zoho-recruit': 'zoho-recruit',
       'zoho_crm': 'zoho-crm',
       'zoho-crm': 'zoho-crm',
     };
@@ -3871,6 +3875,8 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
       'google-workspace': 'marketplace',
       'microsoft-365': 'marketplace',
       'zoho-people': 'integration',
+      'zoho-learn': 'integration',
+      'zoho-recruit': 'integration',
       'zoho-crm': 'integration',
     };
     const toCanonicalAppKey = (value: string) => {
@@ -3886,6 +3892,8 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
             ? ['api_key']
             : ['direct'];
       if (canonical === 'zoho-people') return { primary: 'oauth' as const, advanced: ['oauth', 'direct'] as Array<'oauth' | 'direct'> };
+      if (canonical === 'zoho-learn') return { primary: 'oauth' as const, advanced: ['oauth', 'direct'] as Array<'oauth' | 'direct'> };
+      if (canonical === 'zoho-recruit') return { primary: 'oauth' as const, advanced: ['oauth', 'direct'] as Array<'oauth' | 'direct'> };
       if (canonical === 'google-workspace') return { primary: 'oauth' as const, advanced: ['oauth'] as Array<'oauth'> };
       if (canonical === 'microsoft-365') return { primary: 'oauth' as const, advanced: ['oauth'] as Array<'oauth'> };
       return { primary: defaults[0], advanced: defaults };

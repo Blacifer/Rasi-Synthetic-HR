@@ -78,6 +78,42 @@ jest.mock('../marketplace', () => ({
       colorHex: '#E42527',
       logoLetter: 'Z',
     },
+    {
+      id: 'zoho-learn',
+      name: 'Zoho Learn',
+      developer: 'Zoho',
+      category: 'hr',
+      description: 'Zoho Learn direct setup',
+      permissions: ['Read courses'],
+      relatedAgentIds: [],
+      actionsUnlocked: ['Fetch courses'],
+      setupTimeMinutes: 3,
+      bundleIds: [],
+      installMethod: 'api_key',
+      requiredFields: [{ name: 'api_key', label: 'API Key', type: 'password', required: true }],
+      installCount: 50,
+      featured: false,
+      colorHex: '#E42527',
+      logoLetter: 'Z',
+    },
+    {
+      id: 'zoho-recruit',
+      name: 'Zoho Recruit',
+      developer: 'Zoho',
+      category: 'recruitment',
+      description: 'Zoho Recruit direct setup',
+      permissions: ['Read candidates'],
+      relatedAgentIds: [],
+      actionsUnlocked: ['Fetch candidates'],
+      setupTimeMinutes: 3,
+      bundleIds: [],
+      installMethod: 'api_key',
+      requiredFields: [{ name: 'api_key', label: 'API Key', type: 'password', required: true }],
+      installCount: 50,
+      featured: false,
+      colorHex: '#E42527',
+      logoLetter: 'Z',
+    },
   ],
   getInstalledAppHealth: jest.fn(async () => new Map()),
 }));
@@ -113,6 +149,26 @@ jest.mock('../../lib/integrations/spec-registry', () => ({
       capabilities: { reads: ['employees.read'], writes: [{ id: 'employee.update', label: 'Update employee', approvalDefault: true, risk: 'medium' }] },
       status: 'READY',
       color: '#D97706',
+    },
+    {
+      id: 'zoho_learn',
+      name: 'Zoho Learn',
+      category: 'HR',
+      description: 'Zoho Learn OAuth integration',
+      authType: 'oauth2',
+      capabilities: { reads: ['courses.read'], writes: [{ id: 'course.assign', label: 'Assign course', approvalDefault: true, risk: 'medium' }] },
+      status: 'READY',
+      color: '#EA580C',
+    },
+    {
+      id: 'zoho_recruit',
+      name: 'Zoho Recruit',
+      category: 'RECRUITMENT',
+      description: 'Zoho Recruit OAuth integration',
+      authType: 'oauth2',
+      capabilities: { reads: ['candidates.read'], writes: [{ id: 'candidate.create', label: 'Create candidate', approvalDefault: true, risk: 'medium' }] },
+      status: 'READY',
+      color: '#DC2626',
     },
   ],
 }));
@@ -195,6 +251,8 @@ describe('Connectors catalog unified canonicalization', () => {
     const googleRows = rows.filter((row) => row.app_key === 'google-workspace');
     const microsoftRows = rows.filter((row) => row.app_key === 'microsoft-365');
     const zohoPeopleRows = rows.filter((row) => row.app_key === 'zoho-people');
+    const zohoLearnRows = rows.filter((row) => row.app_key === 'zoho-learn');
+    const zohoRecruitRows = rows.filter((row) => row.app_key === 'zoho-recruit');
 
     expect(googleRows).toHaveLength(1);
     expect(googleRows[0].source).toBe('marketplace');
@@ -211,5 +269,17 @@ describe('Connectors catalog unified canonicalization', () => {
     expect(zohoPeopleRows[0].primary_setup_mode).toBe('oauth');
     expect(zohoPeopleRows[0].advanced_setup_modes).toEqual(expect.arrayContaining(['oauth', 'direct']));
     expect(zohoPeopleRows[0].primary_service_id).toBe('zoho_people');
+
+    expect(zohoLearnRows).toHaveLength(1);
+    expect(zohoLearnRows[0].source).toBe('integration');
+    expect(zohoLearnRows[0].primary_setup_mode).toBe('oauth');
+    expect(zohoLearnRows[0].advanced_setup_modes).toEqual(expect.arrayContaining(['oauth', 'direct']));
+    expect(zohoLearnRows[0].primary_service_id).toBe('zoho_learn');
+
+    expect(zohoRecruitRows).toHaveLength(1);
+    expect(zohoRecruitRows[0].source).toBe('integration');
+    expect(zohoRecruitRows[0].primary_setup_mode).toBe('oauth');
+    expect(zohoRecruitRows[0].advanced_setup_modes).toEqual(expect.arrayContaining(['oauth', 'direct']));
+    expect(zohoRecruitRows[0].primary_service_id).toBe('zoho_recruit');
   });
 });
