@@ -208,6 +208,12 @@ export const integrationsApi = {
     });
   },
 
+  async getWorkspacePreview(service: string): Promise<ApiResponse<any>> {
+    return authenticatedFetch(`/integrations/${encodeURIComponent(service)}/workspace-preview`, {
+      method: 'GET',
+    });
+  },
+
   async initOAuth(service: string, returnTo: string, connection?: Record<string, string>, popup?: boolean): Promise<ApiResponse<{ url: string }>> {
     return authenticatedFetch('/integrations/oauth/init', {
       method: 'POST',

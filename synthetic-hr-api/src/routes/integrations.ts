@@ -600,6 +600,14 @@ async function readCredentials(rest: RestFn, integrationId: string) {
   return out;
 }
 
+function toServiceAliases(service: string) {
+  const normalized = String(service || '').trim();
+  const aliases = new Set<string>([normalized]);
+  if (normalized.includes('_')) aliases.add(normalized.replace(/_/g, '-'));
+  if (normalized.includes('-')) aliases.add(normalized.replace(/-/g, '_'));
+  return Array.from(aliases);
+}
+
 async function writeConnectionLog(
   rest: RestFn,
   integrationId: string,
@@ -1650,6 +1658,149 @@ router.post('/:service/sample-pull', requirePermission('connectors.read'), async
   });
 
   return res.json({ success: true, data: sample });
+});
+
+router.get('/:service/workspace-preview', requirePermission('connectors.read'), async (req, res) => {
+  const orgId = getOrgId(req);
+  if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+
+  const rest = restAsUser(req);
+  const service = req.params.service;
+  const aliases = toServiceAliases(service);
+  const spec = getIntegrationSpec(service) || aliases.map((alias) => getIntegrationSpec(alias)).find(Boolean);
+  if (!spec) return res.status(404).json({ success: false, error: 'Integration not found' });
+
+  const iQuery = new URLSearchParams();
+  iQuery.set('organization_id', eq(orgId));
+  iQuery.set('service_type', in_(aliases));
+  iQuery.set('select', 'id,service_type,status,service_name');
+  const rows = await safeQuery<Pick<StoredIntegrationRow, 'id' | 'service_type' | 'status' | 'service_name'>>(rest, 'integrations', iQuery);
+  const connected = (rows || []).find((row) => row.status === 'connected');
+  if (!connected) {
+    return res.status(400).json({ success: false, error: 'Integration not connected' });
+  }
+
+  const credentials = await readCredentials(rest, connected.id);
+  const token = credentials.access_token || credentials.accessToken;
+  if (!token) {
+    return res.status(400).json({ success: false, error: 'Integration credentials are missing an access token' });
+  }
+
+  const preview: Record<string, any> = {
+    service: connected.service_type,
+    profile: null,
+    events: [],
+    users: [],
+    notes: [],
+    suggested_next_action: null,
+  };
+
+  if (aliases.includes('google-workspace') || aliases.includes('google_workspace')) {
+    const [profileRes, calendarRes, usersRes] = await Promise.allSettled([
+      fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      }),
+      fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=5&orderBy=startTime&singleEvents=true&timeMin=${encodeURIComponent(new Date().toISOString())}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      }),
+      fetch('https://admin.googleapis.com/admin/directory/v1/users?customer=my_customer&maxResults=5&orderBy=email', {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      }),
+    ]);
+
+    if (profileRes.status === 'fulfilled') {
+      const body: any = await profileRes.value.json().catch(() => null);
+      if (profileRes.value.ok && body) {
+        preview.profile = {
+          email: body.email ?? null,
+          name: body.name ?? null,
+          picture: body.picture ?? null,
+        };
+      }
+    }
+
+    if (calendarRes.status === 'fulfilled') {
+      const body: any = await calendarRes.value.json().catch(() => null);
+      if (calendarRes.value.ok && Array.isArray(body?.items)) {
+        preview.events = body.items.map((item: any) => ({
+          id: item.id,
+          title: item.summary || 'Untitled event',
+          start: item.start?.dateTime || item.start?.date || null,
+          end: item.end?.dateTime || item.end?.date || null,
+          organizer: item.organizer?.email || null,
+        }));
+      } else if (!calendarRes.value.ok) {
+        preview.notes.push('Calendar preview is unavailable with the current Google scope set.');
+      }
+    }
+
+    if (usersRes.status === 'fulfilled') {
+      const body: any = await usersRes.value.json().catch(() => null);
+      if (usersRes.value.ok && Array.isArray(body?.users)) {
+        preview.users = body.users.map((item: any) => ({
+          id: item.id,
+          email: item.primaryEmail || null,
+          name: item.name?.fullName || item.primaryEmail || 'Unknown user',
+          suspended: Boolean(item.suspended),
+        }));
+      } else if (!usersRes.value.ok) {
+        preview.notes.push('Directory preview is unavailable with the current Google scope set.');
+      }
+    }
+
+    preview.suggested_next_action = preview.events.length > 0
+      ? 'Review upcoming calendar commitments before allowing agents to send or schedule changes.'
+      : 'Reconnect with broader collaboration scopes if you want inbox and calendar work to happen fully inside Rasi.';
+  } else if (aliases.includes('microsoft-365') || aliases.includes('microsoft_365')) {
+    const [profileRes, calendarRes] = await Promise.allSettled([
+      fetch('https://graph.microsoft.com/v1.0/me', {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      }),
+      fetch(`https://graph.microsoft.com/v1.0/me/calendarview?startDateTime=${encodeURIComponent(new Date().toISOString())}&endDateTime=${encodeURIComponent(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString())}&$top=5`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      }),
+    ]);
+
+    if (profileRes.status === 'fulfilled') {
+      const body: any = await profileRes.value.json().catch(() => null);
+      if (profileRes.value.ok && body) {
+        preview.profile = {
+          email: body.mail || body.userPrincipalName || null,
+          name: body.displayName || null,
+          title: body.jobTitle || null,
+        };
+      }
+    }
+
+    if (calendarRes.status === 'fulfilled') {
+      const body: any = await calendarRes.value.json().catch(() => null);
+      if (calendarRes.value.ok && Array.isArray(body?.value)) {
+        preview.events = body.value.map((item: any) => ({
+          id: item.id,
+          title: item.subject || 'Untitled event',
+          start: item.start?.dateTime || null,
+          end: item.end?.dateTime || null,
+          organizer: item.organizer?.emailAddress?.address || null,
+        }));
+      } else if (!calendarRes.value.ok) {
+        preview.notes.push('Calendar preview needs broader Microsoft Graph scopes than the current connection provides.');
+      }
+    }
+
+    preview.suggested_next_action = preview.events.length > 0
+      ? 'Review meetings and profile details before enabling agents to draft or schedule collaboration actions.'
+      : 'Reconnect with broader Microsoft Graph scopes if you want inbox and calendar work to happen fully inside Rasi.';
+  } else {
+    return res.status(400).json({ success: false, error: 'Workspace preview is not supported for this integration' });
+  }
+
+  await writeConnectionLog(rest, connected.id, 'workspace_preview', 'success', 'Loaded workspace preview', {
+    service: connected.service_type,
+    actor_user_id: req.user?.id || null,
+    actor_email: req.user?.email || null,
+  });
+
+  return res.json({ success: true, data: preview });
 });
 
 // Manual token refresh (OAuth only)

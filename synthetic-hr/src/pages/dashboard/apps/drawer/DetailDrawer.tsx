@@ -5,7 +5,7 @@ import { toast } from '../../../../lib/toast';
 import { cn } from '../../../../lib/utils';
 import type { AIAgent } from '../../../../types';
 import type { UnifiedApp, ConnectionLog, ConnectorExecution, DrawerTab } from '../types';
-import { getAppServiceId, getSetupModeLabel, isHrWorkspaceApp, isRecruitmentWorkspaceApp, isSlackRail } from '../helpers';
+import { getAppServiceId, getSetupModeLabel, isCollaborationWorkspaceApp, isHrWorkspaceApp, isRecruitmentWorkspaceApp, isSlackRail } from '../helpers';
 import { AppLogo } from '../components/AppLogo';
 import { OverviewTab } from './OverviewTab';
 import { AgentsTab } from './AgentsTab';
@@ -16,6 +16,7 @@ import { PermissionsTab } from './PermissionsTab';
 import { ApprovalsTab } from './ApprovalsTab';
 import { HrWorkspaceTab } from './HrWorkspaceTab';
 import { RecruitmentWorkspaceTab } from './RecruitmentWorkspaceTab';
+import { CollaborationWorkspaceTab } from './CollaborationWorkspaceTab';
 
 interface DetailDrawerProps {
   app: UnifiedApp;
@@ -29,9 +30,10 @@ interface DetailDrawerProps {
 export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, initialTab = 'overview' }: DetailDrawerProps) {
   const rawConnectorId = getAppServiceId(app);
   const isSlack = isSlackRail(rawConnectorId);
+  const isCollaborationWorkspace = isCollaborationWorkspaceApp(rawConnectorId);
   const isHrWorkspace = isHrWorkspaceApp(rawConnectorId);
   const isRecruitmentWorkspace = isRecruitmentWorkspaceApp(rawConnectorId);
-  const hasWorkspaceTab = app.connected && (isHrWorkspace || isRecruitmentWorkspace);
+  const hasWorkspaceTab = app.connected && (isCollaborationWorkspace || isHrWorkspace || isRecruitmentWorkspace);
 
   const [tab, setTab] = useState<DrawerTab>(initialTab);
   const [logs, setLogs] = useState<ConnectionLog[]>([]);
@@ -160,7 +162,7 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
 
   const TABS: Array<{ id: DrawerTab; label: string }> = [
     { id: 'overview', label: 'Overview' },
-    ...(hasWorkspaceTab ? [{ id: 'workspace' as DrawerTab, label: isRecruitmentWorkspace ? 'Hiring Workspace' : 'HR Workspace' }] : []),
+    ...(hasWorkspaceTab ? [{ id: 'workspace' as DrawerTab, label: isRecruitmentWorkspace ? 'Hiring Workspace' : isCollaborationWorkspace ? 'Collaboration Workspace' : 'HR Workspace' }] : []),
     ...(app.connected ? [{ id: 'agents' as DrawerTab, label: `Linked Agents (${linkedAgentIds.size})` }] : []),
     ...(app.connected ? [{ id: 'capabilities' as DrawerTab, label: `Capabilities (${app.agentCapabilities?.length || catalog.length || 0})` }] : []),
     ...(app.connected ? [{ id: 'approvals' as DrawerTab, label: 'HITL Approvals' }] : []),
@@ -303,6 +305,13 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
               agents={agents}
               rawConnectorId={rawConnectorId}
               initialLinkedIds={linkedAgentIds}
+            />
+          )}
+          {tab === 'workspace' && isCollaborationWorkspace && rawConnectorId && (
+            <CollaborationWorkspaceTab
+              app={app}
+              serviceId={rawConnectorId}
+              agentNames={agentNames}
             />
           )}
           {tab === 'workspace' && isHrWorkspace && (

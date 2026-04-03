@@ -340,14 +340,20 @@ export function isNaukriConnector(connectorId?: string | null) {
 export function isHrWorkspaceApp(connectorId?: string | null) {
   const value = String(connectorId || '').toLowerCase();
   return [
-    'google-workspace',
-    'google_workspace',
-    'microsoft-365',
-    'microsoft_365',
     'zoho-people',
     'zoho_people',
     'zoho-learn',
     'zoho_learn',
+  ].some((candidate) => value.includes(candidate));
+}
+
+export function isCollaborationWorkspaceApp(connectorId?: string | null) {
+  const value = String(connectorId || '').toLowerCase();
+  return [
+    'google-workspace',
+    'google_workspace',
+    'microsoft-365',
+    'microsoft_365',
   ].some((candidate) => value.includes(candidate));
 }
 
