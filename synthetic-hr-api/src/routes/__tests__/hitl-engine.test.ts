@@ -20,6 +20,14 @@ jest.mock('../../lib/supabase-rest', () => ({
   },
 }));
 
+jest.mock('../../lib/supabase', () => ({
+  supabase: {},
+  supabaseAdmin: {},
+  DEMO_ORG_ID: '00000000-0000-0000-0000-000000000000',
+  __esModule: true,
+  default: {},
+}));
+
 jest.mock('../../middleware/auth', () => ({
   authenticateToken: (req: any, _res: any, next: any) => {
     req.user = req.user || {
