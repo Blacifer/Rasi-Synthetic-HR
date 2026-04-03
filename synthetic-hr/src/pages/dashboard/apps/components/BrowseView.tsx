@@ -4,7 +4,7 @@ import { cn } from '../../../../lib/utils';
 import type { AIAgent } from '../../../../types';
 import type { UnifiedApp } from '../types';
 import { CATEGORY_META, SORT_OPTIONS, TYPE_OPTIONS, BADGE_STYLE } from '../constants';
-import { getAppServiceId, useOutsideClick } from '../helpers';
+import { getAppServiceId, getSetupModeLabel, useOutsideClick } from '../helpers';
 import { AppLogo } from './AppLogo';
 import { IntentPicker } from './IntentPicker';
 
@@ -57,9 +57,9 @@ function BrowseCard({ app, popLabel, onConnect, onManage }: {
         </div>
         <p className="text-xs text-slate-500 mt-1.5 leading-relaxed line-clamp-2">{app.description}</p>
         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-              {app.connectionType && (
+              {(app.primarySetupMode || app.connectionType) && (
                 <span className="text-[10px] text-slate-600">
-                  {app.connectionType === 'oauth_connector' ? 'OAuth setup' : app.connectionType === 'mcp_server' ? 'Agent tools ready' : 'Direct setup'}
+                  {getSetupModeLabel(app.primarySetupMode, app.connectionType)}
                 </span>
               )}
           {app.trustTier && (
@@ -129,10 +129,16 @@ export function BrowseView({ apps, agents, featured: featuredProp, initialCatego
     if (filterCategory !== 'all') list = list.filter((a) => a.category === filterCategory);
     if (search) {
       const q = search.toLowerCase();
-      list = list.filter((a) =>
+      const nameScoped = list.filter((a) =>
+        a.name.toLowerCase().includes(q) ||
+        (a.appId || '').toLowerCase().includes(q) ||
+        (a.developer || '').toLowerCase().includes(q)
+      );
+      list = (nameScoped.length > 0 ? nameScoped : list).filter((a) =>
         a.name.toLowerCase().includes(q) ||
         a.description.toLowerCase().includes(q) ||
-        (a.developer || '').toLowerCase().includes(q)
+        (a.developer || '').toLowerCase().includes(q) ||
+        (a.appId || '').toLowerCase().includes(q)
       );
     }
     if (sortBy === 'alpha') list.sort((a, b) => a.name.localeCompare(b.name));

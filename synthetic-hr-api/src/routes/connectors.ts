@@ -3856,15 +3856,54 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
       return Array.from(built.values());
     };
 
+    const normalizeCatalogId = (value: string) => String(value || '').trim().toLowerCase().replace(/_/g, '-');
+    const CANONICAL_APP_KEYS: Record<string, string> = {
+      'google_workspace': 'google-workspace',
+      'google-workspace': 'google-workspace',
+      'microsoft_365': 'microsoft-365',
+      'microsoft-365': 'microsoft-365',
+      'zoho_people': 'zoho-people',
+      'zoho-people': 'zoho-people',
+      'zoho_crm': 'zoho-crm',
+      'zoho-crm': 'zoho-crm',
+    };
+    const PREFERRED_SOURCE_BY_CANONICAL: Record<string, 'marketplace' | 'integration'> = {
+      'google-workspace': 'marketplace',
+      'microsoft-365': 'marketplace',
+      'zoho-people': 'integration',
+      'zoho-crm': 'integration',
+    };
+    const toCanonicalAppKey = (value: string) => {
+      const normalized = normalizeCatalogId(value);
+      return CANONICAL_APP_KEYS[value] || CANONICAL_APP_KEYS[normalized] || normalized;
+    };
+    const buildSetupModes = (serviceId: string, authType?: string) => {
+      const canonical = toCanonicalAppKey(serviceId);
+      const defaults: Array<'oauth' | 'direct' | 'api_key'> =
+        authType === 'oauth' || authType === 'oauth2'
+          ? ['oauth']
+          : authType === 'api_key'
+            ? ['api_key']
+            : ['direct'];
+      if (canonical === 'zoho-people') return { primary: 'oauth' as const, advanced: ['oauth', 'direct'] as Array<'oauth' | 'direct'> };
+      if (canonical === 'google-workspace') return { primary: 'oauth' as const, advanced: ['oauth'] as Array<'oauth'> };
+      if (canonical === 'microsoft-365') return { primary: 'oauth' as const, advanced: ['oauth'] as Array<'oauth'> };
+      return { primary: defaults[0], advanced: defaults };
+    };
+
     // Get catalog ids already covered by marketplace
-    const marketplaceIds = new Set(PARTNER_APP_CATALOG.map((a) => a.id));
+    const marketplaceIds = new Set(PARTNER_APP_CATALOG.map((a) => toCanonicalAppKey(a.id)));
 
     const entries: object[] = [];
 
     // Marketplace apps first
     for (const app of PARTNER_APP_CATALOG) {
       if (domain && app.category !== domain) continue;
-      const health = healthMap.get(app.id);
+      const health = healthMap.get(app.id) || healthMap.get(app.id.replace(/-/g, '_'));
+      const canonicalAppKey = toCanonicalAppKey(app.id);
+      const preferredSource = PREFERRED_SOURCE_BY_CANONICAL[canonicalAppKey] || 'marketplace';
+      if (preferredSource !== 'marketplace') continue;
+      const setupModes = buildSetupModes(app.id, app.installMethod);
       const registryTools = ACTION_REGISTRY[app.id]?.tools || [];
       const capabilityPolicies = buildCapabilityData(app.id, {
         reads: (app.permissions || []).map((permission) => String(permission).replace(/^Read:\s*/i, '')),
@@ -3874,7 +3913,7 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
       });
       entries.push({
         id: app.id,
-        app_key: app.id,
+        app_key: canonicalAppKey,
         display_name: app.name,
         name: app.name,
         category: app.category,
@@ -3903,6 +3942,10 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
         health_status: !health ? 'not_connected' : (health.status === 'connected' ? 'healthy' : health.status === 'syncing' ? 'degraded' : 'degraded'),
         supports_health_test: app.installMethod !== 'free',
         health_test_mode: app.installMethod !== 'free' ? 'direct' : 'none',
+        primary_setup_mode: setupModes.primary,
+        advanced_setup_modes: setupModes.advanced,
+        primary_service_id: app.id,
+        canonical_sources: ['marketplace'],
         logo_url: null,
         logo_fallback: app.logoLetter,
         lastSyncAt: health?.last_sync_at ?? null,
@@ -3922,10 +3965,13 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
 
     // Spec-driven integrations not already in marketplace catalog
     for (const spec of PHASE1_INTEGRATIONS) {
-      if (marketplaceIds.has(spec.id)) continue; // marketplace version wins
+      const canonicalAppKey = toCanonicalAppKey(spec.id);
+      const preferredSource = PREFERRED_SOURCE_BY_CANONICAL[canonicalAppKey] || 'marketplace';
+      if (marketplaceIds.has(canonicalAppKey) && preferredSource !== 'integration') continue; // marketplace version wins unless integration is preferred
       const catLower = (spec.category || '').toLowerCase();
       if (domain && catLower !== domain) continue;
-      const health = healthMap.get(spec.id);
+      const health = healthMap.get(spec.id) || healthMap.get(spec.id.replace(/_/g, '-'));
+      const setupModes = buildSetupModes(spec.id, spec.authType);
       const registryTools = ACTION_REGISTRY[spec.id]?.tools || [];
       const capabilityPolicies = buildCapabilityData(spec.id, {
         reads: spec.capabilities?.reads || [],
@@ -3936,7 +3982,7 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
       const supportsHealthTest = spec.id === 'internal' || Boolean(getAdapter(spec.id));
       entries.push({
         id: spec.id,
-        app_key: spec.id,
+        app_key: canonicalAppKey,
         display_name: spec.name,
         name: spec.name,
         category: catLower,
@@ -3964,6 +4010,10 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
         health_status: !health ? 'not_connected' : (health.status === 'connected' ? 'healthy' : health.status === 'syncing' ? 'degraded' : 'degraded'),
         supports_health_test: supportsHealthTest,
         health_test_mode: supportsHealthTest ? 'adapter' : 'unsupported',
+        primary_setup_mode: setupModes.primary,
+        advanced_setup_modes: setupModes.advanced,
+        primary_service_id: spec.id,
+        canonical_sources: ['integration'],
         connection_type: openApiCapabilityMap.has(spec.id) ? 'mcp_server' : (spec.authType === 'oauth2' ? 'oauth_connector' : 'native_connector'),
         logo_url: null,
         logo_fallback: (spec.name || '?')[0].toUpperCase(),

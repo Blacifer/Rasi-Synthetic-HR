@@ -2532,6 +2532,13 @@ type InstalledAppHealth = {
 export async function getInstalledAppHealth(orgId: string): Promise<Map<string, InstalledAppHealth>> {
   try {
     const activeStatuses = new Set(['connected', 'syncing', 'error', 'expired']);
+    const toAliases = (serviceType: string) => {
+      const normalized = String(serviceType || '').trim();
+      const aliases = new Set<string>([normalized]);
+      if (normalized.includes('_')) aliases.add(normalized.replace(/_/g, '-'));
+      if (normalized.includes('-')) aliases.add(normalized.replace(/-/g, '_'));
+      return Array.from(aliases);
+    };
     // Fetch all integrations for the org — both marketplace-installed and spec-driven.
     // This lets marketplace apps appear "installed" even when connected via the
     // Integrations/Connections flow, giving users a unified view.
@@ -2553,16 +2560,19 @@ export async function getInstalledAppHealth(orgId: string): Promise<Map<string, 
       if (!activeStatuses.has(String(r.status || '').toLowerCase())) return;
       // Prefer marketplace rows when both exist for the same service_type.
       const isMarketplace = r.metadata?.marketplace_app === 'true';
-      const existing = map.get(r.service_type);
-      if (existing && existing.connectionSource === 'marketplace' && !isMarketplace) return;
-      map.set(r.service_type, {
+      const nextValue: InstalledAppHealth = {
         service_type: r.service_type,
         status: r.status,
         last_sync_at: r.last_sync_at,
         last_error_at: r.last_error_at,
         last_error_msg: r.last_error_msg,
         connectionSource: isMarketplace ? 'marketplace' : 'connections',
-      });
+      };
+      for (const alias of toAliases(r.service_type)) {
+        const existing = map.get(alias);
+        if (existing && existing.connectionSource === 'marketplace' && !isMarketplace) continue;
+        map.set(alias, nextValue);
+      }
     });
     return map;
   } catch {

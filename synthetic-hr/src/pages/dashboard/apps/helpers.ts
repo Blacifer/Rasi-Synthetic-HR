@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { MarketplaceApp } from '../../../lib/api-client';
 import type { UnifiedConnectorEntry } from '../../../lib/api/connectors';
-import type { UnifiedApp, TrustTier, Maturity, GuardrailStatus } from './types';
+import type { UnifiedApp, TrustTier, Maturity, GuardrailStatus, AppSetupMode } from './types';
 import { LOGO_DOMAINS } from './constants';
 
 // ─── Color helpers ──────────────────────────────────────────────────────────
@@ -163,6 +163,13 @@ export function fromUnifiedConnectorEntry(entry: UnifiedConnectorEntry): Unified
   const connected = Boolean(entry.is_connected ?? entry.installed);
   const appId = entry.app_key || entry.id;
   const authType = entry.auth_type || entry.authType || 'api_key';
+  const primarySetupMode: AppSetupMode =
+    entry.primary_setup_mode
+    || (authType === 'oauth' || authType === 'oauth2'
+      ? 'oauth'
+      : authType === 'api_key'
+        ? 'api_key'
+        : 'direct');
   return {
     id: `${entry.source}:${appId}`,
     appId,
@@ -171,6 +178,8 @@ export function fromUnifiedConnectorEntry(entry: UnifiedConnectorEntry): Unified
     category: entry.category || 'productivity',
     source: entry.source,
     connectionType: entry.connection_type || (authType === 'oauth2' || authType === 'oauth' ? 'oauth_connector' : 'native_connector'),
+    primarySetupMode,
+    advancedSetupModes: entry.advanced_setup_modes || [primarySetupMode],
     logoLetter: entry.logoLetter || entry.logo_fallback || (entry.display_name || entry.name || '?')[0].toUpperCase(),
     colorHex: appColor(appId, entry.colorHex),
     badge: entry.badge,
@@ -219,6 +228,7 @@ export function fromUnifiedConnectorEntry(entry: UnifiedConnectorEntry): Unified
     } as MarketplaceApp) : undefined,
     integrationData: entry.source === 'integration' ? entry : undefined,
     rawCatalogData: entry,
+    primaryServiceId: entry.primary_service_id || entry.id,
     linkedAgentCount: entry.linked_agent_count ?? entry.agentCount ?? 0,
     supportsHealthTest: Boolean(entry.supports_health_test),
     healthStatus: (entry.health_status as any) || 'unknown',
@@ -233,7 +243,25 @@ export function fromUnifiedConnectorEntry(entry: UnifiedConnectorEntry): Unified
 }
 
 export function getAppServiceId(app: UnifiedApp) {
-  return app.rawCatalogData?.app_key || app.rawCatalogData?.id || app.integrationData?.id || app.appData?.id || app.appId;
+  return app.primaryServiceId || app.rawCatalogData?.primary_service_id || app.rawCatalogData?.id || app.integrationData?.id || app.appData?.id || app.appId;
+}
+
+export function getSetupModeLabel(mode?: AppSetupMode, connectionType?: UnifiedApp['connectionType']) {
+  if (mode === 'oauth') return 'OAuth setup';
+  if (mode === 'api_key') return 'API key setup';
+  if (mode === 'direct') return 'Direct setup';
+  if (connectionType === 'mcp_server') return 'Agent tools ready';
+  if (connectionType === 'oauth_connector') return 'OAuth setup';
+  return 'Direct setup';
+}
+
+export function getSetupModeSummary(mode?: AppSetupMode, connectionType?: UnifiedApp['connectionType']) {
+  if (mode === 'oauth') return 'OAuth';
+  if (mode === 'api_key') return 'API key';
+  if (mode === 'direct') return 'Direct credentials';
+  if (connectionType === 'mcp_server') return 'MCP server';
+  if (connectionType === 'oauth_connector') return 'OAuth';
+  return 'Direct credentials';
 }
 
 // ─── Date formatting ────────────────────────────────────────────────────────

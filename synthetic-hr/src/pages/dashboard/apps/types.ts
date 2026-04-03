@@ -3,6 +3,7 @@ import type { MarketplaceApp } from '../../../lib/api-client';
 export type AppStatus = 'connected' | 'syncing' | 'error' | 'expired' | 'disconnected';
 export type ConnectorSource = 'marketplace' | 'integration';
 export type AppConnectionType = 'native_connector' | 'oauth_connector' | 'mcp_server';
+export type AppSetupMode = 'oauth' | 'direct' | 'api_key';
 export type TrustTier = 'observe-only' | 'controlled-write' | 'high-trust-operational';
 export type Maturity = 'connected' | 'read-ready' | 'action-ready' | 'governed';
 export type GuardrailStatus = 'not_applicable' | 'missing' | 'partial' | 'applied';
@@ -38,6 +39,8 @@ export interface UnifiedApp {
   category: string;
   source: ConnectorSource;
   connectionType?: AppConnectionType;
+  primarySetupMode?: AppSetupMode;
+  advancedSetupModes?: AppSetupMode[];
   logoLetter: string;
   colorHex: string;
   badge?: string;
@@ -63,6 +66,7 @@ export interface UnifiedApp {
   appData?: MarketplaceApp;
   integrationData?: any;
   rawCatalogData?: any;
+  primaryServiceId?: string;
   linkedAgentCount?: number;
   supportsHealthTest?: boolean;
   healthStatus?: HealthState;

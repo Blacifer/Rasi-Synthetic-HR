@@ -1,7 +1,7 @@
 import { Bot, BriefcaseBusiness, Gavel, HandCoins, Loader2, MessageSquare, Shield, X, Zap, CheckCircle2 } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import type { UnifiedApp } from '../types';
-import { trustTierTone, maturityTone, guardrailTone, fmtDate, financeConnectorMode, getAppServiceId, isTallyConnector, isClearTaxConnector, isNaukriConnector, isSlackRail } from '../helpers';
+import { trustTierTone, maturityTone, guardrailTone, fmtDate, financeConnectorMode, getAppServiceId, getSetupModeSummary, isTallyConnector, isClearTaxConnector, isNaukriConnector, isSlackRail } from '../helpers';
 
 interface OverviewTabProps {
   app: UnifiedApp;
@@ -310,7 +310,7 @@ export function OverviewTab({ app, agentNames, onConfigure: _onConfigure, onDisc
         <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
           <p className="text-[10px] text-slate-500 mb-0.5">Connection mode</p>
           <p className="text-xs text-slate-200 font-medium">
-            {app.connectionType === 'oauth_connector' ? 'OAuth' : app.connectionType === 'mcp_server' ? 'MCP server' : 'Direct credentials'}
+            {getSetupModeSummary(app.primarySetupMode, app.connectionType)}
           </p>
         </div>
         {app.setupTimeMinutes != null && (

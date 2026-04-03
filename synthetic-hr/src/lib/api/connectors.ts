@@ -75,6 +75,10 @@ export type UnifiedConnectorEntry = {
   logo_url?: string | null;
   logo_fallback?: string | null;
   credential_handling?: 'server_injected';
+  primary_setup_mode?: 'oauth' | 'direct' | 'api_key';
+  advanced_setup_modes?: Array<'oauth' | 'direct' | 'api_key'>;
+  canonical_sources?: string[];
+  primary_service_id?: string;
 };
 
 export type ConnectorAction = {

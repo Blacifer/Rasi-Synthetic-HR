@@ -5,7 +5,7 @@ import { toast } from '../../../../lib/toast';
 import { cn } from '../../../../lib/utils';
 import type { AIAgent } from '../../../../types';
 import type { UnifiedApp, ConnectionLog, ConnectorExecution, DrawerTab } from '../types';
-import { getAppServiceId, isSlackRail } from '../helpers';
+import { getAppServiceId, getSetupModeLabel, isSlackRail } from '../helpers';
 import { AppLogo } from '../components/AppLogo';
 import { OverviewTab } from './OverviewTab';
 import { AgentsTab } from './AgentsTab';
@@ -177,9 +177,9 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-base font-bold text-white">{app.name}</p>
-              {app.connectionType && (
+              {(app.primarySetupMode || app.connectionType) && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-white/10 bg-white/5 text-slate-500 font-medium">
-                  {app.connectionType === 'oauth_connector' ? 'OAuth setup' : app.connectionType === 'mcp_server' ? 'Agent tools ready' : 'Direct setup'}
+                  {getSetupModeLabel(app.primarySetupMode, app.connectionType)}
                 </span>
               )}
             </div>
