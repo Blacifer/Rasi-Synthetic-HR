@@ -9,6 +9,7 @@ import { errorResponse, getOrgId, getUserJwt, safeLimit } from '../lib/route-hel
 import { notifySlackApproval } from '../lib/slack-notify';
 import { notifyApprovalAssignedAsync } from '../lib/notification-service';
 import { storeCorrection } from '../lib/correction-memory';
+import { markApprovalDeniedExecution, resumeApprovedToolCall } from '../lib/agentic-tool-execution';
 
 const router = Router();
 
@@ -431,7 +432,37 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
       },
     });
 
-    return res.json({ success: true, data: updated?.[0] || row });
+    let resumed: any = null;
+    try {
+      resumed = await resumeApprovedToolCall({
+        orgId,
+        approvalId: id,
+        reviewerId: userId,
+        reviewerNote: parsed.data?.note || null,
+      });
+    } catch (resumeErr: any) {
+      logger.error('Failed to resume approved connector action', {
+        approval_id: id,
+        org_id: orgId,
+        error: resumeErr?.message,
+      });
+      return res.status(500).json({
+        success: false,
+        error: resumeErr?.message || 'Approval recorded, but execution resume failed',
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: updated?.[0] || row,
+      execution: {
+        resumed: true,
+        connector_id: resumed?.connectorId || row.service,
+        action: resumed?.action || row.action,
+        result: resumed?.result || null,
+        audit_ref: resumed?.auditRef || null,
+      },
+    });
   } catch (err: any) {
     return errorResponse(res, err);
   }
@@ -512,7 +543,27 @@ router.post('/:id/deny', requirePermission('policies.manage'), async (req: Reque
       },
     });
 
-    return res.json({ success: true, data: updated?.[0] || row });
+    void markApprovalDeniedExecution({
+      orgId,
+      approvalId: id,
+      reviewerId: userId,
+      reviewerNote: parsed.data?.note || null,
+    }).catch((markErr: any) => {
+      logger.warn('Failed to mark denied connector execution', {
+        approval_id: id,
+        org_id: orgId,
+        error: markErr?.message,
+      });
+    });
+
+    return res.json({
+      success: true,
+      data: updated?.[0] || row,
+      execution: {
+        resumed: false,
+        state: 'denied',
+      },
+    });
   } catch (err: any) {
     return errorResponse(res, err);
   }

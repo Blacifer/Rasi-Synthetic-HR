@@ -317,7 +317,15 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
             />
           )}
           {tab === 'approvals' && rawConnectorId && (
-            <ApprovalsTab serviceId={rawConnectorId} />
+            <ApprovalsTab
+              serviceId={rawConnectorId}
+              app={app}
+              linkedAgentIds={Array.from(linkedAgentIds)}
+              onChanged={async () => {
+                await loadLogs();
+                await loadExecutions();
+              }}
+            />
           )}
           {tab === 'slack' && rawConnectorId && (
             <SlackTab serviceId={rawConnectorId} />

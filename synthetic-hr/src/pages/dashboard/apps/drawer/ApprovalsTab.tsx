@@ -1,17 +1,67 @@
-import { useEffect, useState } from 'react';
-import { CheckCircle2, Loader2, ShieldAlert, XCircle } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, Loader2, ShieldAlert, Sparkles, XCircle } from 'lucide-react';
 import { api } from '../../../../lib/api-client';
 import type { ApprovalRequest } from '../../../../lib/api-client';
 import { toast } from '../../../../lib/toast';
+import type { UnifiedApp } from '../types';
 
 interface ApprovalsTabProps {
   serviceId: string;
+  app: UnifiedApp;
+  linkedAgentIds?: string[];
+  onChanged?: () => Promise<void> | void;
 }
 
-export function ApprovalsTab({ serviceId }: ApprovalsTabProps) {
+function isLikelyWriteAction(action: string) {
+  return /(create|update|delete|send|post|refund|payout|write|publish|invite|assign|approve|modify|sync)/i.test(action);
+}
+
+function chooseSimulationAction(app: UnifiedApp) {
+  const policies = app.capabilityPolicies || [];
+  const approvalGated = policies.find((item) => item.enabled && item.requires_human_approval);
+  if (approvalGated) return approvalGated.capability;
+
+  const writeLike = policies.find((item) => item.enabled && isLikelyWriteAction(item.capability));
+  if (writeLike) return writeLike.capability;
+
+  const capability = (app.agentCapabilities || []).find((item) => isLikelyWriteAction(item))
+    || (app.agentCapabilities || [])[0];
+  return capability || 'update_record';
+}
+
+function buildSimulationPayload(action: string, appName: string) {
+  const normalized = action.toLowerCase();
+  if (normalized.includes('refund')) {
+    return { amount: 1499, currency: 'INR', reason: `Operator-requested refund test from ${appName}`, reference: `sim-${Date.now()}` };
+  }
+  if (normalized.includes('message') || normalized.includes('send') || normalized.includes('email') || normalized.includes('post')) {
+    return { subject: `Simulated ${appName} outbound action`, body: 'This is a governed approval smoke test from the Apps workspace.', recipient: 'ops@example.com' };
+  }
+  if (normalized.includes('ticket') || normalized.includes('case')) {
+    return { title: `Simulated ${appName} escalation`, priority: 'high', description: 'Created from the Apps HITL smoke test.' };
+  }
+  return {
+    entity_id: `sim-${Date.now()}`,
+    update_reason: `Simulated write action for ${appName}`,
+    summary: 'Created from the Apps HITL smoke test.',
+  };
+}
+
+export function ApprovalsTab({ serviceId, app, linkedAgentIds = [], onChanged }: ApprovalsTabProps) {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [simulateBusy, setSimulateBusy] = useState(false);
   const [items, setItems] = useState<ApprovalRequest[]>([]);
+  const simulationAction = useMemo(() => chooseSimulationAction(app), [app]);
+
+  const loadItems = useCallback(async () => {
+    setLoading(true);
+    const res = await api.approvals.list({ service: serviceId, status: 'pending', limit: 50 });
+    if (res.success) {
+      setItems(res.data || []);
+    }
+    setLoading(false);
+  }, [serviceId]);
 
   useEffect(() => {
     let mounted = true;
@@ -33,12 +83,19 @@ export function ApprovalsTab({ serviceId }: ApprovalsTabProps) {
     setItems((prev) => prev.map((item) => item.id === id ? { ...item, status } : item).filter((item) => item.status === 'pending'));
   };
 
+  const afterDecision = async () => {
+    await loadItems();
+    await onChanged?.();
+  };
+
   const approve = async (id: string) => {
     setBusyId(id);
     const res = await api.approvals.approve(id);
     if (res.success) {
       updateItem(id, 'approved');
-      toast.success('Approval granted');
+      const execution = (res as any).execution;
+      toast.success(execution?.resumed ? 'Approval granted and execution resumed' : 'Approval granted');
+      await afterDecision();
     } else {
       toast.error((res as any).error || 'Approval failed');
     }
@@ -51,10 +108,35 @@ export function ApprovalsTab({ serviceId }: ApprovalsTabProps) {
     if (res.success) {
       updateItem(id, 'denied');
       toast.success('Request denied');
+      await afterDecision();
     } else {
       toast.error((res as any).error || 'Deny failed');
     }
     setBusyId(null);
+  };
+
+  const simulateWriteAction = async () => {
+    setSimulateBusy(true);
+    const payload = buildSimulationPayload(simulationAction, app.name);
+    const agentId = linkedAgentIds[0];
+    const res = await api.unifiedConnectors.toolCall(serviceId, {
+      action: simulationAction,
+      params: payload,
+      ...(agentId ? { agentId } : {}),
+    });
+    if (res.success) {
+      const data = res.data;
+      if (data?.paused || data?.state === 'pending_approval') {
+        toast.success('Simulated write action paused for approval');
+      } else {
+        toast.success('Simulated write action executed directly');
+      }
+      await loadItems();
+      await onChanged?.();
+    } else {
+      toast.error(res.error || 'Simulation failed');
+    }
+    setSimulateBusy(false);
   };
 
   if (loading) {
@@ -66,13 +148,35 @@ export function ApprovalsTab({ serviceId }: ApprovalsTabProps) {
       <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
         <p className="text-sm font-medium text-white">No pending approvals</p>
         <p className="mt-1 text-xs text-slate-400">Write actions that require a human decision will appear here before the backend fires the real tool call.</p>
+        {import.meta.env.DEV && (
+          <button
+            onClick={() => void simulateWriteAction()}
+            disabled={simulateBusy}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-medium text-cyan-100 disabled:opacity-60"
+          >
+            {simulateBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+            Simulate Agent Write Action
+          </button>
+        )}
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-400">Approve or reject high-risk agent actions before Rasi executes them in the connected app.</p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-slate-400">Approve or reject high-risk agent actions before Rasi executes them in the connected app.</p>
+        {import.meta.env.DEV && (
+          <button
+            onClick={() => void simulateWriteAction()}
+            disabled={simulateBusy}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-medium text-cyan-100 disabled:opacity-60"
+          >
+            {simulateBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+            Simulate Agent Write Action
+          </button>
+        )}
+      </div>
       {items.map((item) => {
         const isBusy = busyId === item.id;
         return (

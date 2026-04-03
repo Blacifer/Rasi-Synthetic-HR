@@ -4,7 +4,7 @@ export { incidentApi, escalationsApi, alertsApi } from './incidents';
 export { costApi, metricsApi } from './costs';
 export { connectorsApi, integrationsApi, slackApi } from './integrations';
 export { unifiedConnectorsApi } from './connectors';
-export type { UnifiedConnectorEntry, ConnectorAction, ConnectorActionResult } from './connectors';
+export type { UnifiedConnectorEntry, ConnectorAction, ConnectorActionResult, ConnectorToolCallResult } from './connectors';
 export { policiesApi, complianceApi, safeHarborApi, auditLogsApi } from './governance';
 export type { AuditLogEntry } from './governance';
 export {

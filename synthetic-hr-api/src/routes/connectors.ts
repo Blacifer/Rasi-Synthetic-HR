@@ -8,6 +8,7 @@ import { requirePermission } from '../middleware/rbac';
 import { executeConnectorAction } from '../lib/connectors/action-executor';
 import { decryptSecret } from '../lib/integrations/encryption';
 import { getAdapter } from '../lib/integrations/adapters';
+import { interceptAgentToolCall } from '../lib/agentic-tool-execution';
 import { buildGovernedActionSnapshot } from '../lib/governed-actions';
 import { runPreflightGate } from '../lib/preflight-gate';
 import { appendAuditChainEvent } from '../lib/trust-audit-chain';
@@ -4033,6 +4034,54 @@ router.get('/:connectorId/actions', authenticateToken, (req, res) => {
   const schema = (ACTION_REGISTRY as any)[connectorId];
   if (!schema) return res.json({ success: true, data: [] });
   return res.json({ success: true, data: schema.tools || [] });
+});
+
+// POST /api/connectors/:connectorId/tool-call — intercept an agent tool execution request
+router.post('/:connectorId/tool-call', authenticateToken, requirePermission('connectors.manage'), async (req, res) => {
+  try {
+    const orgId = (req as any).user?.organization_id;
+    if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const { connectorId } = req.params;
+    const {
+      action,
+      toolName,
+      params = {},
+      agentId,
+    } = req.body as {
+      action?: string;
+      toolName?: string;
+      params?: Record<string, any>;
+      agentId?: string;
+    };
+
+    const resolvedAction = String(action || toolName || '').trim();
+    if (!resolvedAction) {
+      return res.status(400).json({ success: false, error: 'action is required' });
+    }
+
+    const outcome = await interceptAgentToolCall({
+      orgId,
+      connectorId,
+      action: resolvedAction,
+      params,
+      agentId: agentId || null,
+      requestedBy: (req as any).user?.id || 'agent',
+      delegatedActor: 'agent',
+      source: 'runtime',
+    });
+
+    if (outcome.paused) {
+      return res.status(202).json({ success: true, data: outcome });
+    }
+    if (!outcome.success) {
+      return res.status(403).json({ success: false, data: outcome, error: outcome.error });
+    }
+    return res.json({ success: true, data: outcome });
+  } catch (err: any) {
+    logger.error('Agent tool call interception failed', { error: err.message });
+    return res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // POST /api/connectors/:connectorId/execute — run a connector action

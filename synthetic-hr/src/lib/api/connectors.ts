@@ -100,6 +100,22 @@ export type ConnectorActionResult = {
   approvalId?: string;
 };
 
+export type ConnectorToolCallResult = {
+  success: boolean;
+  paused?: boolean;
+  queued?: boolean;
+  state?: 'pending_approval' | 'blocked' | 'executed' | string;
+  approvalId?: string | null;
+  decision?: 'allow' | 'block' | 'require_approval' | 'defer_reliability' | null;
+  reason_category?: 'policy_blocked' | 'approval_required' | 'reliability_degraded' | 'execution_failed' | null;
+  reason_message?: string | null;
+  recommended_next_action?: string | null;
+  audit_ref?: string | null;
+  message?: string;
+  result?: Record<string, any> | null;
+  error?: string;
+};
+
 // ---------------------------------------------------------------------------
 // API
 // ---------------------------------------------------------------------------
@@ -149,6 +165,21 @@ export const unifiedConnectorsApi = {
     return authenticatedFetch(`/connectors/${encodeURIComponent(connectorId)}/execute`, {
       method: 'POST',
       body: JSON.stringify({ action, params, agentId }),
+    });
+  },
+
+  async toolCall(
+    connectorId: string,
+    data: {
+      action: string;
+      params?: Record<string, any>;
+      agentId?: string;
+      toolName?: string;
+    },
+  ): Promise<ApiResponse<ConnectorToolCallResult>> {
+    return authenticatedFetch(`/connectors/${encodeURIComponent(connectorId)}/tool-call`, {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   },
 
