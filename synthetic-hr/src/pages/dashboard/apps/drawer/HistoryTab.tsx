@@ -36,7 +36,7 @@ export function HistoryTab({ app, executions, logs, executionsLoading, onRefresh
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between mb-1">
-        <p className="text-xs text-slate-400">Recent governed activity and connection events</p>
+        <p className="text-xs text-slate-400">Recent app activity and connection events</p>
         <button onClick={onRefresh} className="p-1 rounded text-slate-500 hover:text-slate-300 transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
@@ -117,7 +117,7 @@ export function HistoryTab({ app, executions, logs, executionsLoading, onRefresh
       {executionsLoading ? (
         <div className="flex items-center justify-center py-8"><Loader2 className="w-4 h-4 text-slate-500 animate-spin" /></div>
       ) : executions.length === 0 ? (
-        <p className="text-xs text-slate-500 text-center py-4">No governed actions recorded yet.</p>
+        <p className="text-xs text-slate-500 text-center py-4">No app actions recorded yet.</p>
       ) : null}
 
       {executions.map((execution) => {
@@ -146,7 +146,7 @@ export function HistoryTab({ app, executions, logs, executionsLoading, onRefresh
             <div className="flex items-center gap-2 flex-wrap">
               <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', statusClass)}>{statusLabel}</span>
               {execution.approval_required && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-amber-400/20 bg-amber-400/10 text-amber-100 font-medium">approval gated</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-amber-400/20 bg-amber-400/10 text-amber-100 font-medium">needs approval</span>
               )}
               {governance?.source && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-white/10 bg-white/5 text-slate-300 font-medium">
@@ -170,7 +170,7 @@ export function HistoryTab({ app, executions, logs, executionsLoading, onRefresh
             ))}
             {governance && (
               <div className="mt-2 rounded-lg border border-white/8 bg-black/10 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wider text-slate-500">Governance record</p>
+                <p className="text-[10px] uppercase tracking-wider text-slate-500">Decision trail</p>
                 <div className="mt-1 space-y-1">
                   <p className="text-[11px] text-slate-300">
                     Decision: <span className="text-slate-100">{governance.decision.replace(/_/g, ' ')}</span>

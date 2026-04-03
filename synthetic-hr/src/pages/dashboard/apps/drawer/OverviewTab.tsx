@@ -1,7 +1,7 @@
 import { Bot, BriefcaseBusiness, Gavel, HandCoins, Loader2, MessageSquare, Shield, X, Zap, CheckCircle2, Settings2 } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import type { UnifiedApp } from '../types';
-import { trustTierTone, maturityTone, guardrailTone, fmtDate, financeConnectorMode, getAppServiceId, getSetupModeLabel, getSetupModeSummary, isTallyConnector, isClearTaxConnector, isNaukriConnector, isSlackRail } from '../helpers';
+import { trustTierTone, maturityTone, guardrailTone, fmtDate, financeConnectorMode, getAppServiceId, getSetupModeLabel, getSetupModeSummary, getTrustTierLabel, getMaturityLabel, isTallyConnector, isClearTaxConnector, isNaukriConnector, isSlackRail } from '../helpers';
 
 interface OverviewTabProps {
   app: UnifiedApp;
@@ -50,15 +50,15 @@ export function OverviewTab({ app, agentNames, onConfigure: _onConfigure, onDisc
       {/* Governance grid */}
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
-          <p className="text-[10px] text-slate-500 mb-1">Trust tier</p>
+          <p className="text-[10px] text-slate-500 mb-1">Action policy</p>
           <span className={cn('inline-flex text-[10px] px-2 py-1 rounded-md border font-medium', trustTierTone(app.trustTier))}>
-            {app.trustTier || 'observe-only'}
+            {getTrustTierLabel(app.trustTier)}
           </span>
         </div>
         <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
-          <p className="text-[10px] text-slate-500 mb-1">Operational maturity</p>
+          <p className="text-[10px] text-slate-500 mb-1">Readiness</p>
           <span className={cn('inline-flex text-[10px] px-2 py-1 rounded-md border font-medium', maturityTone(app.maturity))}>
-            {app.maturity || 'connected'}
+            {getMaturityLabel(app.maturity)}
           </span>
         </div>
         {app.governanceSummary && (
@@ -70,7 +70,7 @@ export function OverviewTab({ app, agentNames, onConfigure: _onConfigure, onDisc
               </p>
             </div>
             <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
-              <p className="text-[10px] text-slate-500 mb-0.5">Governed actions</p>
+              <p className="text-[10px] text-slate-500 mb-0.5">Enabled actions</p>
               <p className="text-xs text-slate-200 font-medium">
                 {app.governanceSummary.enabledActionCount}/{app.governanceSummary.actionCount} enabled
               </p>
