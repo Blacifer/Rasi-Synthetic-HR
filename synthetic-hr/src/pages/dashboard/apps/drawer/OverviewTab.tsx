@@ -1,7 +1,7 @@
 import { Bot, BriefcaseBusiness, Gavel, HandCoins, Loader2, MessageSquare, Shield, X, Zap, CheckCircle2 } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import type { UnifiedApp } from '../types';
-import { trustTierTone, maturityTone, guardrailTone, fmtDate, financeConnectorMode, isTallyConnector, isClearTaxConnector, isNaukriConnector, isSlackRail } from '../helpers';
+import { trustTierTone, maturityTone, guardrailTone, fmtDate, financeConnectorMode, getAppServiceId, isTallyConnector, isClearTaxConnector, isNaukriConnector, isSlackRail } from '../helpers';
 
 interface OverviewTabProps {
   app: UnifiedApp;
@@ -11,8 +11,8 @@ interface OverviewTabProps {
 }
 
 export function OverviewTab({ app, agentNames, onConfigure: _onConfigure, onDisconnect }: OverviewTabProps) {
-  const rawId = app.source === 'marketplace' ? app.appData?.id : app.integrationData?.id;
-  const isWave1 = app.source === 'integration' && app.wave === 1;
+  const rawId = getAppServiceId(app);
+  const isWave1 = app.wave === 1;
   const financeMode = financeConnectorMode(rawId);
   const isTally = isTallyConnector(rawId);
   const isClearTax = isClearTaxConnector(rawId);
@@ -210,8 +210,8 @@ export function OverviewTab({ app, agentNames, onConfigure: _onConfigure, onDisc
         </div>
       )}
 
-      {/* Integration-specific: token expiry + checklist */}
-      {app.source === 'integration' && row && (
+      {/* Connection health and readiness */}
+      {row && (
         <>
           <div className={cn(
             'rounded-xl border px-4 py-3',
@@ -278,27 +278,26 @@ export function OverviewTab({ app, agentNames, onConfigure: _onConfigure, onDisc
         </>
       )}
 
-      {/* App-specific: install stats */}
-      {app.source === 'marketplace' && (
-        <div className="grid grid-cols-2 gap-2">
-          {app.developer && (
-            <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
-              <p className="text-[10px] text-slate-500 mb-0.5">Developer</p>
-              <p className="text-xs text-slate-200 font-medium">{app.developer}</p>
-            </div>
-          )}
+      <div className="grid grid-cols-2 gap-2">
+        {app.developer && (
           <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
-            <p className="text-[10px] text-slate-500 mb-0.5">Installs</p>
-            <p className="text-xs text-slate-200 font-medium">{app.installCount.toLocaleString()}</p>
+            <p className="text-[10px] text-slate-500 mb-0.5">Provider</p>
+            <p className="text-xs text-slate-200 font-medium">{app.developer}</p>
           </div>
-          {app.setupTimeMinutes != null && (
-            <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
-              <p className="text-[10px] text-slate-500 mb-0.5">Setup time</p>
-              <p className="text-xs text-slate-200 font-medium">~{app.setupTimeMinutes} min</p>
-            </div>
-          )}
+        )}
+        <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
+          <p className="text-[10px] text-slate-500 mb-0.5">Connection mode</p>
+          <p className="text-xs text-slate-200 font-medium">
+            {app.connectionType === 'oauth_connector' ? 'OAuth' : app.connectionType === 'mcp_server' ? 'MCP server' : 'Direct credentials'}
+          </p>
         </div>
-      )}
+        {app.setupTimeMinutes != null && (
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
+            <p className="text-[10px] text-slate-500 mb-0.5">Setup time</p>
+            <p className="text-xs text-slate-200 font-medium">~{app.setupTimeMinutes} min</p>
+          </div>
+        )}
+      </div>
 
       {/* Error detail */}
       {app.lastErrorMsg && (
@@ -322,7 +321,7 @@ export function OverviewTab({ app, agentNames, onConfigure: _onConfigure, onDisc
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-400/20 bg-rose-500/[0.05] text-rose-400 hover:bg-rose-500/10 text-xs font-medium transition-colors"
         >
           <X className="w-3.5 h-3.5" />
-          {app.source === 'marketplace' ? 'Remove app' : 'Disconnect'}
+          Disconnect
         </button>
       </div>
     </div>

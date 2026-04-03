@@ -5,7 +5,7 @@ import { toast } from '../../../../lib/toast';
 import { cn } from '../../../../lib/utils';
 import type { AIAgent } from '../../../../types';
 import type { UnifiedApp, ConnectionLog, ConnectorExecution, DrawerTab } from '../types';
-import { isSlackRail } from '../helpers';
+import { getAppServiceId, isSlackRail } from '../helpers';
 import { AppLogo } from '../components/AppLogo';
 import { OverviewTab } from './OverviewTab';
 import { AgentsTab } from './AgentsTab';
@@ -24,7 +24,7 @@ interface DetailDrawerProps {
 }
 
 export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, initialTab = 'overview' }: DetailDrawerProps) {
-  const rawConnectorId = app.source === 'marketplace' ? app.appData?.id : app.integrationData?.id;
+  const rawConnectorId = getAppServiceId(app);
   const isSlack = isSlackRail(rawConnectorId);
 
   const [tab, setTab] = useState<DrawerTab>(initialTab);
@@ -45,27 +45,17 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
   })[0];
 
   const agentNames = useMemo(() => {
-    if (app.source === 'marketplace' && app.appData) {
-      const ids = new Set(app.appData.relatedAgentIds);
-      return agents.filter((a) => ids.has(a.id)).map((a) => a.name);
-    }
-    if (app.source === 'integration') {
-      const sid = app.integrationData?.id;
-      return agents.filter((a) => ((a as any).integrationIds || []).includes(sid)).map((a) => a.name);
-    }
-    return [];
-  }, [app, agents]);
-
-  const toActionLabel = (name: string) =>
-    name.split('__').pop()!.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    if (!rawConnectorId) return [];
+    return agents.filter((a) => ((a as any).integrationIds || []).includes(rawConnectorId)).map((a) => a.name);
+  }, [agents, rawConnectorId]);
 
   const loadLogs = useCallback(async () => {
-    if (app.source !== 'integration' || !app.integrationData?.id) return;
+    if (!rawConnectorId) return;
     setLogsLoading(true);
-    const res = await api.integrations.getLogs(app.integrationData.id, 20);
+    const res = await api.integrations.getLogs(rawConnectorId, 20);
     if (res.success) setLogs((res.data as ConnectionLog[]) || []);
     setLogsLoading(false);
-  }, [app]);
+  }, [rawConnectorId]);
 
   const loadExecutions = useCallback(async () => {
     if (!rawConnectorId) return;
@@ -78,27 +68,12 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
   const loadCatalog = useCallback(async () => {
     if (!rawConnectorId) return;
     setCatalogLoading(true);
-    if (app.source === 'marketplace') {
-      const res = await api.unifiedConnectors.getActions(rawConnectorId);
-      if (res.success) {
-        const tools = (res.data as any[]) || [];
-        setCatalog(tools.map((t: any) => ({
-          action: t.function?.name?.split('__').pop() ?? t.function?.name,
-          label: toActionLabel(t.function?.name ?? ''),
-          description: t.function?.description,
-          enabled: true,
-          service: rawConnectorId,
-        })));
-      }
-    } else {
-      const res = await api.integrations.getActionCatalog();
-      if (res.success) {
-        const sid = app.integrationData?.id;
-        setCatalog(((res.data as any[]) || []).filter((a) => !sid || a.service === sid || !a.service));
-      }
+    const res = await api.integrations.getActionCatalog();
+    if (res.success) {
+      setCatalog(((res.data as any[]) || []).filter((a) => !rawConnectorId || a.service === rawConnectorId || !a.service));
     }
     setCatalogLoading(false);
-  }, [app, rawConnectorId]);
+  }, [rawConnectorId]);
 
   useEffect(() => {
     if (tab === 'history') {
@@ -113,19 +88,19 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
   }, [app.id, initialTab]);
 
   const testConnection = async () => {
-    if (!app.integrationData?.id) return;
+    if (!rawConnectorId) return;
     setTesting(true); setTestResult(null);
     try {
-      const res = await api.integrations.test(app.integrationData.id);
+      const res = await api.integrations.test(rawConnectorId);
       setTestResult({ ok: !!res.success, msg: res.success ? 'Connection is healthy' : ((res as any).error || 'Test failed') });
     } catch { setTestResult({ ok: false, msg: 'Test failed' }); }
     setTesting(false);
   };
 
   const refreshToken = async () => {
-    if (!app.integrationData?.id) return;
+    if (!rawConnectorId) return;
     setRefreshing(true);
-    const res = await api.integrations.refresh(app.integrationData.id);
+    const res = await api.integrations.refresh(rawConnectorId);
     if (res.success) toast.success('Token refreshed');
     else toast.error((res as any).error || 'Refresh failed');
     setRefreshing(false);
@@ -133,7 +108,7 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
 
   const toggleAction = async (item: any) => {
     const res = await api.integrations.upsertActions([{
-      service: item.service || app.integrationData?.id,
+      service: item.service || rawConnectorId,
       action: item.action,
       enabled: !item.enabled,
     }]);
@@ -182,9 +157,11 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-base font-bold text-white">{app.name}</p>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-white/10 bg-white/5 text-slate-500 font-medium">
-                {app.source === 'marketplace' ? 'App' : 'Integration'}
-              </span>
+              {app.connectionType && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-white/10 bg-white/5 text-slate-500 font-medium">
+                  {app.connectionType === 'oauth_connector' ? 'OAuth setup' : app.connectionType === 'mcp_server' ? 'MCP-ready' : 'Direct setup'}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               {app.status === 'connected' && (
@@ -224,7 +201,7 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
                 <Key className="w-3.5 h-3.5" />
                 {app.authType === 'oauth2' ? 'Reauthorize' : 'Update credentials'}
               </button>
-              {app.source === 'integration' && (
+              {rawConnectorId && (
                 <button
                   onClick={() => void testConnection()}
                   disabled={testing}
@@ -234,7 +211,7 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
                   Test
                 </button>
               )}
-              {app.source === 'integration' && app.authType === 'oauth2' && (
+              {app.authType === 'oauth2' && (
                 <button
                   onClick={() => void refreshToken()}
                   disabled={refreshing}

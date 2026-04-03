@@ -2,6 +2,7 @@ import type { MarketplaceApp } from '../../../lib/api-client';
 
 export type AppStatus = 'connected' | 'syncing' | 'error' | 'expired' | 'disconnected';
 export type ConnectorSource = 'marketplace' | 'integration';
+export type AppConnectionType = 'native_connector' | 'oauth_connector' | 'mcp_server';
 export type TrustTier = 'observe-only' | 'controlled-write' | 'high-trust-operational';
 export type Maturity = 'connected' | 'read-ready' | 'action-ready' | 'governed';
 export type GuardrailStatus = 'not_applicable' | 'missing' | 'partial' | 'applied';
@@ -28,6 +29,7 @@ export interface UnifiedApp {
   description: string;
   category: string;
   source: ConnectorSource;
+  connectionType?: AppConnectionType;
   logoLetter: string;
   colorHex: string;
   badge?: string;

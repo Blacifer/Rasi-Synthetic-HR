@@ -17,6 +17,7 @@ import { BrowseView } from './components/BrowseView';
 import { MobileBottomSheet } from './components/MobileBottomSheet';
 import { DetailDrawer } from './drawer/DetailDrawer';
 import { PageHero } from '../../../components/dashboard/PageHero';
+import { getAppServiceId } from './helpers';
 
 interface AppsPageProps {
   agents?: AIAgent[];
@@ -39,7 +40,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
 
   // Data
   const {
-    allApps, browseList, connectedList, myApps, featured, bundles,
+    allApps, browseList, connectedList, myApps, featured,
     loading, reload, markConnected,
     agentNamesFor, totalActions, errorCount, governedCount,
   } = useAppsData(agents);
@@ -75,12 +76,11 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   useEffect(() => { void loadHealthSummary(); }, [loadHealthSummary]);
 
   const testAll = async () => {
-    const integrationApps = connectedList.filter((a) => a.source === 'integration' && a.integrationData?.id);
-    if (integrationApps.length === 0) { toast.info('No integration apps to test'); return; }
+    if (connectedList.length === 0) { toast.info('No connected apps to test'); return; }
     setTestingAll(true);
     let ok = 0; let fail = 0;
-    for (const app of integrationApps) {
-      const res = await api.integrations.test(app.integrationData!.id);
+    for (const app of connectedList) {
+      const res = await api.integrations.test(app.appId);
       const result: 'ok' | 'error' = res.success ? 'ok' : 'error';
       if (res.success) ok++; else fail++;
       setHealthMap((prev) => new Map(prev).set(app.appId, result));
@@ -163,7 +163,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   useEffect(() => {
     if (!serviceParam) return;
     const target = connectedList.find((app) => {
-      const rawId = app.source === 'marketplace' ? app.appData?.id : app.integrationData?.id;
+      const rawId = getAppServiceId(app);
       return rawId === serviceParam || app.appId === serviceParam;
     });
     if (!target) return;
@@ -210,11 +210,11 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
         <div className="px-6 pt-6 pb-3 shrink-0">
           <PageHero
             eyebrow="Connect useful capabilities"
-            title="Apps should feel helpful, not overwhelming"
-            subtitle="Connect external apps to your agents with governed access, approvals, and evidence, then keep the list focused on the capabilities that matter in real work."
+            title="Connect apps once, then work from Rasi"
+            subtitle="Every connected app becomes one governed workspace for your operators and agents, so work can be read, updated, and supervised without hopping across tools."
             recommendation={recommendedAction}
             actions={[
-              ...(activeTab === 'my' && connectedList.some((a) => a.source === 'integration')
+              ...(activeTab === 'my' && connectedList.length > 0
                 ? [{
                   label: testingAll ? 'Testing…' : 'Test All',
                   onClick: () => void testAll(),
@@ -304,7 +304,6 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
           ) : (
             <BrowseView
               apps={browseList}
-              bundles={bundles as any}
               agents={agents}
               featured={featured}
               initialCategory={selectedCat}

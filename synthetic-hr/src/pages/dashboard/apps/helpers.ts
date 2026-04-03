@@ -58,6 +58,7 @@ export function fromMarketplaceApp(app: MarketplaceApp): UnifiedApp {
     description: app.description,
     category: app.category,
     source: 'marketplace',
+    connectionType: app.installMethod === 'oauth2' ? 'oauth_connector' : 'native_connector',
     logoLetter: app.logoLetter,
     colorHex: app.colorHex,
     badge: app.badge,
@@ -103,6 +104,7 @@ export function fromIntegration(row: any): UnifiedApp {
     description: row.description || '',
     category: row.category || 'it',
     source: 'integration',
+    connectionType: row.connectionType || (row.authType === 'oauth2' ? 'oauth_connector' : 'native_connector'),
     logoLetter: (row.name || '?')[0].toUpperCase(),
     colorHex: appColor(row.id, row.color),
     badge: row.specStatus === 'COMING_SOON' ? undefined : row.badge,
@@ -124,6 +126,10 @@ export function fromIntegration(row: any): UnifiedApp {
     wave1GuardrailsTotal: row.wave1GuardrailsTotal,
     integrationData: row,
   };
+}
+
+export function getAppServiceId(app: UnifiedApp) {
+  return app.integrationData?.id || app.appData?.id || app.appId;
 }
 
 // ─── Date formatting ────────────────────────────────────────────────────────

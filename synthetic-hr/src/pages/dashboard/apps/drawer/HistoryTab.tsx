@@ -2,7 +2,7 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { ReasonCallout } from '../../../../components/dashboard/ReasonCallout';
 import { cn } from '../../../../lib/utils';
 import type { UnifiedApp, ConnectorExecution, ConnectionLog } from '../types';
-import { fmtDate, financeConnectorMode, isTallyConnector, isClearTaxConnector, isNaukriConnector, isSlackRail } from '../helpers';
+import { fmtDate, financeConnectorMode, getAppServiceId, isTallyConnector, isClearTaxConnector, isNaukriConnector, isSlackRail } from '../helpers';
 import {
   financeExecutionSummary, tallyExecutionSummary,
   clearTaxExecutionSummary, naukriExecutionSummary, slackExecutionSummary,
@@ -18,7 +18,7 @@ interface HistoryTabProps {
 }
 
 export function HistoryTab({ app, executions, logs, executionsLoading, onRefresh }: HistoryTabProps) {
-  const rawId = app.source === 'marketplace' ? app.appData?.id : app.integrationData?.id;
+  const rawId = getAppServiceId(app);
   const financeMode = financeConnectorMode(rawId);
   const isTally = isTallyConnector(rawId);
   const isClearTax = isClearTaxConnector(rawId);

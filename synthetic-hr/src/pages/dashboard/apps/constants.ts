@@ -57,9 +57,9 @@ export const SORT_OPTIONS = [
 ] as const;
 
 export const TYPE_OPTIONS = [
-  { value: 'all',         label: 'All types' },
-  { value: 'marketplace', label: 'Apps' },
-  { value: 'integration', label: 'Integrations' },
+  { value: 'all', label: 'All setup types' },
+  { value: 'oauth2', label: 'OAuth' },
+  { value: 'api_key', label: 'API key' },
 ] as const;
 
 export const BADGE_STYLE: Record<string, string> = {

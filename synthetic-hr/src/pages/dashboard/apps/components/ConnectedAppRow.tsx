@@ -30,9 +30,6 @@ export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisco
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="text-sm font-semibold text-white leading-tight">{app.name}</p>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-white/10 bg-white/5 text-slate-500 font-medium">
-            {app.source === 'marketplace' ? 'App' : 'Integration'}
-          </span>
           {app.trustTier && (
             <span className={cn('text-[10px] px-1.5 py-0.5 rounded-md border font-medium', trustTierTone(app.trustTier))}>
               {app.trustTier}
@@ -56,7 +53,7 @@ export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisco
           {healthResult === 'error' && (
             <span className="w-2 h-2 rounded-full bg-rose-400 shrink-0" title="Health check failed" />
           )}
-          {healthResult == null && app.source === 'integration' && (
+          {healthResult == null && (
             <span className="w-2 h-2 rounded-full bg-amber-400/50 shrink-0" title="Not yet tested" />
           )}
         </div>
@@ -124,7 +121,7 @@ export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisco
                 onClick={() => { onDisconnect(app); setShowMenu(false); }}
                 className="w-full text-left px-3.5 py-2.5 text-xs text-rose-400 hover:bg-rose-500/10 transition-colors"
               >
-                {app.source === 'marketplace' ? 'Remove app' : 'Disconnect'}
+                Disconnect
               </button>
             </div>
           )}

@@ -153,6 +153,10 @@ export const integrationsApi = {
     return authenticatedFetch('/integrations', { method: 'GET' });
   },
 
+  async getAppsInventory(): Promise<ApiResponse<any[]>> {
+    return integrationsApi.getAll();
+  },
+
   async connect(service: string, credentials: Record<string, string>): Promise<ApiResponse<any>> {
     return authenticatedFetch(`/integrations/${encodeURIComponent(service)}/connect`, {
       method: 'POST',

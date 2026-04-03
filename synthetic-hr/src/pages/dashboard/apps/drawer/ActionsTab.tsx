@@ -1,7 +1,7 @@
 import { Loader2, Shield } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import type { UnifiedApp } from '../types';
-import { trustTierTone, financeConnectorMode, isTallyConnector, isClearTaxConnector, isNaukriConnector, isSlackRail } from '../helpers';
+import { trustTierTone, financeConnectorMode, getAppServiceId, isTallyConnector, isClearTaxConnector, isNaukriConnector, isSlackRail } from '../helpers';
 import {
   financeActionGuidance, tallyActionGuidance,
   clearTaxActionGuidance, naukriActionGuidance, slackActionGuidance,
@@ -17,8 +17,8 @@ interface ActionsTabProps {
 }
 
 export function ActionsTab({ app, catalog, catalogLoading, seedingPolicies, onToggleAction, onSeedWave1 }: ActionsTabProps) {
-  const rawId = app.source === 'marketplace' ? app.appData?.id : app.integrationData?.id;
-  const isWave1 = app.source === 'integration' && app.wave === 1;
+  const rawId = getAppServiceId(app);
+  const isWave1 = app.wave === 1;
   const financeMode = financeConnectorMode(rawId);
   const isTally = isTallyConnector(rawId);
   const isClearTax = isClearTaxConnector(rawId);

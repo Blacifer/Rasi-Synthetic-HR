@@ -4,6 +4,7 @@ import { api } from '../../../../lib/api-client';
 import { toast } from '../../../../lib/toast';
 import { cn } from '../../../../lib/utils';
 import type { UnifiedApp } from '../types';
+import { getAppServiceId } from '../helpers';
 
 interface PermissionsTabProps {
   app: UnifiedApp;
@@ -26,7 +27,7 @@ const RISK_COLORS: Record<string, string> = {
 };
 
 export function PermissionsTab({ app }: PermissionsTabProps) {
-  const serviceId = app.source === 'marketplace' ? app.appData?.id : app.integrationData?.id;
+  const serviceId = getAppServiceId(app);
   // All possible capabilities come from the app's actionsUnlocked list
   const allCapabilities: string[] = app.actionsUnlocked ?? [];
 

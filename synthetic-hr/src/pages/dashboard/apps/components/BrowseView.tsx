@@ -4,15 +4,12 @@ import { cn } from '../../../../lib/utils';
 import type { AIAgent } from '../../../../types';
 import type { UnifiedApp } from '../types';
 import { CATEGORY_META, SORT_OPTIONS, TYPE_OPTIONS, BADGE_STYLE } from '../constants';
-import { useOutsideClick } from '../helpers';
+import { getAppServiceId, useOutsideClick } from '../helpers';
 import { AppLogo } from './AppLogo';
 import { IntentPicker } from './IntentPicker';
-import { BundleCarousel } from './BundleCarousel';
-import type { AppBundle } from './BundleCarousel';
 
 interface BrowseViewProps {
   apps: UnifiedApp[];
-  bundles: AppBundle[];
   agents: AIAgent[];
   featured?: UnifiedApp[];
   initialCategory?: string | null;
@@ -60,7 +57,11 @@ function BrowseCard({ app, popLabel, onConnect, onManage }: {
         </div>
         <p className="text-xs text-slate-500 mt-1.5 leading-relaxed line-clamp-2">{app.description}</p>
         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-          <p className="text-[10px] text-slate-600">{app.source === 'marketplace' ? 'App' : 'Integration'}</p>
+          {app.connectionType && (
+            <span className="text-[10px] text-slate-600">
+              {app.connectionType === 'oauth_connector' ? 'OAuth setup' : app.connectionType === 'mcp_server' ? 'MCP-ready' : 'Direct setup'}
+            </span>
+          )}
           {app.trustTier && (
             <span className="text-[9px] px-1 py-0.5 rounded border border-white/10 text-slate-500 font-medium">{app.trustTier}</span>
           )}
@@ -83,10 +84,10 @@ function BrowseCard({ app, popLabel, onConnect, onManage }: {
   );
 }
 
-export function BrowseView({ apps, bundles, agents, featured: featuredProp, initialCategory, onConnect, onManage }: BrowseViewProps) {
+export function BrowseView({ apps, agents, featured: featuredProp, initialCategory, onConnect, onManage }: BrowseViewProps) {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<string>('popular');
-  const [filterType, setFilterType] = useState<'all' | 'marketplace' | 'integration'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'oauth2' | 'api_key'>('all');
   const [filterCategory, setFilterCategory] = useState<string>(
     initialCategory && CATEGORY_META[initialCategory] ? initialCategory : 'all'
   );
@@ -116,14 +117,15 @@ export function BrowseView({ apps, bundles, agents, featured: featuredProp, init
   const recommendations = useMemo(() => {
     const agentIds = new Set(agents.map((a) => a.id).filter(Boolean));
     return apps.filter((a) => {
-      if (a.connected || a.source !== 'marketplace') return false;
-      return a.appData?.relatedAgentIds?.some((id: string) => agentIds.has(id));
+      if (a.connected) return false;
+      const serviceId = getAppServiceId(a);
+      return agents.some((agent) => agentIds.has(agent.id) && ((agent as any).integrationIds || []).includes(serviceId));
     }).slice(0, 4);
   }, [apps, agents]);
 
   const filtered = useMemo(() => {
     let list = [...apps];
-    if (filterType !== 'all') list = list.filter((a) => a.source === filterType);
+    if (filterType !== 'all') list = list.filter((a) => a.authType === filterType);
     if (filterCategory !== 'all') list = list.filter((a) => a.category === filterCategory);
     if (search) {
       const q = search.toLowerCase();
@@ -146,7 +148,6 @@ export function BrowseView({ apps, bundles, agents, featured: featuredProp, init
   );
 
   function popLabel(a: UnifiedApp): string | null {
-    if (a.source !== 'marketplace') return null;
     const r = popularityMap[a.id];
     if (!r) return null;
     if (r === 1) return 'Most popular';
@@ -157,12 +158,14 @@ export function BrowseView({ apps, bundles, agents, featured: featuredProp, init
   const handleIntentSelect = (bundleId: string) => {
     setHighlightBundle(bundleId);
     setIntentDone(true);
-    setTimeout(() => document.getElementById('browse-bundles')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-  };
-
-  const handleBundleInstallAll = (bundle: AppBundle) => {
-    const first = apps.find((a) => bundle.appIds.includes(a.appId) && !a.connected);
-    if (first) onConnect(first);
+    const categoryHint = bundleId.replace('-stack', '');
+    if (categoryHint === 'support' || categoryHint === 'finance' || categoryHint === 'sales' || categoryHint === 'compliance') {
+      setFilterCategory(categoryHint);
+    } else if (categoryHint === 'hiring') {
+      setFilterCategory('recruitment');
+    } else if (categoryHint === 'it') {
+      setFilterCategory('it');
+    }
   };
 
   const toggle = (d: typeof activeDropdown) => setActiveDropdown((p: typeof activeDropdown) => p === d ? null : d);
@@ -188,7 +191,7 @@ export function BrowseView({ apps, bundles, agents, featured: featuredProp, init
         </div>
 
         {(['sort', 'type', 'cat'] as const).map((d) => {
-          const label = d === 'sort' ? 'Sort' : d === 'type' ? 'Type' : 'Categories';
+          const label = d === 'sort' ? 'Sort' : d === 'type' ? 'Setup' : 'Categories';
           const isActive = activeDropdown === d
             || (d === 'type' && filterType !== 'all')
             || (d === 'cat' && filterCategory !== 'all');
@@ -264,14 +267,10 @@ export function BrowseView({ apps, bundles, agents, featured: featuredProp, init
           </div>
         )}
 
-        {/* Bundles */}
-        {!search && filterCategory === 'all' && filterType === 'all' && bundles.length > 0 && (
-          <BundleCarousel
-            bundles={bundles}
-            apps={apps}
-            highlightBundle={highlightBundle}
-            onInstallAll={handleBundleInstallAll}
-          />
+        {highlightBundle && !search && (
+          <p className="text-xs text-violet-300">
+            Showing the apps most relevant to the workflow you selected.
+          </p>
         )}
 
         {/* Featured */}
