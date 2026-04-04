@@ -412,6 +412,43 @@ export function isComplianceWorkspaceApp(connectorId?: string | null) {
   ].some((candidate) => value.includes(candidate));
 }
 
+export function isSalesWorkspaceApp(connectorId?: string | null) {
+  const value = String(connectorId || '').toLowerCase();
+  return [
+    'salesforce',
+    'hubspot',
+    'zoho-crm',
+    'zoho_crm',
+    'pipedrive',
+    'freshsales',
+  ].some((candidate) => value.includes(candidate));
+}
+
+export function isMarketingWorkspaceApp(connectorId?: string | null) {
+  const value = String(connectorId || '').toLowerCase();
+  return [
+    'mailchimp',
+    'brevo',
+    'convertkit',
+    'klaviyo',
+    'meta-ads',
+    'google-ads',
+  ].some((candidate) => value.includes(candidate));
+}
+
+export function isItWorkspaceApp(connectorId?: string | null) {
+  const value = String(connectorId || '').toLowerCase();
+  return [
+    'okta',
+    'jumpcloud',
+    'onelogin',
+    'jamf',
+    'kandji',
+    'azure-ad',
+    'azure_ad',
+  ].some((candidate) => value.includes(candidate));
+}
+
 export function isSlackRail(connectorId?: string | null) {
   return String(connectorId || '').toLowerCase().includes('slack');
 }
