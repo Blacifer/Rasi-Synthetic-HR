@@ -61,6 +61,14 @@ jest.mock('../../lib/integrations/spec-registry', () => ({
         category: 'PRODUCTIVITY',
       };
     }
+    if (normalized === 'brevo') {
+      return {
+        id: 'brevo',
+        name: 'Brevo',
+        authType: 'api_key',
+        category: 'PRODUCTIVITY',
+      };
+    }
     if (normalized === 'onelogin') {
       return {
         id: 'onelogin',
@@ -396,5 +404,73 @@ describe('Integrations Routes - workspace preview', () => {
     expect(res.body.data.groups).toHaveLength(1);
     expect(res.body.data.metrics.user_count).toBe(1);
     expect(res.body.data.suggested_next_action).toContain('Review OneLogin users');
+  });
+
+  it('returns Brevo workspace preview using API key credentials', async () => {
+    mockUserRest.mockImplementation(async (_jwt, table, _query, options) => {
+      if (table === 'integrations') {
+        return [{
+          id: 'integration-5',
+          service_type: 'brevo',
+          status: 'connected',
+          service_name: 'Brevo',
+        }];
+      }
+      if (table === 'integration_credentials') {
+        return [
+          { key: 'api_key', value: 'brevo-key', is_sensitive: true, expires_at: null },
+        ];
+      }
+      if (table === 'integration_connection_logs' && options?.method === 'POST') {
+        return [{ id: 'log-5' }];
+      }
+      return [];
+    });
+
+    global.fetch = jest.fn(async (input: any) => {
+      const url = String(input);
+      if (url.includes('/v3/emailCampaigns?limit=5')) {
+        return {
+          ok: true,
+          json: async () => ({
+            count: 1,
+            campaigns: [
+              {
+                id: 91,
+                name: 'April Retention',
+                status: 'sent',
+                modifiedAt: '2026-04-03T10:00:00.000Z',
+                type: 'classic',
+              },
+            ],
+          }),
+        } as Response;
+      }
+      if (url.includes('/v3/contacts?limit=5')) {
+        return {
+          ok: true,
+          json: async () => ({
+            count: 1,
+            contacts: [
+              {
+                id: 17,
+                email: 'user@example.com',
+                listIds: [1, 2],
+              },
+            ],
+          }),
+        } as Response;
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    }) as any;
+
+    const res = await invokeRoute('/brevo/workspace-preview');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.records).toHaveLength(1);
+    expect(res.body.data.audiences).toHaveLength(1);
+    expect(res.body.data.metrics.campaign_count).toBe(1);
+    expect(res.body.data.metrics.contact_count).toBe(1);
+    expect(res.body.data.suggested_next_action).toContain('Review live campaigns');
   });
 });
