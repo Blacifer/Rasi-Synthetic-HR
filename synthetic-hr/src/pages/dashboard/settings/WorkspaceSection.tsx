@@ -4,6 +4,8 @@ import { RefreshCw, Save } from 'lucide-react';
 export function WorkspaceSection({
   orgName,
   setOrgName,
+  providerDisplayName,
+  setProviderDisplayName,
   workspaceTimezone,
   setWorkspaceTimezone,
   defaultResponseStyle,
@@ -14,6 +16,8 @@ export function WorkspaceSection({
 }: {
   orgName: string;
   setOrgName: React.Dispatch<React.SetStateAction<string>>;
+  providerDisplayName: string;
+  setProviderDisplayName: React.Dispatch<React.SetStateAction<string>>;
   workspaceTimezone: string;
   setWorkspaceTimezone: React.Dispatch<React.SetStateAction<string>>;
   defaultResponseStyle: string;
@@ -58,6 +62,16 @@ export function WorkspaceSection({
               onChange={(e) => setOrgName(e.target.value)}
               className="w-full px-4 py-3 bg-slate-900 border border-slate-700 text-white rounded-xl outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Provider Display Name</label>
+            <input
+              value={providerDisplayName}
+              onChange={(e) => setProviderDisplayName(e.target.value)}
+              placeholder="Rasi AI"
+              className="w-full px-4 py-3 bg-slate-900 border border-slate-700 text-white rounded-xl outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
+            />
+            <p className="mt-1.5 text-xs text-slate-500">Shown on agent cards instead of the underlying model vendor (e.g. "OpenAI").</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">Default Timezone</label>

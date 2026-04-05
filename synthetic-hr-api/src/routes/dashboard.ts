@@ -3,6 +3,7 @@ import { requirePermission } from '../middleware/rbac';
 import { supabaseRestAsUser, eq, gte } from '../lib/supabase-rest';
 import { logger } from '../lib/logger';
 import { errorResponse, getOrgId, getUserJwt, clampDays, buildDaySeries, toIsoDay } from '../lib/route-helpers';
+import { checkCostAnomalies } from '../lib/reconciliation-alerts';
 
 const router = express.Router();
 
@@ -205,6 +206,9 @@ router.get('/dashboard/telemetry', requirePermission('dashboard.read'), async (r
     ).length;
     const degradedIntegrations = Math.max(0, integrationRows.length - healthyIntegrations);
 
+    // Fire-and-forget cost spike detection (non-blocking)
+    checkCostAnomalies(orgId).catch((err: any) => logger.warn('Cost anomaly check error', { error: err?.message }));
+
     return res.json({
       success: true,
       data: {
@@ -238,7 +242,18 @@ router.get('/dashboard/telemetry', requirePermission('dashboard.read'), async (r
   }
 });
 
-// GET /api/models — live model catalog from OpenRouter
+// Native first-party models always included regardless of OpenRouter availability
+const NATIVE_MODELS = [
+  { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'openai', context_length: 128000, pricing: { prompt: '0.000005', completion: '0.000015' }, capabilities: ['vision', 'function_calling'] },
+  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'openai', context_length: 128000, pricing: { prompt: '0.00000015', completion: '0.0000006' }, capabilities: ['vision', 'function_calling'] },
+  { id: 'openai/gpt-4-turbo', name: 'GPT-4 Turbo', provider: 'openai', context_length: 128000, pricing: { prompt: '0.00001', completion: '0.00003' }, capabilities: ['vision', 'function_calling'] },
+  { id: 'openai/gpt-3.5-turbo', name: 'GPT-3.5 Turbo', provider: 'openai', context_length: 16385, pricing: { prompt: '0.0000005', completion: '0.0000015' }, capabilities: ['function_calling'] },
+  { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4', provider: 'anthropic', context_length: 200000, pricing: { prompt: '0.000003', completion: '0.000015' }, capabilities: ['vision', 'function_calling'] },
+  { id: 'anthropic/claude-3-5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'anthropic', context_length: 200000, pricing: { prompt: '0.000003', completion: '0.000015' }, capabilities: ['vision', 'function_calling'] },
+  { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', provider: 'anthropic', context_length: 200000, pricing: { prompt: '0.00000025', completion: '0.00000125' }, capabilities: ['function_calling'] },
+];
+
+// GET /api/models — full live model catalog (native + OpenRouter 350+)
 router.get('/models', async (req: Request, res: Response) => {
   try {
     if (Date.now() < modelsCache.expiresAt && modelsCache.data.length > 0) {
@@ -247,18 +262,7 @@ router.get('/models', async (req: Request, res: Response) => {
 
     const openRouterKey = process.env.RASI_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
     if (!openRouterKey) {
-      return res.json({
-        success: true,
-        data: [
-          { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'OpenAI' },
-          { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI' },
-          { id: 'anthropic/claude-3-5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'Anthropic' },
-          { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', provider: 'Anthropic' },
-          { id: 'google/gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'Google' },
-          { id: 'meta-llama/llama-3.1-70b-instruct', name: 'Llama 3.1 70B', provider: 'Meta' },
-          { id: 'mistralai/mistral-large', name: 'Mistral Large', provider: 'Mistral' },
-        ],
-      });
+      return res.json({ success: true, data: NATIVE_MODELS });
     }
 
     const response = await fetch('https://openrouter.ai/api/v1/models', {
@@ -267,27 +271,50 @@ router.get('/models', async (req: Request, res: Response) => {
 
     if (!response.ok) {
       logger.warn('OpenRouter model fetch failed', { status: response.status });
-      return res.json({ success: true, data: modelsCache.data });
+      const fallback = modelsCache.data.length > 0 ? modelsCache.data : NATIVE_MODELS;
+      return res.json({ success: true, data: fallback });
     }
 
-    const json = (await response.json()) as { data?: Array<{ id: string; name?: string; context_length?: number; pricing?: any }> };
-    const models = (json.data || [])
-      .filter((m) => typeof m.id === 'string' && m.id.includes('/'))
-      .map((m) => ({
-        id: m.id,
-        name: m.name || m.id,
-        provider: m.id.split('/')[0] || 'Unknown',
-        context_length: m.context_length,
-        pricing: m.pricing,
-      }))
+    const json = (await response.json()) as {
+      data?: Array<{
+        id: string;
+        name?: string;
+        context_length?: number;
+        pricing?: { prompt?: string; completion?: string };
+        architecture?: { modality?: string };
+      }>;
+    };
+
+    // Build a set of native model IDs so we don't duplicate them from OpenRouter
+    const nativeIds = new Set(NATIVE_MODELS.map((m) => m.id));
+
+    const openRouterModels = (json.data || [])
+      .filter((m) => typeof m.id === 'string' && m.id.includes('/') && !nativeIds.has(m.id))
+      .map((m) => {
+        const modality = m.architecture?.modality || '';
+        const capabilities: string[] = [];
+        if (modality.includes('image')) capabilities.push('vision');
+        if (modality.includes('audio')) capabilities.push('audio');
+        return {
+          id: m.id,
+          name: m.name || m.id,
+          provider: m.id.split('/')[0] || 'Unknown',
+          context_length: m.context_length ?? null,
+          pricing: m.pricing ?? null,
+          capabilities,
+        };
+      })
       .sort((a, b) => a.id.localeCompare(b.id));
 
+    // Native models first, then all OpenRouter models
+    const models = [...NATIVE_MODELS, ...openRouterModels];
     modelsCache = { data: models, expiresAt: Date.now() + 5 * 60 * 1000 };
 
     return res.json({ success: true, data: models });
   } catch (error: any) {
     logger.error('Model catalog fetch error', { error: error.message });
-    return res.json({ success: true, data: modelsCache.data });
+    const fallback = modelsCache.data.length > 0 ? modelsCache.data : NATIVE_MODELS;
+    return res.json({ success: true, data: fallback });
   }
 });
 
@@ -368,5 +395,100 @@ router.get('/usage', requirePermission('dashboard.read'), async (req: Request, r
     errorResponse(res, error);
   }
 });
+
+// GET /api/organizations/settings — read org settings
+router.get('/organizations/settings', requirePermission('settings.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+    const jwt = getUserJwt(req);
+    const orgParams = new URLSearchParams();
+    orgParams.set('id', eq(orgId));
+    orgParams.set('select', 'settings');
+    const orgRows = await supabaseRestAsUser(jwt, 'organizations', orgParams) as any[];
+    return res.json({ success: true, data: orgRows?.[0]?.settings || {} });
+  } catch (err: any) {
+    return errorResponse(res, err);
+  }
+});
+
+// POST /api/mcp-servers/:id/test — verify MCP server connectivity
+router.post('/mcp-servers/:id/test', requirePermission('settings.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+    const { id } = req.params;
+
+    const jwt = getUserJwt(req);
+    const orgParams = new URLSearchParams();
+    orgParams.set('id', eq(orgId));
+    orgParams.set('select', 'settings');
+    const orgRows = await supabaseRestAsUser(jwt, 'organizations', orgParams) as any[];
+    const mcpList: any[] = orgRows?.[0]?.settings?.mcp_servers || [];
+    const srv = mcpList.find((s: any) => s.id === id);
+    if (!srv) return res.status(404).json({ success: false, error: 'MCP server not found' });
+
+    const authToken = srv.auth_token || '';
+    try {
+      const manifestRes = await fetch(`${srv.url}/tools/list`, {
+        headers: { ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}), 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!manifestRes.ok) {
+        return res.json({ success: false, error: `Server returned HTTP ${manifestRes.status}` });
+      }
+      const manifest = await manifestRes.json().catch(() => null);
+      const toolCount = Array.isArray(manifest?.tools) ? manifest.tools.length : 0;
+      return res.json({ success: true, data: { toolCount, tools: (manifest?.tools || []).map((t: any) => t.name) } });
+    } catch (fetchErr: any) {
+      return res.json({ success: false, error: fetchErr?.message || 'Connection failed' });
+    }
+  } catch (err: any) {
+    return errorResponse(res, err);
+  }
+});
+
+// PATCH /api/organizations/settings — update org-level settings JSONB (branding, etc.)
+router.patch('/organizations/settings', requirePermission('settings.update'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const patch = req.body;
+    if (typeof patch !== 'object' || Array.isArray(patch)) {
+      return res.status(400).json({ success: false, error: 'Body must be an object' });
+    }
+
+    // Fetch current settings, then deep-merge the patch
+    const jwt = getUserJwt(req);
+    const orgParams = new URLSearchParams();
+    orgParams.set('id', eq(orgId));
+    orgParams.set('select', 'id,settings');
+    const orgRows = await supabaseRestAsUser(jwt, 'organizations', orgParams) as any[];
+    const current = orgRows?.[0]?.settings || {};
+    const merged = deepMerge(current, patch);
+
+    const updateQ = new URLSearchParams();
+    updateQ.set('id', eq(orgId));
+    await supabaseRestAsUser(jwt, 'organizations', updateQ, { method: 'PATCH', body: { settings: merged } });
+
+    logger.info('Organization settings updated', { org_id: orgId, keys: Object.keys(patch) });
+    return res.json({ success: true, data: merged });
+  } catch (err: any) {
+    return errorResponse(res, err);
+  }
+});
+
+function deepMerge(base: Record<string, any>, patch: Record<string, any>): Record<string, any> {
+  const result = { ...base };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v && typeof v === 'object' && !Array.isArray(v) && typeof result[k] === 'object' && result[k] !== null) {
+      result[k] = deepMerge(result[k] as Record<string, any>, v as Record<string, any>);
+    } else {
+      result[k] = v;
+    }
+  }
+  return result;
+}
 
 export default router;

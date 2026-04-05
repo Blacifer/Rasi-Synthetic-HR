@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { z } from 'zod';
-import { requirePermission, requireRole } from '../middleware/rbac';
+import { requirePermission } from '../middleware/rbac';
 import { supabaseRestAsUser, eq } from '../lib/supabase-rest';
 import { logger } from '../lib/logger';
 import { validateRequestBody, incidentSchemas } from '../schemas/validation';
@@ -8,10 +8,34 @@ import { auditLog } from '../lib/audit-logger';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
 import { firePlaybookTriggers } from '../lib/trigger-evaluator';
 import { notifySlackIncident } from '../lib/slack-notify';
+import { notifyAlertChannels } from '../lib/alert-channels';
 import { incidentDetection } from '../services/incident-detection';
 import { errorResponse, getOrgId, getUserJwt, safeLimit } from '../lib/route-helpers';
 
 const router = express.Router();
+
+// ---------------------------------------------------------------------------
+// SSE client registry — push new incidents to connected dashboards in real-time
+// ---------------------------------------------------------------------------
+type SseClient = Response & { orgId?: string };
+const sseClients = new Map<string, Set<SseClient>>();
+
+/**
+ * Push a new incident payload to all SSE clients subscribed for this org.
+ * Called from POST /incidents, POST /detect, and gateway incident detection.
+ */
+export function pushIncidentEvent(orgId: string, incident: Record<string, unknown>): void {
+  const clients = sseClients.get(orgId);
+  if (!clients || clients.size === 0) return;
+  const payload = JSON.stringify(incident);
+  for (const client of clients) {
+    try {
+      client.write(`event: incident.new\ndata: ${payload}\n\n`);
+    } catch {
+      clients.delete(client);
+    }
+  }
+}
 
 // Get incidents
 router.get('/incidents', requirePermission('incidents.read'), async (req: Request, res: Response) => {
@@ -115,6 +139,9 @@ router.post('/incidents', requirePermission('incidents.create'), async (req: Req
 
     logger.info('Incident created successfully', { incident_id: data?.[0]?.id, severity });
 
+    // Push to SSE clients for this org
+    if (data?.[0]) pushIncidentEvent(orgId, data[0]);
+
     auditLog.log({
       user_id: req.user?.id || 'system',
       action: 'incident.created',
@@ -148,6 +175,17 @@ router.post('/incidents', requirePermission('incidents.create'), async (req: Req
       incidentType: incident_type,
       agentId: agent_id,
       description,
+    });
+
+    // Alert channels: PagerDuty / Teams / Opsgenie / email (fire and forget)
+    void notifyAlertChannels(orgId, {
+      incidentId: data?.[0]?.id,
+      title,
+      severity: (severity || 'medium') as any,
+      incidentType: incident_type,
+      agentId: agent_id,
+      description,
+      dashboardUrl: `${process.env.FRONTEND_URL || 'https://app.rasi.ai'}/dashboard/incidents`,
     });
 
     // Evaluate playbook triggers for incident.created event.
@@ -369,6 +407,31 @@ router.post('/detect', requirePermission('incidents.create'), async (req: Reques
       const incident = incidentRows?.[0];
       logger.warn('Incident detected and created', { incident_type: highest.type, severity: highest.severity });
 
+      // Push to SSE clients
+      if (incident) pushIncidentEvent(orgId, incident);
+
+      // Slack + alert channels (fire-and-forget, all three notification paths)
+      if (incident) {
+        const detectedTitle = `${highest.type?.replace('_', ' ').toUpperCase()} Detected`;
+        void notifySlackIncident(orgId, {
+          incidentId: incident.id,
+          title: detectedTitle,
+          severity: highest.severity,
+          incidentType: highest.type,
+          agentId: agent_id || undefined,
+          description: highest.details,
+        });
+        void notifyAlertChannels(orgId, {
+          incidentId: incident.id,
+          title: detectedTitle,
+          severity: highest.severity as any,
+          incidentType: highest.type,
+          agentId: agent_id || undefined,
+          description: highest.details,
+          dashboardUrl: `${process.env.FRONTEND_URL || 'https://app.rasi.ai'}/dashboard/incidents`,
+        });
+      }
+
       fireAndForgetWebhookEvent(orgId, 'incident.created', {
         id: `evt_detect_${incident?.id || crypto.randomUUID()}`,
         type: 'incident.created',
@@ -383,6 +446,16 @@ router.post('/detect', requirePermission('incidents.create'), async (req: Reques
           description: highest.details,
         },
       });
+
+      // Playbook triggers (same as POST /incidents path)
+      firePlaybookTriggers(orgId, 'incident.created', {
+        incident_id: incident?.id,
+        agent_id,
+        severity: highest.severity,
+        incident_type: highest.type,
+        title: `${highest.type?.replace('_', ' ').toUpperCase()} Detected`,
+        description: highest.details,
+      });
     }
 
     res.json({
@@ -394,6 +467,44 @@ router.post('/detect', requirePermission('incidents.create'), async (req: Reques
   } catch (error: any) {
     errorResponse(res, error);
   }
+});
+
+// SSE stream endpoint — clients connect here to receive real-time incident events
+router.get('/incidents/stream', requirePermission('incidents.read'), (req: Request, res: Response) => {
+  const orgId = getOrgId(req);
+  if (!orgId) {
+    res.status(401).json({ success: false, error: 'Organization not found' });
+    return;
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const client = res as SseClient;
+  client.orgId = orgId;
+
+  if (!sseClients.has(orgId)) sseClients.set(orgId, new Set());
+  sseClients.get(orgId)!.add(client);
+
+  // Send connected event so the client knows the stream is live
+  res.write('event: connected\ndata: {}\n\n');
+
+  const pingTimer = setInterval(() => {
+    try {
+      res.write('event: ping\ndata: {}\n\n');
+    } catch {
+      clearInterval(pingTimer);
+    }
+  }, 25_000);
+
+  req.on('close', () => {
+    clearInterval(pingTimer);
+    sseClients.get(orgId)?.delete(client);
+    if (sseClients.get(orgId)?.size === 0) sseClients.delete(orgId);
+  });
 });
 
 export default router;

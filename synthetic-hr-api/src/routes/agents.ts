@@ -427,6 +427,303 @@ router.get('/agents/:id', requirePermission('agents.read'), async (req: Request,
   }
 });
 
+// GET /agents/:id/health — P50/P95/P99 latency, error rate, uptime SLA, 14-day sparkline
+router.get('/agents/:id/health', requirePermission('agents.read'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const jwt = getUserJwt(req);
+    const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const since14 = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // Fetch cost_tracking rows for last 30 days (latency + request counts)
+    const ctQ = new URLSearchParams();
+    ctQ.set('organization_id', eq(orgId));
+    ctQ.set('agent_id', eq(id));
+    ctQ.set('date', `gte.${since30}`);
+    ctQ.set('select', 'date,avg_latency_ms,request_count,cost_usd');
+    ctQ.set('order', 'date.asc');
+    ctQ.set('limit', '500');
+    const costRows = await supabaseRestAsUser(jwt, 'cost_tracking', ctQ).catch(() => []) as any[];
+
+    // Latency percentiles from avg_latency_ms values (weighted by request_count)
+    const latencySamples: number[] = [];
+    let totalRequests = 0;
+    let totalCostUsd = 0;
+    for (const row of (costRows || [])) {
+      const count = Number(row.request_count) || 0;
+      const lat = Number(row.avg_latency_ms);
+      if (lat > 0 && count > 0) {
+        // Weight: push one sample per request (cap at 10 to avoid huge arrays)
+        const weight = Math.min(count, 10);
+        for (let i = 0; i < weight; i++) latencySamples.push(lat);
+      }
+      totalRequests += count;
+      totalCostUsd += Number(row.cost_usd) || 0;
+    }
+    latencySamples.sort((a, b) => a - b);
+    const pct = (p: number) => latencySamples.length === 0 ? 0
+      : latencySamples[Math.min(Math.floor(latencySamples.length * p / 100), latencySamples.length - 1)];
+    const p50 = pct(50);
+    const p95 = pct(95);
+    const p99 = pct(99);
+
+    // Incident-based error rate (high+critical incidents / total requests)
+    const incQ = new URLSearchParams();
+    incQ.set('organization_id', eq(orgId));
+    incQ.set('agent_id', eq(id));
+    incQ.set('created_at', `gte.${since30}T00:00:00Z`);
+    incQ.set('select', 'id,severity');
+    incQ.set('limit', '500');
+    const incidentRows = await supabaseRestAsUser(jwt, 'incidents', incQ).catch(() => []) as any[];
+    const totalIncidents = (incidentRows || []).length;
+    const highIncidents = (incidentRows || []).filter((i: any) => i.severity === 'high' || i.severity === 'critical').length;
+    const errorRate = totalRequests > 0 ? highIncidents / totalRequests : 0;
+
+    // Uptime SLA: fetch agent created_at + status change events from audit_logs
+    // Approximation: (days with cost_tracking data / calendar days since creation) × 100
+    const agentQ = new URLSearchParams();
+    agentQ.set('id', eq(id));
+    agentQ.set('organization_id', eq(orgId));
+    agentQ.set('select', 'created_at,status');
+    const agentRows = await supabaseRestAsUser(jwt, 'ai_agents', agentQ).catch(() => []) as any[];
+    const agent = agentRows?.[0];
+    let uptimePct = 100;
+    if (agent) {
+      const createdAt = new Date(agent.created_at);
+      const nowMs = Date.now();
+      const totalDays = Math.max(1, Math.ceil((nowMs - createdAt.getTime()) / (24 * 60 * 60 * 1000)));
+      const activeDays = new Set((costRows || []).map((r: any) => r.date)).size;
+      // If agent is terminated/paused add context
+      if (agent.status === 'terminated') {
+        uptimePct = Math.round((activeDays / totalDays) * 100);
+      } else {
+        uptimePct = Math.min(100, Math.round(((activeDays + (activeDays === 0 ? 0 : 1)) / totalDays) * 100));
+      }
+    }
+
+    // 14-day sparkline: daily requests + avg latency
+    const sparklineMap = new Map<string, { requests: number; avgLatency: number; cost: number }>();
+    for (const row of (costRows || [])) {
+      if (row.date < since14) continue;
+      const existing = sparklineMap.get(row.date) || { requests: 0, avgLatency: 0, cost: 0 };
+      existing.requests += Number(row.request_count) || 0;
+      existing.cost += Number(row.cost_usd) || 0;
+      // Weighted avg latency
+      const prevReqs = existing.requests - (Number(row.request_count) || 0);
+      const newReqs = Number(row.request_count) || 0;
+      if (newReqs > 0) {
+        existing.avgLatency = prevReqs > 0
+          ? (existing.avgLatency * prevReqs + (Number(row.avg_latency_ms) || 0) * newReqs) / (prevReqs + newReqs)
+          : Number(row.avg_latency_ms) || 0;
+      }
+      sparklineMap.set(row.date, existing);
+    }
+    // Fill in all 14 days (including zeros)
+    const sparkline: Array<{ date: string; requests: number; avgLatency: number; cost: number }> = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const entry = sparklineMap.get(d) || { requests: 0, avgLatency: 0, cost: 0 };
+      sparkline.push({ date: d, ...entry });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        agentId: id,
+        period: '30d',
+        latency: { p50: Math.round(p50), p95: Math.round(p95), p99: Math.round(p99) },
+        errorRate: Math.round(errorRate * 10000) / 100, // percentage, 2 dp
+        totalRequests,
+        totalIncidents,
+        highSeverityIncidents: highIncidents,
+        totalCostUsd: Math.round(totalCostUsd * 10000) / 10000,
+        uptimePct,
+        agentStatus: agent?.status || 'unknown',
+        sparkline,
+      },
+    });
+  } catch (error: any) {
+    return errorResponse(res, error);
+  }
+});
+
+// GET /agents/:id/forecast — 30-day cost forecast based on 7-day rolling avg
+router.get('/agents/:id/forecast', requirePermission('agents.read'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const jwt = getUserJwt(req);
+    const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const ctQ = new URLSearchParams();
+    ctQ.set('organization_id', eq(orgId));
+    ctQ.set('agent_id', eq(id));
+    ctQ.set('date', `gte.${since30}`);
+    ctQ.set('select', 'date,cost_usd');
+    ctQ.set('order', 'date.asc');
+    ctQ.set('limit', '100');
+    const costRows = await supabaseRestAsUser(jwt, 'cost_tracking', ctQ).catch(() => []) as any[];
+
+    // Build daily cost map
+    const dailyCost: Record<string, number> = {};
+    for (const row of (costRows || [])) {
+      dailyCost[row.date] = (dailyCost[row.date] || 0) + (Number(row.cost_usd) || 0);
+    }
+
+    // Last 7 days for rolling average
+    const last7: number[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      last7.push(dailyCost[d] || 0);
+    }
+    const rollingAvg7d = last7.reduce((s, v) => s + v, 0) / 7;
+
+    // Standard deviation for confidence band
+    const mean = rollingAvg7d;
+    const variance = last7.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / 7;
+    const stdDev = Math.sqrt(variance);
+
+    const forecastMonthly = rollingAvg7d * 30;
+    const confidenceLow = Math.max(0, (rollingAvg7d - stdDev) * 30);
+    const confidenceHigh = (rollingAvg7d + stdDev) * 30;
+
+    // Trend: compare last 7d avg vs prior 7d avg
+    const prior7: number[] = [];
+    for (let i = 13; i >= 7; i--) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      prior7.push(dailyCost[d] || 0);
+    }
+    const priorAvg = prior7.reduce((s, v) => s + v, 0) / 7;
+    const trend = rollingAvg7d > priorAvg * 1.1 ? 'up' : rollingAvg7d < priorAvg * 0.9 ? 'down' : 'flat';
+
+    // Sparkline: last 30 days
+    const sparkline: Array<{ date: string; cost: number }> = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      sparkline.push({ date: d, cost: dailyCost[d] || 0 });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        agentId: id,
+        rollingAvg7d: Math.round(rollingAvg7d * 100000) / 100000,
+        forecastMonthly: Math.round(forecastMonthly * 10000) / 10000,
+        confidenceLow: Math.round(confidenceLow * 10000) / 10000,
+        confidenceHigh: Math.round(confidenceHigh * 10000) / 10000,
+        trend,
+        sparkline,
+      },
+    });
+  } catch (error: any) {
+    return errorResponse(res, error);
+  }
+});
+
+// GET /agents/:id/trust-score — composite trust score from existing tables
+router.get('/agents/:id/trust-score', requirePermission('agents.read'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const jwt = getUserJwt(req);
+    const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // Fetch agent risk_score
+    const agentQ = new URLSearchParams();
+    agentQ.set('id', eq(id));
+    agentQ.set('organization_id', eq(orgId));
+    agentQ.set('select', 'risk_score,status');
+    const agentRows = await supabaseRestAsUser(jwt, 'ai_agents', agentQ).catch(() => []) as any[];
+    const agent = agentRows?.[0];
+    const riskScore = Math.min(100, Math.max(0, Number(agent?.risk_score) || 50));
+
+    // Error rate: incidents (high+critical) / total requests from cost_tracking
+    const ctQ = new URLSearchParams();
+    ctQ.set('organization_id', eq(orgId));
+    ctQ.set('agent_id', eq(id));
+    ctQ.set('date', `gte.${since30}`);
+    ctQ.set('select', 'request_count');
+    ctQ.set('limit', '100');
+    const costRows = await supabaseRestAsUser(jwt, 'cost_tracking', ctQ).catch(() => []) as any[];
+    const totalRequests = (costRows || []).reduce((s: number, r: any) => s + (Number(r.request_count) || 0), 0);
+
+    const incQ = new URLSearchParams();
+    incQ.set('organization_id', eq(orgId));
+    incQ.set('agent_id', eq(id));
+    incQ.set('created_at', `gte.${since30}T00:00:00Z`);
+    incQ.set('select', 'severity');
+    incQ.set('limit', '200');
+    const incRows = await supabaseRestAsUser(jwt, 'incidents', incQ).catch(() => []) as any[];
+    const highIncidents = (incRows || []).filter((i: any) => i.severity === 'high' || i.severity === 'critical').length;
+    const errorRate = totalRequests > 0 ? Math.min(1, highIncidents / totalRequests) : 0;
+
+    // Red team pass rate from shadow_test_runs
+    const stQ = new URLSearchParams();
+    stQ.set('organization_id', eq(orgId));
+    stQ.set('agent_id', eq(id));
+    stQ.set('select', 'result');
+    stQ.set('limit', '100');
+    const stRows = await supabaseRestAsUser(jwt, 'shadow_test_runs', stQ).catch(() => []) as any[];
+    const totalSt = (stRows || []).length;
+    const passedSt = (stRows || []).filter((r: any) => r.result === 'pass' || r.result === 'passed').length;
+    const redTeamPassRate = totalSt > 0 ? passedSt / totalSt : 0.75; // default 75% if no data
+
+    // Policy compliance: approved / (approved + denied) from approval_requests
+    const arQ = new URLSearchParams();
+    arQ.set('organization_id', eq(orgId));
+    arQ.set('agent_id', eq(id));
+    arQ.set('select', 'status');
+    arQ.set('limit', '200');
+    const arRows = await supabaseRestAsUser(jwt, 'approval_requests', arQ).catch(() => []) as any[];
+    const approved = (arRows || []).filter((r: any) => r.status === 'approved').length;
+    const denied = (arRows || []).filter((r: any) => r.status === 'denied').length;
+    const policyCompliancePct = (approved + denied) > 0 ? approved / (approved + denied) : 1;
+
+    // Composite score
+    const score = Math.round(
+      (100 - riskScore) * 0.35 +
+      (1 - errorRate) * 100 * 0.30 +
+      redTeamPassRate * 100 * 0.20 +
+      policyCompliancePct * 100 * 0.15
+    );
+    const clampedScore = Math.min(100, Math.max(0, score));
+    const grade = clampedScore >= 90 ? 'A' : clampedScore >= 75 ? 'B' : clampedScore >= 60 ? 'C' : 'D';
+
+    return res.json({
+      success: true,
+      data: {
+        agentId: id,
+        score: clampedScore,
+        grade,
+        breakdown: {
+          riskComponent: Math.round((100 - riskScore) * 0.35),
+          errorRateComponent: Math.round((1 - errorRate) * 100 * 0.30),
+          redTeamComponent: Math.round(redTeamPassRate * 100 * 0.20),
+          policyComponent: Math.round(policyCompliancePct * 100 * 0.15),
+        },
+        inputs: {
+          riskScore,
+          errorRate: Math.round(errorRate * 10000) / 100,
+          redTeamPassRate: Math.round(redTeamPassRate * 100),
+          policyCompliancePct: Math.round(policyCompliancePct * 100),
+          totalRequests,
+          totalTests: totalSt,
+          totalApprovals: approved + denied,
+        },
+      },
+    });
+  } catch (error: any) {
+    return errorResponse(res, error);
+  }
+});
+
 router.get('/agents/:id/workspace', requirePermission('agents.read'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -438,6 +735,56 @@ router.get('/agents/:id/workspace', requirePermission('agents.read'), async (req
     errorResponse(res, error, error?.message === 'Agent not found' ? 404 : 500);
   }
 });
+
+// ─── Agent versioning helpers ─────────────────────────────────────────────────
+
+const SNAPSHOT_FIELDS = ['name', 'description', 'agent_type', 'platform', 'model_name', 'system_prompt', 'status', 'risk_level', 'risk_score', 'config', 'metadata'] as const;
+
+const buildAgentSnapshot = (agent: any): Record<string, unknown> =>
+  Object.fromEntries(SNAPSHOT_FIELDS.map((k) => [k, agent[k] ?? null]));
+
+const buildChangeSummary = (before: any, after: any): string => {
+  const changed: string[] = [];
+  if (before.model_name !== after.model_name) changed.push(`model → ${after.model_name || '?'}`);
+  if (before.system_prompt !== after.system_prompt) changed.push('system prompt updated');
+  if (before.name !== after.name) changed.push(`name → ${after.name || '?'}`);
+  if (JSON.stringify(before.config) !== JSON.stringify(after.config)) changed.push('config updated');
+  return changed.length > 0 ? changed.join('; ') : 'settings updated';
+};
+
+const createAgentSnapshot = async (
+  jwt: string,
+  orgId: string,
+  agent: any,
+  changedByEmail: string,
+  changeSummary: string,
+): Promise<void> => {
+  try {
+    // Next version number for this agent
+    const countQ = new URLSearchParams();
+    countQ.set('agent_id', eq(agent.id));
+    countQ.set('organization_id', eq(orgId));
+    countQ.set('select', 'version_number');
+    countQ.set('order', 'version_number.desc');
+    countQ.set('limit', '1');
+    const lastRows = await supabaseRestAsUser(jwt, 'agent_versions', countQ).catch(() => []) as any[];
+    const nextVersion = (lastRows?.[0]?.version_number ?? 0) + 1;
+
+    await supabaseRestAsUser(jwt, 'agent_versions', '', {
+      method: 'POST',
+      body: {
+        organization_id: orgId,
+        agent_id: agent.id,
+        version_number: nextVersion,
+        snapshot: buildAgentSnapshot(agent),
+        changed_by_email: changedByEmail,
+        change_summary: changeSummary,
+      },
+    });
+  } catch (err: any) {
+    logger.warn('Failed to create agent snapshot (non-fatal)', { error: err?.message || err, agent_id: agent?.id });
+  }
+};
 
 const PLAN_AGENT_LIMITS: Record<string, number> = {
   free: 3,
@@ -534,6 +881,13 @@ router.put('/agents/:id', requirePermission('agents.update'), async (req: Reques
     const existingRows = await supabaseRestAsUser(getUserJwt(req), 'ai_agents', existingQuery) as any[];
     if (!existingRows || existingRows.length === 0) return errorResponse(res, new Error('Agent not found'), 404);
     const existingAgent = existingRows[0];
+
+    // Snapshot before mutating (non-fatal — fire-and-forget)
+    void createAgentSnapshot(
+      getUserJwt(req), orgId, existingAgent,
+      req.user?.email || 'unknown',
+      buildChangeSummary(existingAgent, { ...existingAgent, ...restUpdateData }),
+    );
 
     const mergedConfig = {
       ...(existingAgent.config || {}),
@@ -655,7 +1009,6 @@ router.post('/agents/:id/resume', requirePermission('agents.update'), async (req
     const existingAgent = await getAgentRecord(req, orgId, id);
     if (existingAgent.status === 'terminated') return errorResponse(res, new Error('Terminated agents cannot be resumed'), 400);
 
-    const publish = readAgentPublishMetadata(existingAgent);
     const agent = await patchAgentRecord(req, orgId, id, { status: 'active' });
     await auditLog.log({ user_id: req.user?.id || 'unknown', action: 'agent.resumed', resource_type: 'agent', resource_id: id, organization_id: orgId, metadata: { reason: typeof req.body?.reason === 'string' ? req.body.reason : 'Resumed from fleet workspace', performed_by_email: req.user?.email || null } });
     const [data] = await enrichAgentRecords(req, orgId, [agent], new Map());
@@ -866,6 +1219,77 @@ router.get('/agents/:id/test-runs', requirePermission('agents.read'), async (req
     return res.json({ success: true, data: rows || [] });
   } catch (err: any) {
     return errorResponse(res, err);
+  }
+});
+
+// ─── Agent version history ────────────────────────────────────────────────────
+
+// GET /agents/:id/versions — list last 50 snapshots (newest first)
+router.get('/agents/:id/versions', requirePermission('agents.read'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const q = new URLSearchParams();
+    q.set('agent_id', eq(id));
+    q.set('organization_id', eq(orgId));
+    q.set('order', 'version_number.desc');
+    q.set('limit', '50');
+    q.set('select', 'id,version_number,changed_by_email,change_summary,created_at,snapshot');
+    const rows = await supabaseRestAsUser(getUserJwt(req), 'agent_versions', q).catch(() => []) as any[];
+    return res.json({ success: true, data: rows || [] });
+  } catch (error: any) {
+    return errorResponse(res, error);
+  }
+});
+
+// POST /agents/:id/versions/:versionId/rollback — restore a snapshot
+router.post('/agents/:id/versions/:versionId/rollback', requirePermission('agents.update'), async (req: Request, res: Response) => {
+  try {
+    const { id, versionId } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    // Fetch the version row (guard org boundary)
+    const vq = new URLSearchParams();
+    vq.set('id', eq(versionId));
+    vq.set('agent_id', eq(id));
+    vq.set('organization_id', eq(orgId));
+    const versionRows = await supabaseRestAsUser(getUserJwt(req), 'agent_versions', vq).catch(() => []) as any[];
+    if (!versionRows || versionRows.length === 0) return errorResponse(res, new Error('Version not found'), 404);
+    const version = versionRows[0];
+    const snap = version.snapshot as Record<string, unknown>;
+
+    // Snapshot the current state before rolling back
+    const currentRows = await supabaseRestAsUser(getUserJwt(req), 'ai_agents', (() => { const q = new URLSearchParams(); q.set('id', eq(id)); q.set('organization_id', eq(orgId)); return q; })()).catch(() => []) as any[];
+    if (currentRows && currentRows[0]) {
+      void createAgentSnapshot(
+        getUserJwt(req), orgId, currentRows[0],
+        req.user?.email || 'unknown',
+        `pre-rollback snapshot (rolling back to v${version.version_number})`,
+      );
+    }
+
+    // Apply the snapshot (only safe mutable fields)
+    const patchQuery = new URLSearchParams();
+    patchQuery.set('id', eq(id));
+    patchQuery.set('organization_id', eq(orgId));
+    const patchBody: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    const allowed: Array<keyof typeof snap> = ['name', 'description', 'agent_type', 'platform', 'model_name', 'system_prompt', 'risk_level', 'risk_score', 'config', 'metadata'];
+    for (const field of allowed) {
+      if (snap[field] !== undefined) patchBody[field] = snap[field];
+    }
+    const patched = await supabaseRestAsUser(getUserJwt(req), 'ai_agents', patchQuery, { method: 'PATCH', body: patchBody }) as any[];
+    if (!patched || patched.length === 0) return errorResponse(res, new Error('Agent not found'), 404);
+
+    auditLog.log({ user_id: req.user?.id || 'unknown', action: 'agent.rollback', resource_type: 'agent', resource_id: id, organization_id: orgId, metadata: { version_id: versionId, version_number: version.version_number, performed_by_email: req.user?.email || null } });
+    logger.info('Agent rolled back to version', { agent_id: id, version_number: version.version_number, org_id: orgId });
+
+    const [finalData] = await enrichAgentRecords(req, orgId, patched, new Map());
+    return res.json({ success: true, data: finalData, rolledBackToVersion: version.version_number });
+  } catch (error: any) {
+    return errorResponse(res, error);
   }
 });
 

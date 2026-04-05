@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase, authHelpers } from '../lib/supabase-client';
 import { api } from '../lib/api-client';
@@ -190,6 +191,97 @@ export const useIncidents = (
     error: error ? (error as Error).message : null,
     refetch,
   };
+};
+
+// ---------------------------------------------------------------------------
+// Real-time incident SSE stream
+// ---------------------------------------------------------------------------
+/**
+ * Connects to /api/incidents/stream and prepends new incidents into the React
+ * Query cache as they arrive, so the UI updates without polling.
+ */
+export const useIncidentStream = (options?: { enabled?: boolean }) => {
+  const queryClient = useQueryClient();
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (options?.enabled === false) return;
+
+    let active = true;
+    let retryDelay = 2000;
+
+    const connect = async () => {
+      if (!active) return;
+      abortRef.current = new AbortController();
+
+      try {
+        const { getSupabaseClient } = await import('../lib/supabase');
+        const supabaseClient = getSupabaseClient();
+        const { data: { session } } = await supabaseClient!.auth.getSession();
+        if (!session?.access_token || !active) return;
+
+        const { getFrontendConfig } = await import('../lib/config');
+        const apiBase = getFrontendConfig().apiUrl || 'http://localhost:3001/api';
+
+        const response = await fetch(`${apiBase}/incidents/stream`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          signal: abortRef.current.signal,
+        });
+
+        if (!response.ok || !response.body) return;
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (active) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const blocks = buffer.split('\n\n');
+          buffer = blocks.pop() ?? '';
+
+          for (const block of blocks) {
+            const eventLine = block.split('\n').find(l => l.startsWith('event:'));
+            const dataLine = block.split('\n').find(l => l.startsWith('data:'));
+            if (!eventLine || !dataLine) continue;
+
+            const eventType = eventLine.slice(6).trim();
+            if (eventType !== 'incident.new') continue;
+
+            try {
+              const incident = JSON.parse(dataLine.slice(5).trim()) as Incident;
+              queryClient.setQueryData<Incident[]>(
+                ['incidents'],
+                (prev) => prev ? [incident, ...prev.filter(i => i.id !== incident.id)] : [incident]
+              );
+              // Invalidate all filtered incident queries so they also refresh
+              queryClient.invalidateQueries({ queryKey: ['incidents'], exact: false });
+            } catch { /* malformed JSON — skip */ }
+          }
+        }
+
+        retryDelay = 2000; // reset on clean disconnect
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
+      }
+
+      // Reconnect with backoff (max 30s)
+      if (active) {
+        await new Promise(r => setTimeout(r, retryDelay));
+        retryDelay = Math.min(retryDelay * 2, 30_000);
+        connect();
+      }
+    };
+
+    connect();
+
+    return () => {
+      active = false;
+      abortRef.current?.abort();
+    };
+  }, [options?.enabled, queryClient]);
 };
 
 // ---------------------------------------------------------------------------

@@ -21,6 +21,8 @@ export {
 export { marketplaceApi } from './marketplace';
 export { approvalsApi } from './approvals';
 export type { ApprovalRequest } from './approvals';
+export { alertChannelsApi } from './alert-channels';
+export type { AlertChannel, ChannelType, SeverityLevel, CreateAlertChannelInput } from './alert-channels';
 export { recruitmentApi } from './recruitment';
 export { supportHubApi, salesHubApi, itHubApi, financeHubApi, complianceHubApi, identityHubApi } from './hubs';
 export {
@@ -78,6 +80,7 @@ import {
 } from './platform';
 import { marketplaceApi } from './marketplace';
 import { approvalsApi } from './approvals';
+import { alertChannelsApi } from './alert-channels';
 import { recruitmentApi } from './recruitment';
 import { supportHubApi, salesHubApi, itHubApi, financeHubApi, complianceHubApi, identityHubApi } from './hubs';
 import {
@@ -123,6 +126,7 @@ export const api = {
   actionPolicies: actionPoliciesApi,
   marketplace: marketplaceApi,
   approvals: approvalsApi,
+  alertChannels: alertChannelsApi,
   slack: slackApi,
   recruitment: recruitmentApi,
   hubs: {

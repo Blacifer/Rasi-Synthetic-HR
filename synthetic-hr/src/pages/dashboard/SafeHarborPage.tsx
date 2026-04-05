@@ -196,6 +196,7 @@ export default function SafeHarborPage({ onNavigate, userRole }: { onNavigate?: 
   const [pageError, setPageError] = useState<string | null>(null);
   const [downloadingType, setDownloadingType] = useState<'sla' | 'dpa' | 'security' | null>(null);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingIso42001, setDownloadingIso42001] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [savingContract, setSavingContract] = useState(false);
   const [configDraft, setConfigDraft] = useState<SafeHarborState['config'] | null>(null);
@@ -366,6 +367,32 @@ export default function SafeHarborPage({ onNavigate, userRole }: { onNavigate?: 
       toast.error('Failed to generate PDF report.');
     } finally {
       setDownloadingPdf(false);
+    }
+  };
+
+  const handleDownloadIso42001 = async () => {
+    setDownloadingIso42001(true);
+    try {
+      const { getSupabaseClient } = await import('../../lib/supabase');
+      const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase!.auth.getSession();
+      const { API_BASE_URL } = await import('../../lib/api/_helpers');
+      const res = await fetch(`${API_BASE_URL}/compliance/iso42001.pdf`, {
+        headers: { Authorization: `Bearer ${session?.access_token || ''}` },
+      });
+      if (!res.ok) { toast.error('Failed to generate ISO 42001 report.'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `rasi-iso42001-report-${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('ISO 42001 evidence package downloaded.');
+    } catch {
+      toast.error('Failed to generate ISO 42001 report.');
+    } finally {
+      setDownloadingIso42001(false);
     }
   };
 
@@ -574,7 +601,8 @@ export default function SafeHarborPage({ onNavigate, userRole }: { onNavigate?: 
             <button onClick={() => handleDownload('security')} className="rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-white transition hover:border-cyan-400/40 hover:bg-cyan-500/10">{downloadingType === 'security' ? 'Downloading security overview...' : 'Download Security Overview'}</button>
             <button onClick={() => handleDownload('dpa')} className="rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-white transition hover:border-cyan-400/40 hover:bg-cyan-500/10">{downloadingType === 'dpa' ? 'Downloading DPA overview...' : 'Download DPA Overview'}</button>
             <button onClick={handleContactLegal} className="rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-white transition hover:border-cyan-400/40 hover:bg-cyan-500/10">Request Custom Terms</button>
-            <button onClick={handleDownloadPdf} disabled={downloadingPdf} className="md:col-span-2 rounded-2xl border border-indigo-500/40 bg-indigo-500/10 px-4 py-3 text-sm font-semibold text-indigo-300 transition hover:border-indigo-400/60 hover:bg-indigo-500/20 disabled:opacity-50">{downloadingPdf ? 'Generating PDF...' : 'Download Compliance Report (PDF)'}</button>
+            <button onClick={handleDownloadPdf} disabled={downloadingPdf} className="rounded-2xl border border-indigo-500/40 bg-indigo-500/10 px-4 py-3 text-sm font-semibold text-indigo-300 transition hover:border-indigo-400/60 hover:bg-indigo-500/20 disabled:opacity-50">{downloadingPdf ? 'Generating PDF...' : 'Download Compliance Report (PDF)'}</button>
+            <button onClick={handleDownloadIso42001} disabled={downloadingIso42001} className="rounded-2xl border border-violet-500/40 bg-violet-500/10 px-4 py-3 text-sm font-semibold text-violet-300 transition hover:border-violet-400/60 hover:bg-violet-500/20 disabled:opacity-50">{downloadingIso42001 ? 'Generating ISO 42001...' : 'Download ISO/IEC 42001 Evidence Package'}</button>
           </div>
         </SectionCard>
       </div>

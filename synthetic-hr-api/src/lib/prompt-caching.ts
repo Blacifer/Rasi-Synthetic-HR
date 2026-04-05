@@ -137,6 +137,92 @@ export async function updatePromptCachingPolicy(orgId: string, updates: Partial<
   return state;
 }
 
+// ---------------------------------------------------------------------------
+// Semantic cache lookup + store — uses normalized SHA-256 as the match key.
+// Responses are stored in organizations.settings.rasi_semantic_cache.
+// TTL defaults to 24 hours (same as policy.retentionHours).
+// ---------------------------------------------------------------------------
+
+interface SemanticCacheMap {
+  [keyHash: string]: { response: string; model: string; storedAt: string };
+}
+
+function buildContextKey(messages: Array<{ role: string; content: string }>, matchMode: 'normalized' | 'exact' = 'normalized'): string | null {
+  // Use all non-user-final messages as context (same as recordPromptCacheObservation)
+  const prefixMessages = messages.length > 1
+    ? messages.slice(0, -1)
+    : messages.filter((m) => m.role !== 'user');
+  const rawContext = prefixMessages.map((m) => `[${m.role}] ${m.content}`).join('\n\n').trim();
+  if (!rawContext) return null;
+  const comparable = matchMode === 'normalized' ? normalizeText(rawContext) : rawContext;
+  return crypto.createHash('sha256').update(comparable).digest('hex');
+}
+
+export async function lookupSemanticCache(params: {
+  orgId: string;
+  messages: Array<{ role: string; content: string }>;
+  modelName: string;
+}): Promise<string | null> {
+  const { orgId, messages, modelName } = params;
+  try {
+    const { settings, state } = await loadOrgState(orgId);
+    if (!state.policy.enabled) return null;
+
+    const keyHash = buildContextKey(messages, state.policy.matchMode);
+    if (!keyHash) return null;
+
+    const cacheMap: SemanticCacheMap = settings.rasi_semantic_cache || {};
+    const entry = cacheMap[keyHash];
+    if (!entry || entry.model !== modelName) return null;
+
+    const ttlMs = state.policy.retentionHours * 60 * 60 * 1000;
+    if (Date.now() - new Date(entry.storedAt).getTime() > ttlMs) return null;
+
+    logger.info('Semantic cache hit', { orgId, keyHash: keyHash.slice(0, 12), model: modelName });
+    return entry.response;
+  } catch (err: any) {
+    logger.warn('Semantic cache lookup failed', { orgId, error: err?.message });
+    return null;
+  }
+}
+
+export async function storeSemanticCacheResponse(params: {
+  orgId: string;
+  messages: Array<{ role: string; content: string }>;
+  modelName: string;
+  response: string;
+}): Promise<void> {
+  const { orgId, messages, modelName, response } = params;
+  try {
+    const { settings, state } = await loadOrgState(orgId);
+    if (!state.policy.enabled) return;
+
+    const keyHash = buildContextKey(messages, state.policy.matchMode);
+    if (!keyHash) return;
+
+    const contextTokens = estimateTokenCount(messages.map((m) => m.content).join(' '));
+    if (contextTokens < state.policy.minContextTokens) return;
+
+    const cacheMap: SemanticCacheMap = settings.rasi_semantic_cache || {};
+    cacheMap[keyHash] = { response, model: modelName, storedAt: new Date().toISOString() };
+
+    // Evict expired entries (keep max 200 entries)
+    const ttlMs = state.policy.retentionHours * 60 * 60 * 1000;
+    const now = Date.now();
+    const validEntries = Object.entries(cacheMap)
+      .filter(([, v]) => now - new Date(v.storedAt).getTime() <= ttlMs)
+      .slice(0, 200);
+    const trimmedCache: SemanticCacheMap = Object.fromEntries(validEntries);
+
+    await supabaseAdmin
+      .from('organizations')
+      .update({ settings: { ...settings, rasi_semantic_cache: trimmedCache } })
+      .eq('id', orgId);
+  } catch (err: any) {
+    logger.warn('Semantic cache store failed', { orgId, error: err?.message });
+  }
+}
+
 export async function recordPromptCacheObservation(params: {
   orgId: string;
   modelName: string;

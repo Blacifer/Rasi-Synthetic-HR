@@ -9,7 +9,7 @@ import {
 import { AIAgent, Incident, CostData, ApiKey } from '../types';
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api-client';
-import { useAgents, useIncidents, useCostData, queryKeys } from '../hooks/useData';
+import { useAgents, useIncidents, useIncidentStream, useCostData, queryKeys } from '../hooks/useData';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { cn } from '../lib/utils';
 import { CommandPalette } from '../components/CommandPalette';
@@ -59,6 +59,7 @@ const ApprovalsPage = lazy(() => import('./dashboard/ApprovalsPage'));
 const GovernedActionsPage = lazy(() => import('./dashboard/GovernedActionsPage'));
 const AuditLogPage = lazy(() => import('./dashboard/AuditLogPage'));
 const RuntimeWorkersPage = lazy(() => import('./dashboard/RuntimeWorkersPage'));
+const ModelCatalogPage = lazy(() => import('./dashboard/ModelCatalogPage'));
 
 interface DashboardProps {
   isDemoMode?: boolean;
@@ -286,6 +287,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
   // React Query hooks (disabled when in demo mode)
   const { agents: liveAgents, loading: agentsLoading } = useAgents({ enabled: !isDemoMode });
   const { incidents: liveIncidents } = useIncidents(undefined, { enabled: !isDemoMode });
+  useIncidentStream({ enabled: !isDemoMode });
   const { costData: liveCostData } = useCostData('30d', { enabled: !isDemoMode });
 
   // Unified data — demo or live
@@ -1086,8 +1088,8 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
 
                 <div className="my-2 border-t border-white/[0.06]" />
                 <p className="px-2 pt-1 pb-1 text-[10px] uppercase tracking-[0.18em] text-slate-600 font-semibold">Advanced</p>
-                {(['templates', 'agent-library', 'playbooks', 'action-policies', 'conversations', 'costs'] as const).map((id) => {
-                  const labels: Record<string, string> = { templates: 'Templates', 'agent-library': 'Agent Library', playbooks: 'Playbooks', 'action-policies': 'Action Policies', conversations: 'Conversations', costs: 'Costs' };
+                {(['templates', 'agent-library', 'models', 'playbooks', 'action-policies', 'conversations', 'costs'] as const).map((id) => {
+                  const labels: Record<string, string> = { templates: 'Templates', 'agent-library': 'Agent Library', models: 'Model Catalog', playbooks: 'Playbooks', 'action-policies': 'Action Policies', conversations: 'Conversations', costs: 'Costs' };
                   return (
                     <button key={id} data-tour={id} onClick={() => { navigateTo(id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === id && 'nav-item-active')}>
                       <span className="w-4 h-4 shrink-0" />
@@ -1634,6 +1636,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="batch" element={<BatchProcessingPage />} />
                   <Route path="fine-tuning" element={<ModelFineTuningPage />} />
                   <Route path="caching" element={<CachingPage />} />
+                  <Route path="models" element={<ModelCatalogPage />} />
                   <Route path="pricing" element={<PricingPage onNavigate={navigateTo} />} />
                   <Route path="legal" element={<SafeHarborPage onNavigate={navigateTo} userRole={role} />} />
                   <Route path="*" element={<Navigate to="overview" replace />} />

@@ -1,6 +1,6 @@
 import { authenticatedFetch } from './_helpers';
 import type { ApiResponse } from './_helpers';
-import type { AIAgent, AgentWorkspaceData } from '../../types';
+import type { AIAgent, AgentVersion, AgentWorkspaceData } from '../../types';
 
 /**
  * Agent API methods
@@ -77,6 +77,51 @@ export const agentApi = {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
+  },
+
+  async getHealth(agentId: string): Promise<ApiResponse<unknown>> {
+    return authenticatedFetch<unknown>(`/agents/${agentId}/health`, { method: 'GET' });
+  },
+
+  async getVersions(agentId: string): Promise<ApiResponse<AgentVersion[]>> {
+    return authenticatedFetch<AgentVersion[]>(`/agents/${agentId}/versions`, { method: 'GET' });
+  },
+
+  async rollbackToVersion(agentId: string, versionId: string): Promise<ApiResponse<AIAgent & { rolledBackToVersion: number }>> {
+    return authenticatedFetch<AIAgent & { rolledBackToVersion: number }>(`/agents/${agentId}/versions/${versionId}/rollback`, { method: 'POST' });
+  },
+
+  async getForecast(agentId: string): Promise<ApiResponse<{
+    agentId: string;
+    rollingAvg7d: number;
+    forecastMonthly: number;
+    confidenceLow: number;
+    confidenceHigh: number;
+    trend: 'up' | 'flat' | 'down';
+    sparkline: Array<{ date: string; cost: number }>;
+  }>> {
+    return authenticatedFetch(`/agents/${agentId}/forecast`, { method: 'GET' });
+  },
+
+  async getTrustScore(agentId: string): Promise<ApiResponse<{
+    agentId: string;
+    score: number;
+    grade: 'A' | 'B' | 'C' | 'D';
+    breakdown: { riskComponent: number; errorRateComponent: number; redTeamComponent: number; policyComponent: number };
+    inputs: { riskScore: number; errorRate: number; redTeamPassRate: number; policyCompliancePct: number };
+  }>> {
+    return authenticatedFetch(`/agents/${agentId}/trust-score`, { method: 'GET' });
+  },
+
+  async getHealth(agentId: string): Promise<ApiResponse<{
+    agentId: string;
+    latency: { p50: number; p95: number; p99: number };
+    errorRate: number;
+    totalRequests: number;
+    uptimePct: number;
+    sparkline: Array<{ date: string; requests: number; avgLatency: number; cost: number }>;
+  }>> {
+    return authenticatedFetch(`/agents/${agentId}/health`, { method: 'GET' });
   },
 
   async getPublishState(id: string): Promise<ApiResponse<{

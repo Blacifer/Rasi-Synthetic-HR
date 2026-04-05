@@ -1,4 +1,5 @@
 import { ChevronRight, Database, DollarSign, Eye, FileText, Shield, Sparkles, TrendingUp, Webhook, Zap } from 'lucide-react';
+import { SettingsMcpSection } from './SettingsMcpSection';
 
 export function AdvancedSection({ onNavigate }: { onNavigate?: (page: string) => void }) {
   return (
@@ -36,6 +37,10 @@ export function AdvancedSection({ onNavigate }: { onNavigate?: (page: string) =>
             </div>
           </button>
         ))}
+      </div>
+
+      <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6">
+        <SettingsMcpSection />
       </div>
     </div>
   );

@@ -23,6 +23,14 @@ const WorkspaceSettingsPanel = lazy(async () => {
   const mod = await import('./fleet/WorkspaceSettingsPanel');
   return { default: mod.WorkspaceSettingsPanel };
 });
+const WorkspaceVersionsSection = lazy(async () => {
+  const mod = await import('./fleet/WorkspaceVersionsSection');
+  return { default: mod.WorkspaceVersionsSection };
+});
+const WorkspaceHealthSection = lazy(async () => {
+  const mod = await import('./fleet/WorkspaceHealthSection');
+  return { default: mod.WorkspaceHealthSection };
+});
 const WorkspaceOverviewSection = lazy(async () => {
   const mod = await import('./fleet/WorkspaceOverviewSection');
   return { default: mod.WorkspaceOverviewSection };
@@ -58,10 +66,11 @@ interface FleetPageProps {
   isLoading?: boolean;
 }
 
-type WorkspaceTab = 'overview' | 'deployment' | 'conversations' | 'integrations' | 'policies' | 'analytics' | 'controls' | 'settings' | 'compliance';
+type WorkspaceTab = 'overview' | 'deployment' | 'conversations' | 'integrations' | 'policies' | 'analytics' | 'controls' | 'settings' | 'compliance' | 'history' | 'health';
 type DeployMethod = 'website' | 'api' | 'terminal' | 'advanced';
 type DeployCodeTab = 'curl' | 'python' | 'nodejs' | 'php';
 const FLEET_AUTO_REFRESH_MS = 5000;
+type ForecastData = { forecastMonthly: number; confidenceLow: number; confidenceHigh: number; trend: 'up' | 'flat' | 'down'; rollingAvg7d: number };
 type WorkspaceState = {
   summary: AgentWorkspaceSummary | null;
   conversations: AgentWorkspaceConversation[];
@@ -73,6 +82,7 @@ type WorkspaceState = {
   analytics: AgentWorkspaceAnalytics | null;
   loadingAnalytics: boolean;
   analyticsError: string | null;
+  forecast: ForecastData | null;
 };
 
 function InfoTip({ text }: { text: string }) {
@@ -198,9 +208,12 @@ export default function FleetPage({
   const [applyingRec, setApplyingRec] = useState<string | null>(null);
   const [killSwitchAgent, setKillSwitchAgent] = useState<string | null>(null);
   const [highlightedAgentId, setHighlightedAgentId] = useState<string | null>(null);
+  const [pendingRuleAgentIds, setPendingRuleAgentIds] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
   const [wsSettingsBudget, setWsSettingsBudget] = useState(0);
   const [wsSettingsAutoThrottle, setWsSettingsAutoThrottle] = useState(false);
+  const [wsRateLimitRpm, setWsRateLimitRpm] = useState(0);
+  const [wsRateLimitRpd, setWsRateLimitRpd] = useState(0);
   const [wsSettingsModel, setWsSettingsModel] = useState('gpt-4o');
   const [wsSettingsPlatform, setWsSettingsPlatform] = useState('');
   const [wsModels, setWsModels] = useState<{ id: string; name: string; provider: string; pricing?: { prompt?: string; completion?: string } }[]>([]);
@@ -223,6 +236,7 @@ export default function FleetPage({
     analytics: null,
     loadingAnalytics: false,
     analyticsError: null,
+    forecast: null,
   });
   const [policyDraft, setPolicyDraft] = useState({ systemPrompt: '', operationalPolicy: '' });
   const [policySaving, setPolicySaving] = useState(false);
@@ -303,6 +317,20 @@ export default function FleetPage({
     setDriftAlerts(newAlerts);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, agents.length]);
+
+  // Load which agents have pending auto-proposed rules (self-healing badge)
+  useEffect(() => {
+    if (agents.length === 0) return;
+    supabase
+      .from('synthesized_rules')
+      .select('agent_id')
+      .is('status', null)
+      .then(({ data }) => {
+        if (data) {
+          setPendingRuleAgentIds(new Set(data.map((r: any) => r.agent_id).filter(Boolean)));
+        }
+      });
+  }, [agents.length]);
 
   const dismissDrift = (agentId: string) => {
     const a = agents.find((ag) => ag.id === agentId);
@@ -399,7 +427,10 @@ export default function FleetPage({
       analyticsError: null,
     }));
 
-    const workspaceResponse = await api.agents.getWorkspace(agentId);
+    const [workspaceResponse, forecastResponse] = await Promise.all([
+      api.agents.getWorkspace(agentId),
+      api.agents.getForecast(agentId).catch(() => null),
+    ]);
     if (!workspaceResponse.success || !workspaceResponse.data) {
       if (workspaceResponse.error?.toLowerCase().includes('not found')) {
         setWorkspaceAgentId(null);
@@ -417,6 +448,7 @@ export default function FleetPage({
         analytics: null,
         loadingAnalytics: false,
         analyticsError: workspaceResponse.error || 'Failed to load analytics.',
+        forecast: null,
       });
       return;
     }
@@ -436,6 +468,7 @@ export default function FleetPage({
       analytics: workspaceResponse.data.analytics || null,
       loadingAnalytics: false,
       analyticsError: null,
+      forecast: forecastResponse?.success ? forecastResponse.data ?? null : null,
     });
   }, [agents, onSelectAgent, setAgents]);
 
@@ -825,6 +858,8 @@ export default function FleetPage({
         config: {
           ...((agent as any).config || {}),
           auto_throttle: wsSettingsAutoThrottle,
+          rate_limit_rpm: wsRateLimitRpm,
+          rate_limit_rpd: wsRateLimitRpd,
         },
       });
       if (!response.success || !response.data) throw new Error(response.error || 'Failed to save settings.');
@@ -1016,6 +1051,8 @@ export default function FleetPage({
     if (agent) {
       setWsSettingsBudget(agent.budget_limit ?? 0);
       setWsSettingsAutoThrottle(agent.auto_throttle ?? false);
+      setWsRateLimitRpm(Number((agent as any).config?.rate_limit_rpm) || 0);
+      setWsRateLimitRpd(Number((agent as any).config?.rate_limit_rpd) || 0);
       setWsSettingsModel(agent.model_name || 'gpt-4o');
       setWsSettingsPlatform('');
     }
@@ -1348,7 +1385,7 @@ export default function FleetPage({
         >
           {filteredAgents.map((agent) => {
             const connectedTargetCount = agent.connectedTargets?.length || 0;
-            const providerLabel = (() => {
+            const providerLabel = (agent as any).config?.display_provider || (() => {
               const prefix = (agent.model_name || '').split('/')[0].toLowerCase();
               const labels: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', meta: 'Meta', mistral: 'Mistral', openrouter: 'OpenRouter' };
               return labels[prefix] || prefix || 'Unknown';
@@ -1411,6 +1448,25 @@ export default function FleetPage({
                           agent.risk_level === 'medium' ? 'bg-amber-400/10 text-amber-400 border border-amber-400/20' :
                             'bg-red-400/10 text-red-400 border border-red-400/20'
                           }`}>Risk {agent.risk_score}/100</span>
+                        {(() => {
+                          // Quick local trust score estimate based on risk_score alone (full score loads in workspace)
+                          const ts = Math.round((100 - agent.risk_score) * 0.35 + 65 * 0.65);
+                          const grade = ts >= 90 ? 'A' : ts >= 75 ? 'B' : ts >= 60 ? 'C' : 'D';
+                          const color = grade === 'A' ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20'
+                            : grade === 'B' ? 'bg-blue-400/10 text-blue-400 border-blue-400/20'
+                            : grade === 'C' ? 'bg-amber-400/10 text-amber-400 border-amber-400/20'
+                            : 'bg-rose-400/10 text-rose-400 border-rose-400/20';
+                          return (
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${color}`} title="Trust Score — open workspace for full breakdown">
+                              Trust {grade}
+                            </span>
+                          );
+                        })()}
+                        {pendingRuleAgentIds.has(agent.id) && (
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold border border-amber-500/30 bg-amber-500/10 text-amber-300" title="Self-healing: a policy rule has been auto-proposed — review in Action Policies">
+                            1 rule proposed
+                          </span>
+                        )}
                         {agent.publishStatus === 'live' ? (
                           <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-400/10 text-emerald-300 border border-emerald-400/20">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />Live
@@ -1622,6 +1678,8 @@ export default function FleetPage({
               ['compliance', 'Compliance'],
               ['controls', 'Controls'],
               ['settings', 'Settings'],
+              ['history', 'Version History'],
+              ['health', 'Health'],
             ] as Array<[WorkspaceTab, string]>).map(([tabId, label]) => (
               <button
                 key={tabId}
@@ -1841,6 +1899,7 @@ export default function FleetPage({
                   analytics={workspaceState.analytics}
                   analyticsError={workspaceState.analyticsError}
                   loadingAnalytics={workspaceState.loadingAnalytics}
+                  forecast={workspaceState.forecast}
                   onOpenOperationsPage={onOpenOperationsPage}
                 />
               </Suspense>
@@ -1975,17 +2034,36 @@ export default function FleetPage({
                   setWsSettingsBudget={setWsSettingsBudget}
                   wsSettingsAutoThrottle={wsSettingsAutoThrottle}
                   setWsSettingsAutoThrottle={setWsSettingsAutoThrottle}
+                  wsRateLimitRpm={wsRateLimitRpm}
+                  setWsRateLimitRpm={setWsRateLimitRpm}
+                  wsRateLimitRpd={wsRateLimitRpd}
+                  setWsRateLimitRpd={setWsRateLimitRpd}
                   handleKillSwitch={handleKillSwitch}
                   wsSettingsSaving={wsSettingsSaving}
                   saveWsSettings={saveWsSettings}
                   resetWsSettings={() => {
                     setWsSettingsBudget(activeWorkspaceAgent.budget_limit ?? 0);
                     setWsSettingsAutoThrottle(activeWorkspaceAgent.auto_throttle ?? false);
+                    setWsRateLimitRpm(Number((activeWorkspaceAgent as any).config?.rate_limit_rpm) || 0);
+                    setWsRateLimitRpd(Number((activeWorkspaceAgent as any).config?.rate_limit_rpd) || 0);
                     setWsSettingsModel(activeWorkspaceAgent.model_name || 'gpt-4o');
                     setWsSettingsPlatform('');
                   }}
                   InfoTip={InfoTip}
                 />
+              </Suspense>
+            ) : workspaceTab === 'history' ? (
+              <Suspense fallback={lazyFallback}>
+                <WorkspaceVersionsSection
+                  agent={activeWorkspaceAgent}
+                  onRollbackSuccess={(updated) => {
+                    void mergeAgent(updated);
+                  }}
+                />
+              </Suspense>
+            ) : workspaceTab === 'health' ? (
+              <Suspense fallback={lazyFallback}>
+                <WorkspaceHealthSection agent={activeWorkspaceAgent} />
               </Suspense>
             ) : null}
           </div>

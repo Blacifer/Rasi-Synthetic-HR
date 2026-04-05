@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -8,9 +9,12 @@ import {
   ShoppingBag,
   Shield,
   Zap,
+  BrainCircuit,
+  UserCheck,
 } from 'lucide-react';
 import type { AIAgent, AgentWorkspaceConversation, AgentWorkspaceIncident } from '../../../types';
 import type { IntegrationPackId } from '../../../lib/integration-packs';
+import { supabase } from '../../../lib/supabase-client';
 
 type SuggestedApp = {
   id: string;
@@ -52,6 +56,28 @@ export function WorkspaceOverviewSection({
   const needsConnection = connectedTargets.length === 0;
   const latestConversation = conversations[0] || null;
   const latestIncident = incidents[0] || null;
+
+  const [corrections, setCorrections] = useState<any[]>([]);
+  const [pendingSynthesized, setPendingSynthesized] = useState(0);
+
+  useEffect(() => {
+    const agentId = activeWorkspaceAgent.id;
+    if (!agentId) return;
+    supabase
+      .from('agent_corrections')
+      .select('id, action_type, correction_reason, created_at')
+      .eq('agent_id', agentId)
+      .order('created_at', { ascending: false })
+      .limit(5)
+      .then(({ data }) => setCorrections(data || []));
+
+    supabase
+      .from('synthesized_rules')
+      .select('id', { count: 'exact' })
+      .eq('agent_id', agentId)
+      .is('status', null)
+      .then(({ count }) => setPendingSynthesized(count || 0));
+  }, [activeWorkspaceAgent.id]);
 
   const nextAction = (() => {
     if (criticalIncidentCount > 0) {
@@ -313,6 +339,44 @@ export function WorkspaceOverviewSection({
           </div>
         </div>
       </div>
+
+      {/* Correction history + self-healing status */}
+      {(corrections.length > 0 || pendingSynthesized > 0) && (
+        <div className="rounded-2xl border border-amber-400/10 bg-white/[0.02] p-5">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <BrainCircuit className="w-4 h-4 text-amber-400" />
+              <h3 className="text-sm font-semibold text-white">Agent Learning</h3>
+              {pendingSynthesized > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-semibold">
+                  {pendingSynthesized} rule{pendingSynthesized !== 1 ? 's' : ''} proposed
+                </span>
+              )}
+            </div>
+            <UserCheck className="w-4 h-4 text-slate-400" />
+          </div>
+
+          {corrections.length === 0 ? (
+            <p className="text-xs text-slate-500">No human corrections recorded yet for this agent.</p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-slate-500 mb-3">Last {corrections.length} human correction{corrections.length !== 1 ? 's' : ''} — the agent learns from each one.</p>
+              {corrections.map((c) => (
+                <div key={c.id} className="flex items-start gap-3 rounded-xl border border-white/5 bg-slate-950/30 px-3 py-2.5">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-xs font-medium text-white">{c.action_type}</div>
+                    {c.correction_reason && (
+                      <div className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{c.correction_reason}</div>
+                    )}
+                    <div className="text-[11px] text-slate-600 mt-1">{new Date(c.created_at).toLocaleDateString()}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {suggestedApps.length > 0 && (
         <div className="rounded-2xl border border-violet-400/15 bg-violet-500/[0.04] p-5">

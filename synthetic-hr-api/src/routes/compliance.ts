@@ -307,6 +307,134 @@ async function streamCompliancePdf(
   }
 }
 
+// GET /api/compliance/iso42001.pdf — ISO/IEC 42001:2023 AI Management System compliance report
+router.get('/iso42001.pdf', async (req: Request, res: Response) => {
+  const orgId = req.user?.organization_id;
+  if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+  const startDate = String(req.query.from || new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString());
+  const endDate = String(req.query.to || new Date().toISOString());
+
+  try {
+    const [orgRows, incidents, auditLogs, agents, policies] = await Promise.all([
+      supabaseAdmin.from('organizations').select('name, plan').eq('id', orgId).limit(1),
+      supabaseAdmin.from('incidents').select('severity, type, status, created_at').eq('organization_id', orgId)
+        .gte('created_at', startDate).lte('created_at', endDate),
+      supabaseAdmin.from('audit_logs').select('action, resource_type, created_at').eq('organization_id', orgId)
+        .gte('created_at', startDate).lte('created_at', endDate).order('created_at', { ascending: false }).limit(30),
+      supabaseAdmin.from('ai_agents').select('name, model_name, status, risk_score').eq('organization_id', orgId),
+      supabaseAdmin.from('action_policies').select('service, action, enabled, require_approval').eq('organization_id', orgId),
+    ]);
+
+    const orgName = (orgRows.data?.[0] as any)?.name || 'Your Organization';
+    const orgPlan = (orgRows.data?.[0] as any)?.plan || 'unknown';
+    const incidentList: any[] = incidents.data || [];
+    const auditList: any[] = auditLogs.data || [];
+    const agentList: any[] = agents.data || [];
+    const policyList: any[] = policies.data || [];
+
+    const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    const BRAND = '#6366f1';
+    const DARK = '#1e1b4b';
+    const GRAY = '#6b7280';
+    const GREEN = '#22c55e';
+    const AMBER = '#f59e0b';
+    const RED = '#ef4444';
+
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const filename = `rasi-iso42001-report-${Date.now()}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    doc.pipe(res);
+
+    const pageW = doc.page.width - 100;
+
+    // Cover header
+    doc.rect(0, 0, doc.page.width, 130).fill(DARK);
+    doc.fillColor('#ffffff').fontSize(22).font('Helvetica-Bold').text('ISO/IEC 42001:2023 Compliance Report', 50, 35);
+    doc.fontSize(12).font('Helvetica').text('AI Management System — Evidence Package', 50, 65);
+    doc.fontSize(9).fillColor('#a5b4fc').text(`${orgName}  ·  Period: ${fmt(startDate)} – ${fmt(endDate)}  ·  Generated: ${fmt(new Date().toISOString())}  ·  Plan: ${orgPlan}`, 50, 92);
+
+    doc.moveDown(5);
+    doc.fillColor(BRAND).fontSize(14).font('Helvetica-Bold').text('ISO/IEC 42001:2023 Control Mapping', 50);
+    doc.moveDown(0.5);
+    doc.fillColor(GRAY).fontSize(9).font('Helvetica').text('ISO 42001 is the international standard for AI Management Systems. The table below maps each clause to Rasi platform controls.', 50, undefined, { width: pageW });
+    doc.moveDown(0.8);
+
+    const controls = [
+      { clause: '4.1', title: 'Understanding Context', control: 'Org settings, agent type taxonomy, risk classification', covered: true },
+      { clause: '5.2', title: 'AI Policy', control: 'Action Policies + YAML policy-as-code engine', covered: true },
+      { clause: '6.1', title: 'Risk Assessment', control: `Risk scoring per agent (0-100). Active agents: ${agentList.length}. High-risk agents: ${agentList.filter(a => a.risk_score > 60).length}`, covered: true },
+      { clause: '6.2', title: 'AI Objectives', control: 'Agent purpose field, model selection, integration packs', covered: true },
+      { clause: '7.3', title: 'Awareness', control: 'Audit log available for all operator actions', covered: true },
+      { clause: '8.1', title: 'Operational Planning', control: 'Playbooks, HITL approvals, rate limits, budget caps', covered: true },
+      { clause: '8.4', title: 'AI System Lifecycle', control: `Agent versioning snapshots. Active policies: ${policyList.filter(p => p.enabled).length}`, covered: true },
+      { clause: '9.1', title: 'Monitoring & Measurement', control: `Incidents in period: ${incidentList.length}. Critical: ${incidentList.filter(i => i.severity === 'critical').length}`, covered: true },
+      { clause: '9.3', title: 'Management Review', control: 'Compliance exports, evidence packages, tamper-evident audit chain', covered: true },
+      { clause: '10.2', title: 'Incident Management', control: `Open incidents: ${incidentList.filter(i => i.status === 'open').length}. Auto-detection via PII scan, hallucination, prompt injection detection`, covered: true },
+      { clause: '10.3', title: 'Continual Improvement', control: 'Self-healing engine: auto-proposes policies after repeated denials', covered: true },
+    ];
+
+    for (const ctrl of controls) {
+      const y = doc.y;
+      doc.fillColor(ctrl.covered ? GREEN : RED).fontSize(9).font('Helvetica-Bold')
+        .text(ctrl.covered ? '✓' : '✗', 50, y, { width: 15 });
+      doc.fillColor(DARK).font('Helvetica-Bold').fontSize(9)
+        .text(`${ctrl.clause} — ${ctrl.title}`, 68, y, { width: 120 });
+      doc.fillColor(GRAY).font('Helvetica').fontSize(8)
+        .text(ctrl.control, 195, y, { width: pageW - 145 });
+      doc.moveDown(0.7);
+    }
+
+    // Incident summary
+    doc.addPage();
+    doc.fillColor(BRAND).fontSize(14).font('Helvetica-Bold').text('9.1 — Incident Summary', 50, 50);
+    doc.moveDown(0.5);
+    doc.fillColor(GRAY).fontSize(9).font('Helvetica').text(`${incidentList.length} incidents recorded in the reporting period.`, 50);
+    doc.moveDown(0.5);
+
+    const bySeverity: Record<string, number> = {};
+    for (const inc of incidentList) bySeverity[inc.severity] = (bySeverity[inc.severity] || 0) + 1;
+    for (const [sev, count] of Object.entries(bySeverity)) {
+      const color = sev === 'critical' ? RED : sev === 'high' ? AMBER : GRAY;
+      doc.fillColor(color).fontSize(9).font('Helvetica').text(`${sev.toUpperCase()}: ${count}`, 50);
+    }
+
+    // Audit trail summary
+    doc.moveDown(1.5);
+    doc.fillColor(BRAND).fontSize(14).font('Helvetica-Bold').text('7.3 — Audit Trail (last 30 events)', 50);
+    doc.moveDown(0.5);
+    for (const log of auditList.slice(0, 20)) {
+      doc.fillColor(GRAY).fontSize(8).font('Helvetica')
+        .text(`${fmt(log.created_at)}  ·  ${log.action}  ·  ${log.resource_type}`, 50);
+    }
+
+    // Agent inventory
+    doc.addPage();
+    doc.fillColor(BRAND).fontSize(14).font('Helvetica-Bold').text('6.1 — AI Agent Inventory & Risk Register', 50, 50);
+    doc.moveDown(0.5);
+    for (const agent of agentList) {
+      const riskColor = agent.risk_score > 60 ? RED : agent.risk_score > 30 ? AMBER : GREEN;
+      doc.fillColor(riskColor).fontSize(9).font('Helvetica-Bold').text(`Risk ${agent.risk_score}/100`, 50, undefined, { width: 80 });
+      doc.fillColor(DARK).font('Helvetica').fontSize(9).text(`${agent.name}  ·  ${agent.model_name}  ·  ${agent.status}`, 135, doc.y - 13, { width: pageW - 85 });
+      doc.moveDown(0.4);
+    }
+
+    // Footer
+    const pageCount = (doc as any).bufferedPageRange?.()?.count || 1;
+    for (let i = 0; i < pageCount; i++) {
+      doc.switchToPage(i);
+      doc.fillColor(GRAY).fontSize(8)
+        .text(`Rasi AI Management System  ·  ISO/IEC 42001:2023 Evidence Package  ·  ${orgName}  ·  Page ${i + 1} of ${pageCount}`, 50, doc.page.height - 40, { align: 'center', width: pageW });
+    }
+
+    doc.end();
+  } catch (error: any) {
+    logger.error('Error generating ISO 42001 PDF:', { error: error?.message });
+    if (!res.headersSent) res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // GET /api/compliance/report.pdf - Direct PDF download (no pre-existing export required)
 router.get('/report.pdf', async (req: Request, res: Response) => {
   const orgId = req.user?.organization_id;

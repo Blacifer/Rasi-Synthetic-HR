@@ -123,6 +123,15 @@ export interface AIAgent {
   lastIntegrationSyncAt?: string | null;
 }
 
+export interface AgentVersion {
+  id: string;
+  version_number: number;
+  changed_by_email: string | null;
+  change_summary: string | null;
+  created_at: string;
+  snapshot: Record<string, unknown>;
+}
+
 export interface AgentWorkspaceConversation {
   id: string;
   user: string;

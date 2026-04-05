@@ -780,7 +780,7 @@ export const fineTunesApi = {
     readiness_score: number;
     issues: string[];
     status: string;
-    provider_state: 'staged_local' | 'openai_submitted';
+    provider_state: 'staged_local' | 'openai_submitted' | 'anthropic_submitted';
     provider_job_id: string | null;
     fine_tuned_model: string | null;
     trained_tokens: number | null;
@@ -810,6 +810,28 @@ export const fineTunesApi = {
 
   async deleteJob(id: string): Promise<ApiResponse<{ id: string }>> {
     return authenticatedFetch(`/fine-tunes/jobs/${id}`, { method: 'DELETE' });
+  },
+
+  async createAnthropicJob(data: {
+    name: string;
+    baseModel: string;
+    epochs: number;
+    trainingRecords: Array<{ prompt: string; completion: string }>;
+    validationRecords?: Array<{ prompt: string; completion: string }>;
+    stagedJobId?: string;
+  }): Promise<ApiResponse<{
+    provider: 'anthropic';
+    id: string;
+    model: string;
+    status: string;
+    trainingFileId: string;
+    validationFileId: string | null;
+    trainedTokens: number | null;
+  }>> {
+    return authenticatedFetch('/fine-tunes/anthropic', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 };
 

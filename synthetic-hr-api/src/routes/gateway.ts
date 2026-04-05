@@ -9,8 +9,8 @@ import { supabaseRest, eq, gte } from '../lib/supabase-rest';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
 import { sendTransactionalEmail } from '../lib/email';
 import { notifySlackIncident } from '../lib/slack-notify';
-import { applyRequestInterceptors, applyResponseInterceptors, resolveModelRouting } from '../lib/gateway-interceptors';
-import { recordPromptCacheObservation } from '../lib/prompt-caching';
+import { applyRequestInterceptors, applyResponseInterceptors, resolveModelRouting, classifyQueryComplexity } from '../lib/gateway-interceptors';
+import { recordPromptCacheObservation, lookupSemanticCache, storeSemanticCacheResponse } from '../lib/prompt-caching';
 import { ACTION_REGISTRY } from '../lib/connectors/action-registry';
 import { executeConnectorAction } from '../lib/connectors/action-executor';
 import { decryptSecret, encryptSecret } from '../lib/integrations/encryption';
@@ -18,6 +18,9 @@ import { computeEntropy } from '../services/policy-engine';
 import { runPreflightGate } from '../lib/preflight-gate';
 import { buildGovernedActionSnapshot } from '../lib/governed-actions';
 import { fetchRelevantCorrections } from '../lib/correction-memory';
+import { pushIncidentEvent } from './incidents';
+import { notifyAlertChannels } from '../lib/alert-channels';
+import { firePlaybookTriggers } from '../lib/trigger-evaluator';
 import { usdToInr } from '../lib/currency';
 import { appendAuditChainEvent } from '../lib/trust-audit-chain';
 import { applyCrossBorderMasking, reinjectMaskedValues } from '../lib/cross-border-pii';
@@ -29,6 +32,9 @@ interface GatewayModel {
   provider: 'openai' | 'anthropic' | 'openrouter';
   upstreamModel: string;
   ownedBy: string;
+  contextLength?: number;
+  pricing?: { prompt: string; completion: string };
+  capabilities?: string[];
 }
 
 const ANTHROPIC_MODEL_ALIASES: Record<string, string> = {
@@ -48,21 +54,23 @@ const ANTHROPIC_MODEL_ALIASES: Record<string, string> = {
 };
 
 const GATEWAY_MODELS: GatewayModel[] = [
-  { id: 'openai/gpt-4o', provider: 'openai', upstreamModel: 'gpt-4o', ownedBy: 'openai' },
-  { id: 'openai/gpt-4o-mini', provider: 'openai', upstreamModel: 'gpt-4o-mini', ownedBy: 'openai' },
-  { id: 'openai/gpt-4o-mini-transcribe', provider: 'openai', upstreamModel: 'gpt-4o-mini-transcribe', ownedBy: 'openai' },
-  { id: 'openai/whisper-1', provider: 'openai', upstreamModel: 'whisper-1', ownedBy: 'openai' },
-  { id: 'openai/gpt-4-turbo', provider: 'openai', upstreamModel: 'gpt-4-turbo', ownedBy: 'openai' },
-  { id: 'openai/gpt-3.5-turbo', provider: 'openai', upstreamModel: 'gpt-3.5-turbo', ownedBy: 'openai' },
-  { id: 'openai/text-embedding-3-small', provider: 'openai', upstreamModel: 'text-embedding-3-small', ownedBy: 'openai' },
-  { id: 'openai/text-embedding-3-large', provider: 'openai', upstreamModel: 'text-embedding-3-large', ownedBy: 'openai' },
-  // Anthropic model IDs evolve quickly; route legacy names to currently-supported upstream IDs.
-  { id: 'anthropic/claude-3-5-sonnet', provider: 'anthropic', upstreamModel: 'claude-sonnet-4-0', ownedBy: 'anthropic' },
-  { id: 'anthropic/claude-3-sonnet', provider: 'anthropic', upstreamModel: 'claude-sonnet-4-0', ownedBy: 'anthropic' },
-  { id: 'anthropic/claude-3-haiku', provider: 'anthropic', upstreamModel: 'claude-3-haiku-20240307', ownedBy: 'anthropic' },
-  { id: 'anthropic/claude-sonnet-4', provider: 'anthropic', upstreamModel: 'claude-sonnet-4-0', ownedBy: 'anthropic' },
-  { id: 'google/gemini-2.0-flash', provider: 'openrouter', upstreamModel: 'google/gemini-2.0-flash', ownedBy: 'google' },
-  { id: 'meta-llama/llama-3.1-70b-instruct', provider: 'openrouter', upstreamModel: 'meta-llama/llama-3.1-70b-instruct', ownedBy: 'meta' },
+  // OpenAI — native direct route
+  { id: 'openai/gpt-4o', provider: 'openai', upstreamModel: 'gpt-4o', ownedBy: 'openai', contextLength: 128000, pricing: { prompt: '0.000005', completion: '0.000015' }, capabilities: ['vision', 'function_calling'] },
+  { id: 'openai/gpt-4o-mini', provider: 'openai', upstreamModel: 'gpt-4o-mini', ownedBy: 'openai', contextLength: 128000, pricing: { prompt: '0.00000015', completion: '0.0000006' }, capabilities: ['vision', 'function_calling'] },
+  { id: 'openai/gpt-4o-mini-transcribe', provider: 'openai', upstreamModel: 'gpt-4o-mini-transcribe', ownedBy: 'openai', contextLength: 128000, pricing: { prompt: '0.00000015', completion: '0.0000006' }, capabilities: ['audio'] },
+  { id: 'openai/whisper-1', provider: 'openai', upstreamModel: 'whisper-1', ownedBy: 'openai', capabilities: ['audio'] },
+  { id: 'openai/gpt-4-turbo', provider: 'openai', upstreamModel: 'gpt-4-turbo', ownedBy: 'openai', contextLength: 128000, pricing: { prompt: '0.00001', completion: '0.00003' }, capabilities: ['vision', 'function_calling'] },
+  { id: 'openai/gpt-3.5-turbo', provider: 'openai', upstreamModel: 'gpt-3.5-turbo', ownedBy: 'openai', contextLength: 16385, pricing: { prompt: '0.0000005', completion: '0.0000015' }, capabilities: ['function_calling'] },
+  { id: 'openai/text-embedding-3-small', provider: 'openai', upstreamModel: 'text-embedding-3-small', ownedBy: 'openai', capabilities: ['embeddings'] },
+  { id: 'openai/text-embedding-3-large', provider: 'openai', upstreamModel: 'text-embedding-3-large', ownedBy: 'openai', capabilities: ['embeddings'] },
+  // Anthropic — native direct route; legacy IDs aliased to current supported upstream
+  { id: 'anthropic/claude-sonnet-4', provider: 'anthropic', upstreamModel: 'claude-sonnet-4-0', ownedBy: 'anthropic', contextLength: 200000, pricing: { prompt: '0.000003', completion: '0.000015' }, capabilities: ['vision', 'function_calling'] },
+  { id: 'anthropic/claude-3-5-sonnet', provider: 'anthropic', upstreamModel: 'claude-sonnet-4-0', ownedBy: 'anthropic', contextLength: 200000, pricing: { prompt: '0.000003', completion: '0.000015' }, capabilities: ['vision', 'function_calling'] },
+  { id: 'anthropic/claude-3-sonnet', provider: 'anthropic', upstreamModel: 'claude-sonnet-4-0', ownedBy: 'anthropic', contextLength: 200000, pricing: { prompt: '0.000003', completion: '0.000015' }, capabilities: ['vision', 'function_calling'] },
+  { id: 'anthropic/claude-3-haiku', provider: 'anthropic', upstreamModel: 'claude-3-haiku-20240307', ownedBy: 'anthropic', contextLength: 200000, pricing: { prompt: '0.00000025', completion: '0.00000125' }, capabilities: ['function_calling'] },
+  // Pinned OpenRouter models that should always be present regardless of catalog state
+  { id: 'google/gemini-2.0-flash', provider: 'openrouter', upstreamModel: 'google/gemini-2.0-flash', ownedBy: 'google', contextLength: 1048576, pricing: { prompt: '0.0000001', completion: '0.0000004' }, capabilities: ['vision', 'function_calling'] },
+  { id: 'meta-llama/llama-3.1-70b-instruct', provider: 'openrouter', upstreamModel: 'meta-llama/llama-3.1-70b-instruct', ownedBy: 'meta-llama', contextLength: 128000, pricing: { prompt: '0.000000059', completion: '0.000000079' }, capabilities: ['function_calling'] },
 ];
 
 const keyWindow = new Map<string, { windowStartMs: number; count: number }>();
@@ -181,6 +189,7 @@ const maybeCreateIncidentFromCompletion = async (params: {
     );
 
     const incident = Array.isArray(rows) ? rows[0] : null;
+    if (incident) pushIncidentEvent(params.orgId, incident);
     logger.warn('Gateway incident created', {
       incident_id: incident?.id,
       orgId: params.orgId,
@@ -215,6 +224,27 @@ const maybeCreateIncidentFromCompletion = async (params: {
       description: highest.details,
       confidence: highest.confidence,
     });
+
+    if (incident) {
+      void notifyAlertChannels(params.orgId, {
+        incidentId: incident.id,
+        title,
+        severity: highest.severity as any,
+        incidentType: highest.type || 'unknown',
+        agentId: params.agentId || undefined,
+        description: highest.details,
+        dashboardUrl: `${process.env.FRONTEND_URL || 'https://app.rasi.ai'}/dashboard/incidents`,
+      });
+
+      firePlaybookTriggers(params.orgId, 'incident.created', {
+        incident_id: incident.id,
+        agent_id: params.agentId,
+        severity: highest.severity,
+        incident_type: highest.type,
+        title,
+        description: highest.details,
+      });
+    }
   } catch (error: any) {
     logger.error('Gateway incident detection failed', {
       error: String(error?.message || error),
@@ -277,9 +307,15 @@ const captureReasoningTrace = async (params: CaptureTraceParams): Promise<void> 
   }
 };
 
-let openRouterModelsCache: { expiresAt: number; models: GatewayModel[] } = {
+// Extended cache also stores per-model pricing from OpenRouter for accurate cost estimation
+let openRouterModelsCache: {
+  expiresAt: number;
+  models: GatewayModel[];
+  pricingMap: Record<string, { input: number; output: number }>;
+} = {
   expiresAt: 0,
   models: [],
+  pricingMap: {},
 };
 
 type IdempotencyCompletedEntry = {
@@ -364,6 +400,12 @@ const normalizeModel = (model: string): GatewayModel | null => {
     return { id: model, provider: 'openrouter', upstreamModel: upstream, ownedBy: 'openrouter' };
   }
 
+  // Local/Ollama models — route to OLLAMA_BASE_URL (e.g. http://localhost:11434)
+  if (model.startsWith('local/')) {
+    const upstream = model.slice('local/'.length);
+    return { id: model, provider: 'openai', upstreamModel: upstream, ownedBy: 'local' };
+  }
+
   // Any provider-style model (e.g. google/gemini-2.0-flash) can route via OpenRouter.
   if (model.includes('/')) {
     return { id: model, provider: 'openrouter', upstreamModel: model, ownedBy: model.split('/')[0] || 'openrouter' };
@@ -425,20 +467,46 @@ const fetchOpenRouterModels = async (): Promise<GatewayModel[]> => {
     throw new Error(`AI model catalog fetch failed: ${response.status} ${body}`);
   }
 
-  const payload = (await response.json()) as { data?: Array<{ id: string; name?: string }> };
+  const payload = (await response.json()) as {
+    data?: Array<{
+      id: string;
+      name?: string;
+      context_length?: number;
+      pricing?: { prompt?: string; completion?: string };
+      architecture?: { modality?: string };
+    }>;
+  };
+
+  const pricingMap: Record<string, { input: number; output: number }> = {};
   const models = (payload.data || [])
     .filter((m) => typeof m.id === 'string' && m.id.includes('/'))
-    .slice(0, 200)
-    .map((m) => ({
-      id: m.id,
-      provider: 'openrouter' as const,
-      upstreamModel: m.id,
-      ownedBy: m.id.split('/')[0] || 'rasi-ai',
-    }));
+    .map((m) => {
+      const inputPrice = parseFloat(m.pricing?.prompt || '0') * 1_000_000;
+      const outputPrice = parseFloat(m.pricing?.completion || '0') * 1_000_000;
+      if (inputPrice > 0 || outputPrice > 0) {
+        pricingMap[m.id] = { input: inputPrice, output: outputPrice };
+      }
+      const modality = m.architecture?.modality || '';
+      const capabilities: string[] = [];
+      if (modality.includes('image')) capabilities.push('vision');
+      if (modality.includes('audio')) capabilities.push('audio');
+      return {
+        id: m.id,
+        provider: 'openrouter' as const,
+        upstreamModel: m.id,
+        ownedBy: m.id.split('/')[0] || 'rasi-ai',
+        contextLength: m.context_length,
+        pricing: m.pricing
+          ? { prompt: m.pricing.prompt || '0', completion: m.pricing.completion || '0' }
+          : undefined,
+        capabilities,
+      };
+    });
 
   openRouterModelsCache = {
     expiresAt: Date.now() + OPENROUTER_MODELS_CACHE_TTL_MS,
     models,
+    pricingMap,
   };
 
   return models;
@@ -472,7 +540,13 @@ const OPENROUTER_PRICING: Record<string, { input: number; output: number }> = {
 };
 
 const estimateOpenRouterCost = (model: string, inputTokens: number, outputTokens: number): number => {
-  // Try exact match first, then prefix match (e.g. "openai/gpt-4o-mini-2024...")
+  // 1. Live pricing from OpenRouter catalog (most accurate, refreshed every 5 min)
+  const livePricing = openRouterModelsCache.pricingMap[model]
+    ?? Object.entries(openRouterModelsCache.pricingMap).find(([k]) => model.startsWith(k))?.[1];
+  if (livePricing) {
+    return ((inputTokens * livePricing.input) + (outputTokens * livePricing.output)) / 1_000_000;
+  }
+  // 2. Hardcoded fallback table for well-known models (covers cold-start / no-key scenarios)
   const pricing = OPENROUTER_PRICING[model]
     ?? Object.entries(OPENROUTER_PRICING).find(([k]) => model.startsWith(k))?.[1]
     ?? { input: 1, output: 3 }; // conservative default ~gpt-4 class
@@ -533,6 +607,76 @@ const routeViaOpenRouter = async (
   };
 };
 
+/** Route a request to a local Ollama instance (OpenAI-compatible API). */
+const routeViaOllama = async (
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+  options: { temperature?: number; maxTokens?: number } = {}
+): Promise<{ content: string; model: string; inputTokens: number; outputTokens: number; totalTokens: number; costUSD: number; latency: number }> => {
+  const ollamaBase = (process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(/\/$/, '');
+  const startTime = Date.now();
+
+  const response = await fetch(`${ollamaBase}/v1/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ollama' },
+    body: JSON.stringify({
+      model,
+      messages,
+      stream: false,
+      ...(typeof options.temperature === 'number' ? { temperature: options.temperature } : {}),
+      ...(typeof options.maxTokens === 'number' ? { max_tokens: options.maxTokens } : {}),
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Ollama completion failed: ${response.status} ${body}`);
+  }
+
+  const data = (await response.json()) as any;
+  const latency = Date.now() - startTime;
+  const inputTokens = data?.usage?.prompt_tokens || 0;
+  const outputTokens = data?.usage?.completion_tokens || 0;
+  return {
+    content: data?.choices?.[0]?.message?.content || '',
+    model: data?.model || model,
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    costUSD: 0, // local — no cost
+    latency,
+  };
+};
+
+// ── Per-agent in-memory rate limit counters ───────────────────────────────────
+interface AgentRateCounter { rpm: number; rpmReset: number; rpd: number; rpdReset: number }
+const agentRateCounters = new Map<string, AgentRateCounter>();
+
+function checkAgentRateLimit(agentId: string, config: Record<string, any>): { allowed: boolean; retryAfter?: number } {
+  const limitRpm = Number(config?.rate_limit_rpm) || 0;
+  const limitRpd = Number(config?.rate_limit_rpd) || 0;
+  if (!limitRpm && !limitRpd) return { allowed: true };
+
+  const now = Date.now();
+  const counter = agentRateCounters.get(agentId) || { rpm: 0, rpmReset: now + 60_000, rpd: 0, rpdReset: now + 86_400_000 };
+
+  // Reset windows
+  if (now >= counter.rpmReset) { counter.rpm = 0; counter.rpmReset = now + 60_000; }
+  if (now >= counter.rpdReset) { counter.rpd = 0; counter.rpdReset = now + 86_400_000; }
+
+  if (limitRpm > 0 && counter.rpm >= limitRpm) {
+    return { allowed: false, retryAfter: Math.ceil((counter.rpmReset - now) / 1000) };
+  }
+  if (limitRpd > 0 && counter.rpd >= limitRpd) {
+    return { allowed: false, retryAfter: Math.ceil((counter.rpdReset - now) / 1000) };
+  }
+
+  counter.rpm += 1;
+  counter.rpd += 1;
+  agentRateCounters.set(agentId, counter);
+  return { allowed: true };
+}
+
 const checkAgentBudget = async (req: Request, res: Response): Promise<string | null | false> => {
   const agentId = req.header('x-rasi-agent-id') || req.body?.agent_id;
   if (!agentId || !req.apiKey) return null;
@@ -549,6 +693,16 @@ const checkAgentBudget = async (req: Request, res: Response): Promise<string | n
     }
 
     const agent = agents[0];
+
+    // Per-agent rate limiting
+    const rl = checkAgentRateLimit(agentId, agent.config || {});
+    if (!rl.allowed) {
+      res.status(429).json({
+        error: { message: 'Agent rate limit exceeded', type: 'rate_limit_error', retry_after: rl.retryAfter }
+      });
+      return false;
+    }
+
     const budgetLimit = Number(agent.config?.budget_limit ?? 0);
     let currentSpend = Number(agent.config?.current_spend ?? 0);
 
@@ -652,10 +806,13 @@ const MAX_TOOL_LOOPS = 5;
 
 type CredentialMap = Record<string, string>;
 
+interface McpServerEntry { id: string; url: string; authToken?: string }
 interface AgentToolContext {
   tools: ConnectorTool[];
   /** Map of connectorId → decrypted credentials for that connector */
   credentialsByConnector: Record<string, CredentialMap>;
+  /** MCP servers indexed by tool prefix `mcp__{server_id}` */
+  mcpServers?: Record<string, McpServerEntry>;
 }
 
 // 60-second in-memory cache for agent tool contexts, keyed by `orgId:agentId`.
@@ -814,10 +971,47 @@ const loadAgentTools = async (agentId: string, orgId: string): Promise<AgentTool
 
     // 6. Build the merged tools array from the ACTION_REGISTRY
     const tools: ConnectorTool[] = connectedActionable.flatMap(
-      (id) => ACTION_REGISTRY[id]?.tools || []
+      (id) => (ACTION_REGISTRY[id] as any)?.tools || []
     );
 
-    const ctx: AgentToolContext = { tools, credentialsByConnector };
+    // 7. Load MCP server tools from organizations.settings.mcp_servers
+    const mcpServers: Record<string, McpServerEntry> = {};
+    try {
+      const orgQ = new URLSearchParams();
+      orgQ.set('id', eq(orgId));
+      orgQ.set('select', 'settings');
+      const orgRows = await supabaseRest('organizations', orgQ) as any[];
+      const mcpList: any[] = orgRows?.[0]?.settings?.mcp_servers || [];
+      for (const srv of mcpList) {
+        if (!srv?.id || !srv?.url) continue;
+        const authToken = srv.auth_token_encrypted ? (() => { try { return decryptSecret(srv.auth_token_encrypted); } catch { return ''; } })() : '';
+        try {
+          const manifestRes = await fetch(`${srv.url}/tools/list`, {
+            headers: { ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}), 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(5000),
+          });
+          if (!manifestRes.ok) continue;
+          const manifest = await manifestRes.json().catch(() => null);
+          const serverTools: any[] = (manifest as any)?.tools || [];
+          for (const t of serverTools) {
+            if (!t?.name) continue;
+            tools.push({
+              name: `mcp__${srv.id}__${t.name}`,
+              description: t.description || `MCP tool: ${t.name}`,
+              inputSchema: t.inputSchema || { type: 'object', properties: {} },
+            } as unknown as ConnectorTool);
+          }
+          mcpServers[`mcp__${srv.id}`] = { id: srv.id, url: srv.url, authToken };
+          logger.info('MCP server tools loaded', { serverId: srv.id, count: serverTools.length });
+        } catch (mcpErr: any) {
+          logger.warn('MCP server tool fetch failed', { serverId: srv.id, error: mcpErr?.message });
+        }
+      }
+    } catch (mcpLoadErr: any) {
+      logger.warn('MCP server registry load failed', { error: mcpLoadErr?.message });
+    }
+
+    const ctx: AgentToolContext = { tools, credentialsByConnector, mcpServers };
     agentToolCache.set(cacheKey, { ctx, expiresAt: Date.now() + AGENT_TOOL_CACHE_TTL_MS });
     return ctx;
   } catch (err) {
@@ -834,7 +1028,36 @@ const executeSingleToolCall = async (
   credentialsByConnector: Record<string, CredentialMap>,
   orgId: string,
   agentId: string | null,
+  mcpServers?: Record<string, McpServerEntry>,
 ): Promise<string> => {
+  // MCP tool dispatch — prefix `mcp__{server_id}__{tool_name}`
+  if (tc.function.name.startsWith('mcp__')) {
+    const parts = tc.function.name.split('__');
+    const serverId = parts[1];
+    const toolName = parts.slice(2).join('__');
+    const srv = mcpServers?.[`mcp__${serverId}`];
+    if (!srv) return JSON.stringify({ error: `MCP server '${serverId}' not found` });
+    let mcpParams: Record<string, any> = {};
+    try { mcpParams = JSON.parse(tc.function.arguments); } catch { /* use empty */ }
+    try {
+      const mcpRes = await fetch(`${srv.url}/tools/call`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(srv.authToken ? { Authorization: `Bearer ${srv.authToken}` } : {}),
+        },
+        body: JSON.stringify({ name: toolName, arguments: mcpParams }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      const mcpData = await mcpRes.json().catch(() => ({ error: 'Invalid JSON from MCP server' }));
+      logger.info('MCP tool executed', { serverId, toolName, status: mcpRes.status });
+      return JSON.stringify(mcpData);
+    } catch (err: any) {
+      logger.warn('MCP tool call failed', { serverId, toolName, error: err?.message });
+      return JSON.stringify({ error: err?.message || 'MCP call failed' });
+    }
+  }
+
   const [connectorId, action] = tc.function.name.split('__');
   let params: Record<string, any> = {};
   try { params = JSON.parse(tc.function.arguments); } catch { /* use empty */ }
@@ -1811,7 +2034,11 @@ router.get('/models', async (req: Request, res: Response) => {
       id: model.id,
       object: 'model',
       created: 0,
-      owned_by: model.provider === 'openrouter' ? 'rasi-ai' : model.ownedBy,
+      owned_by: model.ownedBy,
+      provider: model.provider,
+      context_length: model.contextLength ?? null,
+      pricing: model.pricing ?? null,
+      capabilities: model.capabilities ?? [],
     })),
   });
 });
@@ -1879,6 +2106,37 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
         const routedConfig = normalizeModel(routedModelId);
         if (routedConfig) modelConfig = routedConfig;
       }
+
+      // Smart tier routing: classify query complexity and reroute if a tier policy exists
+      try {
+        const tierPolicyRows = (await supabaseRest('action_policies', new URLSearchParams({
+          organization_id: eq(orgId),
+          action: 'eq.model_tier_routing',
+          service: 'eq.__gateway__',
+          enabled: 'eq.true',
+        }))) as any[];
+        const tierPolicy = tierPolicyRows?.[0];
+        if (tierPolicy?.interceptor_rules) {
+          const tierMap = Array.isArray(tierPolicy.interceptor_rules) ? tierPolicy.interceptor_rules[0] : tierPolicy.interceptor_rules;
+          if (tierMap && (tierMap.tier_1 || tierMap.tier_2 || tierMap.tier_3)) {
+            const { tier } = classifyQueryComplexity(normalizedMessages);
+            const targetModelId: string | undefined =
+              tier === 'simple' ? tierMap.tier_1 :
+              tier === 'standard' ? tierMap.tier_2 :
+              tierMap.tier_3;
+            if (targetModelId) {
+              const tieredConfig = normalizeModel(targetModelId);
+              if (tieredConfig) {
+                logger.info('gateway: smart tier routing applied', { orgId, tier, from: modelConfig.id, to: targetModelId });
+                modelConfig = tieredConfig;
+              }
+            }
+          }
+        }
+      } catch {
+        // Tier routing is best-effort; never block the request
+      }
+
       // Request interception: redact PII, replace patterns, inject system instructions
       normalizedMessages = await applyRequestInterceptors(orgId, normalizedMessages);
       if (process.env.CROSS_BORDER_PII_MASKING === 'true') {
@@ -1928,6 +2186,31 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
       latency: number;
     };
 
+    // ── Semantic cache lookup (before upstream call) ───────────────────────────
+    if (req.apiKey?.organization_id && !stream) {
+      const cachedResponse = await lookupSemanticCache({
+        orgId: req.apiKey.organization_id,
+        messages: normalizedMessages,
+        modelName: modelConfig.id,
+      }).catch(() => null);
+      if (cachedResponse) {
+        logger.info('Semantic cache hit — returning cached response', { orgId: req.apiKey.organization_id, model: modelConfig.id });
+        const nowSec = Math.floor(Date.now() / 1000);
+        const cacheBody = {
+          id: `chatcmpl-cache-${crypto.randomBytes(8).toString('hex')}`,
+          object: 'chat.completion',
+          created: nowSec,
+          model: modelConfig.id,
+          choices: [{ index: 0, message: { role: 'assistant', content: cachedResponse }, finish_reason: 'stop', logprobs: null }],
+          usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+          x_rasi_cached: true,
+        };
+        await completeIdempotency(idem.cacheKey, idem.dbRowId, { contentType: 'json', payload: cacheBody });
+        return res.json(cacheBody);
+      }
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
     // ── Tool-call continuation loop ────────────────────────────────────────────
     const conversationMessages = [...normalizedMessages];
     let totalInputTokens = 0;
@@ -1940,7 +2223,16 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
     for (let loopCount = 0; loopCount < MAX_TOOL_LOOPS; loopCount++) {
       let aiResponse: { content: string; tokenCount: { input: number; output: number; total: number }; costUSD: number; latency: number; toolCalls?: ToolCall[] };
 
-      if (modelConfig.provider === 'openai') {
+      if (modelConfig.ownedBy === 'local') {
+        // Local Ollama model — OpenAI-compatible, no tool support; single pass
+        const ollamaResponse = await routeViaOllama(modelConfig.upstreamModel, conversationMessages, chatOptions);
+        totalInputTokens += ollamaResponse.inputTokens;
+        totalOutputTokens += ollamaResponse.outputTokens;
+        totalCostUSD += ollamaResponse.costUSD;
+        totalLatency += ollamaResponse.latency;
+        finalContent = ollamaResponse.content;
+        break;
+      } else if (modelConfig.provider === 'openai') {
         aiResponse = await new OpenAIService(providerKey).chat(conversationMessages, modelConfig.upstreamModel, chatOptions);
       } else if (modelConfig.provider === 'anthropic') {
         aiResponse = await new AnthropicService(providerKey).chat(conversationMessages, modelConfig.upstreamModel, chatOptions);
@@ -1976,7 +2268,7 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
       // Execute each tool call and append results
       for (const tc of aiResponse.toolCalls) {
         const tcStart = Date.now();
-        const resultContent = await executeSingleToolCall(tc, toolContext.credentialsByConnector, orgId, agentId);
+        const resultContent = await executeSingleToolCall(tc, toolContext.credentialsByConnector, orgId, agentId, toolContext.mcpServers);
         capturedToolCalls.push({
           name: tc.function.name,
           arguments: tc.function.arguments,
@@ -2034,6 +2326,15 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
         totalTokens: completion.totalTokens,
         costUsd: completion.costUSD,
       });
+      // Store response for future semantic cache hits (fire-and-forget)
+      if (completion.content) {
+        void storeSemanticCacheResponse({
+          orgId: req.apiKey.organization_id,
+          messages: normalizedMessages,
+          modelName: modelConfig.id,
+          response: completion.content,
+        }).catch(() => { /* non-fatal */ });
+      }
     }
 
     if (req.apiKey?.organization_id && agentId) {

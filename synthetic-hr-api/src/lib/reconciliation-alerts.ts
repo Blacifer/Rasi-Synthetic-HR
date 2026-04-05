@@ -288,3 +288,71 @@ export async function dispatchReconciliationAlertsForOrganization(orgId: string)
 
   return { sent: newAlerts.length, alerts };
 }
+
+// ---------------------------------------------------------------------------
+// Cost spike anomaly detection — called fire-and-forget from telemetry endpoint
+// ---------------------------------------------------------------------------
+
+export async function checkCostAnomalies(orgId: string): Promise<void> {
+  try {
+    // Fetch last 30 days of cost data per agent
+    const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
+
+    const q = new URLSearchParams();
+    q.set('organization_id', `eq.${orgId}`);
+    q.set('date', `gte.${since30}`);
+    q.set('select', 'agent_id,date,cost_usd');
+    q.set('order', 'date.asc');
+    q.set('limit', '2000');
+    const rows = await supabaseRest('cost_tracking', q) as any[];
+    if (!rows || rows.length === 0) return;
+
+    // Group by agent
+    const byAgent = new Map<string, Array<{ date: string; cost: number }>>();
+    for (const row of rows) {
+      const aid = row.agent_id;
+      if (!aid) continue;
+      if (!byAgent.has(aid)) byAgent.set(aid, []);
+      byAgent.get(aid)!.push({ date: row.date, cost: Number(row.cost_usd) || 0 });
+    }
+
+    // Fetch alert channels for org (for broadcasting)
+    const { notifyAlertChannels } = await import('./alert-channels');
+
+    for (const [agentId, entries] of byAgent.entries()) {
+      // Build daily map
+      const dailyMap: Record<string, number> = {};
+      for (const e of entries) dailyMap[e.date] = (dailyMap[e.date] || 0) + e.cost;
+
+      // 7-day rolling average (days prior to today)
+      const last7: number[] = [];
+      for (let i = 7; i >= 1; i--) {
+        const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        last7.push(dailyMap[d] || 0);
+      }
+      const avg7 = last7.reduce((s, v) => s + v, 0) / 7;
+      const todayCost = dailyMap[today] || 0;
+
+      // Spike threshold: today > avg × 2.5 AND avg is non-trivial (>$0.001)
+      if (avg7 > 0.001 && todayCost > avg7 * 2.5) {
+        logger.warn('Cost spike detected', { orgId, agentId, todayCost, avg7 });
+        try {
+          await notifyAlertChannels(orgId, {
+            incidentId: `cost-spike-${agentId}-${today}`,
+            title: `Cost spike detected on agent ${agentId}`,
+            severity: 'high',
+            incidentType: 'cost_spike',
+            agentId,
+            description: `Today's cost $${todayCost.toFixed(4)} is ${(todayCost / avg7).toFixed(1)}× above the 7-day average of $${avg7.toFixed(4)}.`,
+            dashboardUrl: `${process.env.FRONTEND_URL || 'https://app.rasi.ai'}/dashboard/agents`,
+          });
+        } catch (notifyErr: any) {
+          logger.warn('Cost spike notification failed', { error: notifyErr?.message, agentId });
+        }
+      }
+    }
+  } catch (err: any) {
+    logger.warn('checkCostAnomalies failed', { error: err?.message, orgId });
+  }
+}

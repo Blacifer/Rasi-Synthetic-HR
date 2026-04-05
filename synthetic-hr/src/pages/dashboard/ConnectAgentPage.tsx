@@ -5,6 +5,7 @@ import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 import { supabase } from '../../lib/supabase-client';
 import { getFrontendConfig } from '../../lib/config';
+import { FALLBACK_MODELS, DEFAULT_MODEL_ID } from '../../lib/models';
 
 type WizardStep = 1 | 2 | 3;
 
@@ -130,7 +131,7 @@ export default function ConnectAgentPage(props: {
   const [creatingKey, setCreatingKey] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [verifyOutput, setVerifyOutput] = useState<string | null>(null);
-  const [modelId, setModelId] = useState('google/gemini-2.0-flash');
+  const [modelId, setModelId] = useState(DEFAULT_MODEL_ID);
   const [models, setModels] = useState<Array<{ id: string; name: string; provider: string }>>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelFilter, setModelFilter] = useState('');
@@ -198,12 +199,7 @@ export default function ConnectAgentPage(props: {
       setModelsLoading(false);
     }
 
-    setModels((prev) => (prev.length > 0 ? prev : [
-      { id: 'google/gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'google' },
-      { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'openai' },
-      { id: 'openai/gpt-4o-mini', name: 'GPT-4o mini', provider: 'openai' },
-      { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', provider: 'anthropic' },
-    ]));
+    setModels((prev) => (prev.length > 0 ? prev : FALLBACK_MODELS));
   };
 
   useEffect(() => {

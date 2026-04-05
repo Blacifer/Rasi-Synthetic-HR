@@ -314,6 +314,55 @@ function computePreflightRiskScore(messages: GatewayMessage[]): number {
   return severityScore[highest.severity] ?? 0;
 }
 
+// ── Smart Model Tier Routing ─────────────────────────────────────────────────
+
+export type QueryComplexityTier = 'simple' | 'standard' | 'complex';
+
+/**
+ * Classify the query complexity to support smart tier routing.
+ * Uses heuristics only — no external API call required.
+ *
+ * simple (0–3): short messages, FAQ-like, no code/math → tier_1 model
+ * standard (4–7): medium context, some reasoning → tier_2 model
+ * complex (8–10): long context, code/math, multi-step → tier_3 model
+ */
+export function classifyQueryComplexity(messages: GatewayMessage[]): { tier: QueryComplexityTier; score: number } {
+  const userMessages = messages.filter((m) => m.role === 'user');
+  const lastUser = userMessages[userMessages.length - 1];
+  const lastContent = lastUser ? (typeof lastUser.content === 'string' ? lastUser.content : JSON.stringify(lastUser.content)) : '';
+
+  const allContent = messages
+    .map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
+    .join(' ');
+
+  let score = 0;
+
+  // Token count heuristic (4 chars ≈ 1 token)
+  const totalTokens = Math.ceil(allContent.length / 4);
+  if (totalTokens > 2000) score += 3;
+  else if (totalTokens > 800) score += 2;
+  else if (totalTokens > 300) score += 1;
+
+  // Code/math indicators
+  if (/```|function\s*\(|def\s+\w+|class\s+\w+|\$\{|=>|lambda|import\s+\w|SELECT\s|equation|formula|integral|derivative/i.test(lastContent)) {
+    score += 2;
+  }
+
+  // Multi-step reasoning indicators
+  if (/step[s]?\s+\d|compare|analyze|explain why|break down|summarize|pros and cons|trade.?off/i.test(lastContent)) {
+    score += 2;
+  }
+
+  // Long last message
+  if (lastContent.length > 600) score += 1;
+
+  // Multi-turn conversation adds complexity
+  if (messages.length > 6) score += 1;
+
+  const tier: QueryComplexityTier = score <= 3 ? 'simple' : score <= 7 ? 'standard' : 'complex';
+  return { tier, score };
+}
+
 /**
  * Sum this month's cost_usd for the org from cost_tracking table.
  */

@@ -14,6 +14,10 @@ export function WorkspaceSettingsPanel({
   setWsSettingsBudget,
   wsSettingsAutoThrottle,
   setWsSettingsAutoThrottle,
+  wsRateLimitRpm,
+  setWsRateLimitRpm,
+  wsRateLimitRpd,
+  setWsRateLimitRpd,
   handleKillSwitch,
   wsSettingsSaving,
   saveWsSettings,
@@ -31,6 +35,10 @@ export function WorkspaceSettingsPanel({
   setWsSettingsBudget: React.Dispatch<React.SetStateAction<number>>;
   wsSettingsAutoThrottle: boolean;
   setWsSettingsAutoThrottle: React.Dispatch<React.SetStateAction<boolean>>;
+  wsRateLimitRpm: number;
+  setWsRateLimitRpm: React.Dispatch<React.SetStateAction<number>>;
+  wsRateLimitRpd: number;
+  setWsRateLimitRpd: React.Dispatch<React.SetStateAction<number>>;
   handleKillSwitch: (agentId: string, level: 1 | 2 | 3) => void;
   wsSettingsSaving: boolean;
   saveWsSettings: () => Promise<void>;
@@ -115,7 +123,32 @@ export function WorkspaceSettingsPanel({
                   min="0"
                 />
               </div>
-              <p className="text-xs text-slate-500 mt-1">Current spend: ₹{(activeWorkspaceAgent.current_spend || 0).toLocaleString()}</p>
+              {wsSettingsBudget > 0 && (() => {
+                const spend = activeWorkspaceAgent.current_spend || 0;
+                const pct = Math.min((spend / wsSettingsBudget) * 100, 100);
+                const barColor = pct >= 85 ? 'bg-rose-500' : pct >= 60 ? 'bg-amber-500' : 'bg-emerald-500';
+                const textColor = pct >= 85 ? 'text-rose-400' : pct >= 60 ? 'text-amber-400' : 'text-emerald-400';
+                return (
+                  <div className="mt-2 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Current spend: ₹{spend.toLocaleString()}</span>
+                      <span className={`font-mono font-bold ${textColor}`}>{pct.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+                    </div>
+                    {pct >= 80 && (
+                      <p className={`text-xs font-medium flex items-center gap-1 ${textColor}`}>
+                        <span>⚠</span>
+                        {pct >= 100 ? 'Budget cap reached — agent is paused' : `Budget ${pct.toFixed(0)}% consumed`}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+              {wsSettingsBudget === 0 && (
+                <p className="text-xs text-slate-500 mt-1">Current spend: ₹{(activeWorkspaceAgent.current_spend || 0).toLocaleString()}</p>
+              )}
             </div>
             <label className="flex items-center gap-3 cursor-pointer">
               <div className="relative shrink-0">
@@ -128,6 +161,30 @@ export function WorkspaceSettingsPanel({
                 <p className="text-xs text-slate-400">Slow down responses as budget limit approaches</p>
               </div>
             </label>
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-700/40">
+              <div>
+                <label className="flex items-center text-xs text-slate-400 mb-1.5">Rate Limit (RPM)<InfoTip text="Max requests per minute for this agent. 0 = unlimited." /></label>
+                <input
+                  type="number"
+                  value={wsRateLimitRpm}
+                  onChange={(e) => setWsRateLimitRpm(Math.max(0, parseInt(e.target.value) || 0))}
+                  min="0"
+                  placeholder="0 = unlimited"
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-emerald-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="flex items-center text-xs text-slate-400 mb-1.5">Rate Limit (RPD)<InfoTip text="Max requests per day for this agent. 0 = unlimited." /></label>
+                <input
+                  type="number"
+                  value={wsRateLimitRpd}
+                  onChange={(e) => setWsRateLimitRpd(Math.max(0, parseInt(e.target.value) || 0))}
+                  min="0"
+                  placeholder="0 = unlimited"
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white outline-none focus:border-emerald-500 text-sm"
+                />
+              </div>
+            </div>
           </div>
         </div>
 

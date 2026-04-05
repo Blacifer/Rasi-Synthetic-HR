@@ -12,6 +12,7 @@ import { validateAgentForm } from '../../../lib/validation';
 import { toast } from '../../../lib/toast';
 import { getFrontendConfig } from '../../../lib/config';
 import { supabase } from '../../../lib/supabase-client';
+import { FALLBACK_MODELS } from '../../../lib/models';
 
 const SUGGESTED_CAPABILITIES: Record<string, string[]> = {
   support: ['Sentiment Analysis', 'Ticket Routing', 'Knowledge Base Search', 'Multi-lingual Support'],
@@ -83,12 +84,7 @@ export function AddAgentModal({ onClose, onAdd }: { onClose: () => void; onAdd: 
         console.warn('Failed to load models, using defaults', err);
       }
 
-      const fallback = [
-        { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'openai', pricing: { prompt: '0.000005', completion: '0.000015' } },
-        { id: 'anthropic/claude-3-5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'anthropic', pricing: { prompt: '0.000003', completion: '0.000015' } },
-        { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', provider: 'google', pricing: { prompt: '0.0000001', completion: '0.0000004' } }
-      ];
-      setLiveModels(fallback);
+      setLiveModels(FALLBACK_MODELS);
       setProviderFilter(fallback[0].provider);
       setForm((f) => ({ ...f, model_name: fallback[0].id }));
       setLoadingModels(false);
@@ -149,7 +145,7 @@ export function AddAgentModal({ onClose, onAdd }: { onClose: () => void; onAdd: 
       return;
     }
     setErrors({});
-    onAdd(form);
+    onAdd({ ...form, config: { ...form.config, display_provider: 'Rasi AI' } });
   };
 
   const handleChange = (field: string, value: string | number | boolean) => {

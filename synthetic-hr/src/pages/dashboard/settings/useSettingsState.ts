@@ -21,6 +21,7 @@ export function useSettingsState({ isDemoMode = false }: { isDemoMode?: boolean 
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
   const [orgName, setOrgName] = useState(user?.organizationName || '');
+  const [providerDisplayName, setProviderDisplayName] = useState('Rasi AI');
   const [dataRetention, setDataRetention] = useState(90);
   const [savingOrg, setSavingOrg] = useState(false);
   const [exportingData, setExportingData] = useState(false);
@@ -260,10 +261,20 @@ export function useSettingsState({ isDemoMode = false }: { isDemoMode?: boolean 
 
   const handleSaveOrg = async () => {
     setSavingOrg(true);
-    await new Promise((r) => setTimeout(r, 600));
-    localStorage.setItem('synthetic_hr_org_name', orgName);
-    localStorage.setItem('synthetic_hr_retention', dataRetention.toString());
-    setWorkspaceBaseline(JSON.stringify({ orgName, dataRetention }));
+    try {
+      localStorage.setItem('synthetic_hr_org_name', orgName);
+      localStorage.setItem('synthetic_hr_retention', dataRetention.toString());
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const apiUrl = getFrontendConfig().apiUrl || 'http://localhost:3001/api';
+        await fetch(`${apiUrl}/organizations/settings`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ branding: { provider_name: providerDisplayName.trim() || 'Rasi AI' } }),
+        });
+      }
+    } catch { /* non-fatal */ }
+    setWorkspaceBaseline(JSON.stringify({ orgName, dataRetention, providerDisplayName }));
     setSavingOrg(false);
     toast.success('Organization settings saved.');
   };
@@ -523,6 +534,8 @@ export function useSettingsState({ isDemoMode = false }: { isDemoMode?: boolean 
     profileImage,
     orgName,
     setOrgName,
+    providerDisplayName,
+    setProviderDisplayName,
     dataRetention,
     setDataRetention,
     savingOrg,

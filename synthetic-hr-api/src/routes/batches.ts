@@ -371,6 +371,186 @@ router.get('/fine-tunes/openai/:jobId', requirePermission('dashboard.read'), asy
   }
 });
 
+// POST /api/fine-tunes/anthropic — create a real Anthropic fine-tuning job
+// Anthropic fine-tuning accepts the same JSONL format as OpenAI (messages array).
+// API: https://docs.anthropic.com/en/docs/build-with-claude/model-distillation
+router.post('/fine-tunes/anthropic', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const {
+      name,
+      baseModel,
+      epochs,
+      trainingRecords,
+      validationRecords = [],
+      stagedJobId,
+      fileName = '',
+      examples,
+      validationExamples,
+      estimatedCostInr = 0,
+      readinessScore = 100,
+      issues = [],
+    } = req.body as {
+      name?: string;
+      baseModel?: string;
+      epochs?: number;
+      trainingRecords?: Array<{ prompt: string; completion: string }>;
+      validationRecords?: Array<{ prompt: string; completion: string }>;
+      stagedJobId?: string;
+      fileName?: string;
+      examples?: number;
+      validationExamples?: number;
+      estimatedCostInr?: number;
+      readinessScore?: number;
+      issues?: string[];
+    };
+
+    if (!name || !String(name).trim()) return errorResponse(res, new Error('Fine-tune name is required'), 400);
+    if (!baseModel || !String(baseModel).startsWith('anthropic/')) return errorResponse(res, new Error('baseModel must be an anthropic/ prefixed model'), 400);
+    if (!Array.isArray(trainingRecords) || trainingRecords.length < 10) return errorResponse(res, new Error('At least 10 training records are required'), 400);
+
+    const anthropicApiKey = process.env.RASI_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY || '';
+    if (!anthropicApiKey) return errorResponse(res, new Error('Anthropic API key missing for fine-tuning'), 500);
+
+    const model = String(baseModel).replace(/^anthropic\//, '');
+    const nEpochs = Number.isFinite(Number(epochs)) ? Number(epochs) : 3;
+
+    const toJsonl = (records: Array<{ prompt: string; completion: string }>) =>
+      records.map((r) => JSON.stringify({ messages: [{ role: 'user', content: r.prompt }, { role: 'assistant', content: r.completion }] })).join('\n');
+
+    // Step 1: Upload training file
+    const safePrefix = String(name).trim().replace(/\s+/g, '_').toLowerCase().slice(0, 30);
+    const trainingJsonl = toJsonl(trainingRecords);
+
+    const uploadRes = await fetch('https://api.anthropic.com/v1/files', {
+      method: 'POST',
+      headers: {
+        'x-api-key': anthropicApiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'files-api-2025-04-14',
+      },
+      body: (() => {
+        const form = new FormData();
+        form.append('file', new Blob([trainingJsonl], { type: 'application/jsonl' }), `${safePrefix}_train.jsonl`);
+        return form;
+      })(),
+    });
+
+    const uploadPayload = await uploadRes.json().catch(() => ({} as any)) as any;
+    if (!uploadRes.ok) {
+      logger.error('Anthropic file upload failed', { status: uploadRes.status, uploadPayload });
+      throw new Error(uploadPayload?.error?.message || 'Anthropic training file upload failed');
+    }
+    const trainingFileId: string = uploadPayload.id;
+
+    // Step 2: Upload validation file (optional)
+    let validationFileId: string | undefined;
+    if (Array.isArray(validationRecords) && validationRecords.length > 0) {
+      const valRes = await fetch('https://api.anthropic.com/v1/files', {
+        method: 'POST',
+        headers: {
+          'x-api-key': anthropicApiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'files-api-2025-04-14',
+        },
+        body: (() => {
+          const form = new FormData();
+          form.append('file', new Blob([toJsonl(validationRecords)], { type: 'application/jsonl' }), `${safePrefix}_val.jsonl`);
+          return form;
+        })(),
+      });
+      const valPayload = await valRes.json().catch(() => ({} as any)) as any;
+      if (valRes.ok) validationFileId = valPayload.id;
+    }
+
+    // Step 3: Create fine-tuning job
+    const ftRes = await fetch('https://api.anthropic.com/v1/fine-tuning/jobs', {
+      method: 'POST',
+      headers: {
+        'x-api-key': anthropicApiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'fine-tuning-2025-01-24',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: String(name).trim(),
+        model,
+        training_data: [{ type: 'upload', file_id: trainingFileId }],
+        ...(validationFileId ? { validation_data: [{ type: 'upload', file_id: validationFileId }] } : {}),
+        hyperparameters: { num_epochs: nEpochs },
+      }),
+    });
+
+    const ftPayload = await ftRes.json().catch(() => ({} as any)) as any;
+    if (!ftRes.ok) {
+      logger.error('Anthropic fine-tune job creation failed', { status: ftRes.status, ftPayload });
+      throw new Error(ftPayload?.error?.message || 'Anthropic fine-tune job creation failed');
+    }
+
+    await auditLog.log({
+      user_id: req.user?.id || '',
+      action: 'fine_tune.created',
+      resource_type: 'organization',
+      resource_id: orgId,
+      organization_id: orgId,
+      metadata: { provider: 'anthropic', fine_tune_job_id: ftPayload.id, model, training_examples: trainingRecords.length },
+    });
+
+    // Step 4: Persist to DB
+    const dbPayload = {
+      organization_id: orgId,
+      name: String(name).trim(),
+      base_model: `anthropic/${model}`,
+      epochs: nEpochs,
+      file_name: String(fileName || `${safePrefix}_train.jsonl`),
+      examples: Number(examples ?? trainingRecords.length),
+      validation_examples: Number(validationExamples ?? validationRecords.length),
+      estimated_cost_inr: Number(estimatedCostInr),
+      readiness_score: Number(readinessScore),
+      issues: Array.isArray(issues) ? issues : [],
+      status: ftPayload.status || 'provider_queued',
+      provider_state: 'anthropic_submitted',
+      provider_job_id: ftPayload.id,
+    };
+
+    try {
+      if (stagedJobId) {
+        const uq = new URLSearchParams();
+        uq.set('id', eq(stagedJobId));
+        uq.set('organization_id', eq(orgId));
+        await supabaseRestAsUser(getUserJwt(req), 'fine_tune_jobs', uq, {
+          method: 'PATCH',
+          body: { ...dbPayload, updated_at: new Date().toISOString() },
+        });
+      } else {
+        await supabaseRestAsUser(getUserJwt(req), 'fine_tune_jobs', new URLSearchParams(), {
+          method: 'POST',
+          body: dbPayload,
+        });
+      }
+    } catch (dbErr) {
+      logger.warn('Failed to persist Anthropic fine-tune job to DB', { error: dbErr, jobId: ftPayload.id });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        provider: 'anthropic',
+        id: ftPayload.id,
+        model: ftPayload.model,
+        status: ftPayload.status,
+        trainingFileId,
+        validationFileId: validationFileId || null,
+        trainedTokens: null,
+      },
+    });
+  } catch (error: any) {
+    errorResponse(res, error);
+  }
+});
+
 // POST /api/batches/process-line — process a single line from the batch feature
 router.post('/batches/process-line', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
   try {

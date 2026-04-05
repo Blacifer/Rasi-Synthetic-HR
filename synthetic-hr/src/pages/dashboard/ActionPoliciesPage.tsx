@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Shield, Plus, RefreshCw, Trash2, X, BookOpen, ChevronRight, Zap, GitBranch, Filter, ToggleLeft, ToggleRight, Code2, Play, History, CheckCircle2 } from 'lucide-react';
+import { Shield, Plus, RefreshCw, Trash2, X, BookOpen, ChevronRight, Zap, GitBranch, Filter, ToggleLeft, ToggleRight, Code2, Play, History, CheckCircle2, BrainCircuit, CheckCheck, XCircle } from 'lucide-react';
 import { api, type ActionPolicyRow, type RoutingRule, type InterceptorRule, type ActionPolicyConstraints } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
+import { FALLBACK_MODELS, DEFAULT_MODEL_ID, type ModelDefinition } from '../../lib/models';
+import { getFrontendConfig } from '../../lib/config';
+import { supabase } from '../../lib/supabase-client';
 
 type Editor = {
   service: string;
@@ -169,17 +172,8 @@ const CONDITION_LABELS: Record<string, string> = {
   monthly_cost_above: 'Monthly cost above ($USD)',
 };
 
-const GATEWAY_MODELS_UI = [
-  { id: 'anthropic/claude-3-haiku', label: 'Claude 3 Haiku (fast, cheap)' },
-  { id: 'openai/gpt-4o-mini', label: 'GPT-4o Mini (fast, cheap)' },
-  { id: 'anthropic/claude-3-5-sonnet', label: 'Claude 3.5 Sonnet (capable)' },
-  { id: 'openai/gpt-4o', label: 'GPT-4o (powerful)' },
-  { id: 'google/gemini-2.0-flash', label: 'Gemini 2.0 Flash (fast)' },
-  { id: 'meta-llama/llama-3.1-70b-instruct', label: 'Llama 3.1 70B (open)' },
-];
-
 function emptyRule(tab: 'patch_request' | 'patch_response' | 'route_model'): InterceptorRule {
-  if (tab === 'route_model') return { id: crypto.randomUUID(), enabled: true, condition: 'risk_score_above', threshold: 70, target_model: 'anthropic/claude-3-haiku' };
+  if (tab === 'route_model') return { id: crypto.randomUUID(), enabled: true, condition: 'risk_score_above', threshold: 70, target_model: DEFAULT_MODEL_ID };
   return { id: crypto.randomUUID(), enabled: true, match_type: 'always', transform: 'redact_pii' };
 }
 
@@ -192,9 +186,10 @@ interface GatewayInterceptorsSectionProps {
   saving: boolean;
   setSaving: (v: boolean) => void;
   onSaved: (row: ActionPolicyRow) => void;
+  models: ModelDefinition[];
 }
 
-function GatewayInterceptorsSection({ rows, show, onToggle, tab, onTabChange, saving, setSaving, onSaved }: GatewayInterceptorsSectionProps) {
+function GatewayInterceptorsSection({ rows, show, onToggle, tab, onTabChange, saving, setSaving, onSaved, models }: GatewayInterceptorsSectionProps) {
   const existingPolicy = rows.find(r => r.service === '__gateway__' && r.action === tab) || null;
   const [rules, setRules] = useState<InterceptorRule[]>(existingPolicy?.interceptor_rules || []);
   const [enabled, setEnabled] = useState(existingPolicy?.enabled !== false);
@@ -346,11 +341,15 @@ function GatewayInterceptorsSection({ rows, show, onToggle, tab, onTabChange, sa
                         <div>
                           <label className="text-xs text-slate-400 mb-1 block">Reroute to model</label>
                           <select
-                            value={rule.target_model || 'anthropic/claude-3-haiku'}
+                            value={rule.target_model || DEFAULT_MODEL_ID}
                             onChange={e => updateRule(idx, { target_model: e.target.value })}
                             className="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 text-white text-xs rounded-lg outline-none focus:border-cyan-500"
                           >
-                            {GATEWAY_MODELS_UI.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                            {models.map(m => (
+                              <option key={m.id} value={m.id}>
+                                {m.name} ({m.provider})
+                              </option>
+                            ))}
                           </select>
                         </div>
                       </div>
@@ -461,6 +460,23 @@ function GatewayInterceptorsSection({ rows, show, onToggle, tab, onTabChange, sa
 export default function ActionPoliciesPage() {
   const [busy, setBusy] = useState(false);
   const [rows, setRows] = useState<ActionPolicyRow[]>([]);
+  const [gatewayModels, setGatewayModels] = useState<ModelDefinition[]>(FALLBACK_MODELS);
+
+  useEffect(() => {
+    const apiUrl = (getFrontendConfig().apiUrl || 'http://localhost:3001/api') as string;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const headers: Record<string, string> = {};
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      fetch(`${apiUrl}/models`, { headers })
+        .then((r) => r.ok ? r.json() : null)
+        .then((json) => {
+          if (json?.success && Array.isArray(json.data) && json.data.length > 0) {
+            setGatewayModels(json.data);
+          }
+        })
+        .catch(() => { /* keep FALLBACK_MODELS */ });
+    });
+  }, []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTemplateCategory, setActiveTemplateCategory] = useState<PolicyTemplate['category']>('soc2');
   const [showTemplates, setShowTemplates] = useState(false);
@@ -475,6 +491,9 @@ export default function ActionPoliciesPage() {
   const [simResult, setSimResult] = useState<{ decision: string; violations: any[] } | null>(null);
   const [versionHistory, setVersionHistory] = useState<any[]>([]);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [synthesizedRules, setSynthesizedRules] = useState<any[]>([]);
+  const [showSynthesized, setShowSynthesized] = useState(false);
+  const [synthesizedLoading, setSynthesizedLoading] = useState(false);
   const [editor, setEditor] = useState<Editor>({
     service: 'internal',
     action: 'support.ticket.create',
@@ -516,6 +535,42 @@ export default function ActionPoliciesPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const loadSynthesizedRules = async () => {
+    setSynthesizedLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('synthesized_rules')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (!error) setSynthesizedRules(data || []);
+    } finally {
+      setSynthesizedLoading(false);
+    }
+  };
+
+  const acceptSynthesizedRule = async (rule: any) => {
+    // Apply the proposed rule as a real action policy
+    await api.actionPolicies.upsert({
+      service: rule.service,
+      action: rule.action,
+      enabled: true,
+      require_approval: true,
+      required_role: 'manager',
+      notes: `Auto-proposed by self-healing engine after ${rule.denial_count} denials. ${rule.synthesis_summary || ''}`,
+    });
+    // Mark as applied in synthesized_rules
+    await supabase.from('synthesized_rules').update({ status: 'accepted' }).eq('id', rule.id);
+    setSynthesizedRules((prev) => prev.filter((r) => r.id !== rule.id));
+    toast.success('Rule accepted and added to Action Policies.');
+    load();
+  };
+
+  const dismissSynthesizedRule = async (id: string) => {
+    await supabase.from('synthesized_rules').update({ status: 'dismissed' }).eq('id', id);
+    setSynthesizedRules((prev) => prev.filter((r) => r.id !== id));
+  };
 
   useEffect(() => {
     if (!selected) return;
@@ -1170,12 +1225,95 @@ export default function ActionPoliciesPage() {
         onTabChange={setInterceptorTab}
         saving={savingInterceptor}
         setSaving={setSavingInterceptor}
+        models={gatewayModels}
         onSaved={(updated) => setRows((prev) => {
           const idx = prev.findIndex((r) => r.id === updated.id);
           if (idx >= 0) { const next = [...prev]; next[idx] = updated; return next; }
           return [updated, ...prev];
         })}
       />
+
+      {/* Auto-Proposed Rules (Self-Healing) */}
+      <div className="rounded-xl border border-amber-500/20 bg-slate-800/20 overflow-hidden">
+        <button
+          onClick={() => {
+            setShowSynthesized((v) => !v);
+            if (!showSynthesized) loadSynthesizedRules();
+          }}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-800/40 transition"
+        >
+          <div className="flex items-center gap-2">
+            <BrainCircuit className="w-4 h-4 text-amber-400" />
+            <span className="text-sm font-semibold text-white">Auto-Proposed Rules</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-medium">Self-Healing</span>
+            {synthesizedRules.length > 0 && (
+              <span className="rounded-full bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 text-xs text-amber-300 font-semibold">
+                {synthesizedRules.length} pending
+              </span>
+            )}
+          </div>
+          <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${showSynthesized ? 'rotate-90' : ''}`} />
+        </button>
+
+        {showSynthesized && (
+          <div className="border-t border-amber-500/10 p-5 space-y-4">
+            <p className="text-sm text-slate-400">
+              When an agent action is denied 3 or more times for the same reason, the self-healing engine synthesizes a policy proposal. Review and accept or dismiss each one.
+            </p>
+
+            {synthesizedLoading ? (
+              <div className="flex items-center gap-2 text-sm text-slate-400 py-4">
+                <RefreshCw className="w-4 h-4 animate-spin" /> Loading proposals…
+              </div>
+            ) : synthesizedRules.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-amber-500/20 bg-slate-950/20 px-4 py-6 text-center">
+                <BrainCircuit className="w-6 h-6 text-amber-400/40 mx-auto mb-2" />
+                <p className="text-sm text-slate-400">No pending rule proposals.</p>
+                <p className="text-xs text-slate-500 mt-1">The engine will propose a rule after 3 consecutive denials of the same action.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {synthesizedRules.map((rule) => (
+                  <div key={rule.id} className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold text-white">{rule.service}:{rule.action}</span>
+                          <span className="text-[11px] px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300">
+                            {rule.denial_count} denials
+                          </span>
+                        </div>
+                        {rule.synthesis_summary && (
+                          <p className="mt-1 text-xs text-slate-400 leading-relaxed">{rule.synthesis_summary}</p>
+                        )}
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          Proposed {new Date(rule.created_at).toLocaleDateString()} · Agent: {rule.agent_id?.slice(0, 8)}…
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => acceptSynthesizedRule(rule)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 text-xs font-semibold transition-colors"
+                        >
+                          <CheckCheck className="w-3.5 h-3.5" />
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => dismissSynthesizedRule(rule.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800/40 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 text-xs font-semibold transition-colors"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Template Gallery */}
       <div className="rounded-xl border border-slate-700 bg-slate-800/20 overflow-hidden">

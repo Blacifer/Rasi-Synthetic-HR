@@ -9,6 +9,7 @@ import { api } from '../../lib/api-client';
 import { supabase } from '../../lib/supabase-client';
 import { USD_TO_INR } from '../../lib/currency';
 import { getFrontendConfig } from '../../lib/config';
+import { FALLBACK_MODELS as CANONICAL_FALLBACK, DEFAULT_MODEL_ID } from '../../lib/models';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -261,19 +262,8 @@ function InlineCalc({ model, allModels, onClose }: { model: Model; allModels: Mo
 }
 
 // ─── Fallback model list ──────────────────────────────────────────────────────
-
-const FALLBACK_MODELS: LiveModel[] = [
-  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'openai', context_length: 128000, pricing: { prompt: '0.00000015', completion: '0.0000006' } },
-  { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'openai', context_length: 128000, pricing: { prompt: '0.000005', completion: '0.000015' } },
-  { id: 'anthropic/claude-3-5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'anthropic', context_length: 200000, pricing: { prompt: '0.000003', completion: '0.000015' } },
-  { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', provider: 'anthropic', context_length: 200000, pricing: { prompt: '0.00000025', completion: '0.00000125' } },
-  { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', provider: 'google', context_length: 1048576, pricing: { prompt: '0.0000001', completion: '0.0000004' } },
-  { id: 'google/gemini-1.5-pro', name: 'Gemini 1.5 Pro', provider: 'google', context_length: 1048576, pricing: { prompt: '0.00000125', completion: '0.000005' } },
-  { id: 'meta-llama/llama-3.1-70b-instruct', name: 'Llama 3.1 70B', provider: 'meta-llama', context_length: 128000, pricing: { prompt: '0.00000008', completion: '0.00000008' } },
-  { id: 'mistralai/mistral-large', name: 'Mistral Large', provider: 'mistralai', context_length: 128000, pricing: { prompt: '0.000002', completion: '0.000006' } },
-  { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1', provider: 'deepseek', context_length: 65536, pricing: { prompt: '0', completion: '0' } },
-  { id: 'x-ai/grok-2-1212', name: 'Grok 2', provider: 'x-ai', context_length: 131072, pricing: { prompt: '0.000002', completion: '0.000010' } },
-];
+// Sourced from lib/models.ts — single source of truth across all pages
+const FALLBACK_MODELS: LiveModel[] = CANONICAL_FALLBACK;
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
@@ -297,7 +287,7 @@ export default function PricingPage({ onNavigate }: { onNavigate?: (page: string
   const [calcModel, setCalcModel] = useState<Model | null>(null);
 
   // Calculator tab state
-  const [calcSelectedId, setCalcSelectedId] = useState('openai/gpt-4o-mini');
+  const [calcSelectedId, setCalcSelectedId] = useState(DEFAULT_MODEL_ID);
   const [calcReq, setCalcReq] = useState(10000);
   const [msgLength, setMsgLength] = useState<MsgLength>('medium');
   const [replyLength, setReplyLength] = useState<ReplyLength>('standard');

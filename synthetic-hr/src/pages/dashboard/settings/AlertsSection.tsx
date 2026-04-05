@@ -1,5 +1,6 @@
-import { AlertTriangle, Bell, Check, CheckCircle2, ExternalLink, Mail, Phone, RefreshCw, Save, Send, Slack, Webhook } from 'lucide-react';
+import { AlertTriangle, Bell, Check, CheckCircle2, ExternalLink, Mail, Phone, RefreshCw, Save, Send, Webhook } from 'lucide-react';
 import type { NotificationRule, ReconciliationAlertConfigState, SeverityRoutingState } from './types';
+import { AlertChannelsManager } from './AlertChannelsManager';
 
 export function AlertsSection({
   slackWebhook,
@@ -52,6 +53,8 @@ export function AlertsSection({
         <h2 className="text-xl font-bold text-white mb-1">Alerts</h2>
         <p className="text-slate-400 text-sm">Decide who gets interrupted, what goes where, and how noisy the workspace should be.</p>
       </div>
+
+      <AlertChannelsManager />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
@@ -182,7 +185,7 @@ export function AlertsSection({
           </div>
           {slackWebhook && <p className="text-xs text-emerald-400 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Slack webhook configured</p>}
           <p className="text-xs text-slate-500 border-t border-slate-800 pt-3">
-            <Slack className="w-3 h-3 inline mr-1 text-[#4A154B]" />
+            <span className="mr-1">💬</span>
             <strong className="text-slate-400">Incident &amp; approval alerts via Slack bot:</strong> Connect your Slack workspace in{' '}
             <button className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2" onClick={() => (window as any).__rasNavigate?.('apps')}>Apps → Slack</button>
             {' '}to enable rich Block Kit notifications. Set the <code className="text-slate-400">alert_channel_id</code> credential to specify the alerts channel.

@@ -69,7 +69,7 @@ interface FineTuneJob {
   readinessScore: number;
   issues: string[];
   fileName: string;
-  providerState: 'staged_local' | 'openai_submitted';
+  providerState: 'staged_local' | 'openai_submitted' | 'anthropic_submitted';
   providerJobId?: string;
   validationExamples: number;
   providerStatusText?: string;
@@ -84,9 +84,9 @@ const BASE_MODELS = [
   { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'OpenAI', tier: 'Highest Quality', inputUsdPerMillion: 3.75, outputUsdPerMillion: 15, liveProviderSupported: true },
   { id: 'openai/gpt-4.1-mini', name: 'GPT-4.1 Mini', provider: 'OpenAI', tier: 'Fast Iteration', inputUsdPerMillion: 0.4, outputUsdPerMillion: 1.6, liveProviderSupported: false },
   { id: 'openai/gpt-4.1', name: 'GPT-4.1', provider: 'OpenAI', tier: 'Reasoning Heavy', inputUsdPerMillion: 2, outputUsdPerMillion: 8, liveProviderSupported: false },
-  // ── Anthropic (dataset prep + cost estimate; live submission coming soon) ─
-  { id: 'anthropic/claude-3-5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'Anthropic', tier: 'Strong Writing', inputUsdPerMillion: 3, outputUsdPerMillion: 15, liveProviderSupported: false },
-  { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', provider: 'Anthropic', tier: 'Low Latency', inputUsdPerMillion: 0.25, outputUsdPerMillion: 1.25, liveProviderSupported: false },
+  // ── Anthropic (live fine-tuning supported via Files API + fine-tuning API) ─
+  { id: 'anthropic/claude-3-5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'Anthropic', tier: 'Strong Writing', inputUsdPerMillion: 3, outputUsdPerMillion: 15, liveProviderSupported: true },
+  { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', provider: 'Anthropic', tier: 'Low Latency', inputUsdPerMillion: 0.25, outputUsdPerMillion: 1.25, liveProviderSupported: true },
   // ── Google (dataset prep + cost estimate; live submission coming soon) ────
   { id: 'google/gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'Google', tier: 'Cost Efficient', inputUsdPerMillion: 0.35, outputUsdPerMillion: 0.7, liveProviderSupported: false },
   // ── Open Source (dataset prep + export only) ──────────────────────────────
@@ -471,8 +471,8 @@ export default function ModelFineTuningPage() {
   const queuedJobsKey = useMemo(
     () =>
       jobs
-        .filter(j => j.providerState === 'openai_submitted' && j.providerJobId && !['provider_succeeded', 'provider_failed'].includes(j.status))
-        .map(j => j.providerJobId!)
+        .filter(j => (j.providerState === 'openai_submitted' || j.providerState === 'anthropic_submitted') && j.providerJobId && !['provider_succeeded', 'provider_failed'].includes(j.status))
+        .map(j => `${j.providerState}:${j.providerJobId!}`)
         .sort()
         .join(','),
     [jobs],
@@ -480,12 +480,15 @@ export default function ModelFineTuningPage() {
 
   useEffect(() => {
     if (!queuedJobsKey) return;
-    const providerJobIds = queuedJobsKey.split(',');
+    const entries = queuedJobsKey.split(',').map(e => {
+      const [state, ...rest] = e.split(':');
+      return { state, id: rest.join(':') };
+    });
 
     const interval = window.setInterval(async () => {
-      // Fetching each job's status causes the backend to sync the DB row;
-      // then we refetch to pick up the updated state from DB.
-      await Promise.allSettled(providerJobIds.map(id => api.fineTunes.getOpenAIJobStatus(id)));
+      // Poll only OpenAI jobs (Anthropic status API not yet available via our wrapper)
+      const openaiIds = entries.filter(e => e.state === 'openai_submitted').map(e => e.id);
+      await Promise.allSettled(openaiIds.map(id => api.fineTunes.getOpenAIJobStatus(id)));
       void refetch();
     }, 15000);
 
@@ -627,19 +630,44 @@ export default function ModelFineTuningPage() {
 
         if (!response.success || !response.data) {
           toast.error(response.error || 'OpenAI fine-tune creation failed');
-          // If staging succeeded, it's already in DB as 'ready'; otherwise create it now as a fallback
           if (!stagedId) await createStagedJob.mutateAsync(stagedJobData).catch(() => null);
         } else {
           const createdJob = response.data;
           if (stagedId) markJobSubmitted(stagedId, createdJob.id);
           toast.success('OpenAI fine-tune job created and queued');
         }
+      } else if (dataset.providerEstimate.liveProviderSupported && dataset.issues.length === 0 && effectiveModelId.startsWith('anthropic/')) {
+        // Anthropic fine-tuning — same JSONL format, different endpoint
+        let stagedId: string | undefined;
+        try {
+          const stageRes = await createStagedJob.mutateAsync(stagedJobData);
+          stagedId = stageRes.data?.id;
+        } catch {
+          // Non-fatal
+        }
+
+        const response = await api.fineTunes.createAnthropicJob({
+          name: newFineTune.name.trim(),
+          baseModel: effectiveModelId,
+          epochs: newFineTune.epochs,
+          trainingRecords: dataset.trainRecords,
+          validationRecords: dataset.validationRecords,
+          stagedJobId: stagedId,
+        });
+
+        if (!response.success || !response.data) {
+          toast.error(response.error || 'Anthropic fine-tune creation failed');
+          if (!stagedId) await createStagedJob.mutateAsync(stagedJobData).catch(() => null);
+        } else {
+          if (stagedId) markJobSubmitted(stagedId, response.data.id);
+          toast.success('Anthropic fine-tune job created and queued');
+        }
       } else {
         await createStagedJob.mutateAsync(stagedJobData);
         toast.success(
           dataset.providerEstimate.liveProviderSupported
             ? 'Job staged with warnings. Fix dataset issues before provider training.'
-            : 'Job staged locally. Live provider fine-tuning is not wired for this model yet.'
+            : 'Job staged locally. Live provider fine-tuning is not available for this model yet.'
         );
       }
 
@@ -662,7 +690,7 @@ export default function ModelFineTuningPage() {
           <div className="max-w-3xl">
             <h1 className="text-4xl font-extrabold text-white">Model Fine-tuning Studio</h1>
             <p className="text-slate-300 mt-3 text-lg leading-relaxed">
-              Validate your dataset, inspect samples, split train and validation cleanly, and submit directly to OpenAI when the dataset is ready. Anthropic and Google fine-tuning — prepare your dataset now, submit when provider APIs go live.
+              Validate your dataset, inspect samples, split train and validation cleanly, and submit directly to OpenAI or Anthropic when the dataset is ready. Google, Meta, and Mistral fine-tuning — prepare your dataset now, submit when provider APIs go live.
             </p>
             <p className="text-slate-500 mt-2 text-sm">
               Jobs are saved to your account. Export your JSONL files to preserve training data across devices.
@@ -870,8 +898,10 @@ export default function ModelFineTuningPage() {
               className="w-full bg-gradient-to-r from-fuchsia-500 to-violet-500 hover:from-fuchsia-400 hover:to-violet-400 disabled:from-slate-700 disabled:to-slate-700 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
             >
               <Brain className="w-4 h-4" />
-              {isSubmitting ? 'Submitting...' : dataset?.providerEstimate.liveProviderSupported && dataset.issues.length === 0 && newFineTune.baseModel.startsWith('openai/')
-                ? 'Create OpenAI Fine-tune'
+              {isSubmitting ? 'Submitting...' : dataset?.providerEstimate.liveProviderSupported && dataset.issues.length === 0
+                ? newFineTune.baseModel.startsWith('anthropic/')
+                  ? 'Create Anthropic Fine-tune'
+                  : 'Create OpenAI Fine-tune'
                 : 'Stage Fine-tune Job'}
             </button>
           </div>
@@ -1072,7 +1102,11 @@ export default function ModelFineTuningPage() {
                   </div>
                   <div>
                     <p className="text-xs text-slate-400">Provider State</p>
-                    <p className="text-sm text-slate-300 font-medium">{job.providerState === 'openai_submitted' ? 'OpenAI submitted' : 'Local staged'}</p>
+                    <p className="text-sm text-slate-300 font-medium">
+                      {job.providerState === 'openai_submitted' ? 'OpenAI submitted'
+                        : job.providerState === 'anthropic_submitted' ? 'Anthropic submitted'
+                        : 'Local staged'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-400">Status Detail</p>

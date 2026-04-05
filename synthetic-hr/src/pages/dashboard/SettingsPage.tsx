@@ -75,6 +75,8 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
     profileImage,
     orgName,
     setOrgName,
+    providerDisplayName,
+    setProviderDisplayName,
     dataRetention,
     setDataRetention,
     savingOrg,
@@ -266,6 +268,8 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
     <WorkspaceSection
       orgName={orgName}
       setOrgName={setOrgName}
+      providerDisplayName={providerDisplayName}
+      setProviderDisplayName={setProviderDisplayName}
       workspaceTimezone={workspaceTimezone}
       setWorkspaceTimezone={setWorkspaceTimezone}
       defaultResponseStyle={defaultResponseStyle}

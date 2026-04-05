@@ -4,6 +4,7 @@ import conversationsRouter from './conversations';
 import incidentsRouter from './incidents';
 import dashboardRouter from './dashboard';
 import batchesRouter from './batches';
+import alertChannelsRouter from './alert-channels';
 
 const router = express.Router();
 
@@ -13,5 +14,6 @@ router.use(conversationsRouter);
 router.use(incidentsRouter);
 router.use(dashboardRouter);
 router.use(batchesRouter);
+router.use(alertChannelsRouter);
 
 export default router;
