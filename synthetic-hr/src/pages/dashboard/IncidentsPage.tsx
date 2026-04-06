@@ -85,8 +85,21 @@ const SOURCE_STYLES: Record<IncidentSource, string> = {
   audit_rule: 'border-slate-600 bg-slate-800/80 text-slate-300',
 };
 
+const FRIENDLY_INCIDENT_LABELS: Record<string, string> = {
+  pii_leak: "PII Exposure Prevented",
+  data_extraction_attempt: "Data Privacy Threat Blocked",
+  prompt_injection: "Data Privacy Threat Blocked",
+  refund_abuse: "Policy Violation Blocked",
+  toxic_output: "Harmful Content Blocked",
+  hallucination: "Accuracy Alert",
+  legal_advice: "Legal Risk Flagged",
+  angry_user: "Escalation Required",
+  policy_violation: "Policy Violation Blocked",
+  audit_rule: "Audit Rule Triggered",
+};
+
 function normalizeLabel(value: string) {
-  return value.replace(/_/g, ' ');
+  return FRIENDLY_INCIDENT_LABELS[value] ?? value.replace(/_/g, ' ');
 }
 
 function detectIncident(content: string): { detected: boolean; incidentType: IncidentType; severity: IncidentSeverity; details: string } {

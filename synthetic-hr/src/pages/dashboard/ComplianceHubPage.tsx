@@ -145,7 +145,7 @@ export default function ComplianceHubPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Compliance Hub</h1>
+          <h1 className="text-2xl font-bold text-white">Compliance Workspace</h1>
           <p className="text-sm text-slate-400 mt-1">Regulatory deadlines, posture scoring &amp; evidence collection</p>
         </div>
         <div className="flex items-center gap-2">

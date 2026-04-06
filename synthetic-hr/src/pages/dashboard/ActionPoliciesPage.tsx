@@ -1174,8 +1174,8 @@ export default function ActionPoliciesPage() {
         >
           <div className="flex items-center gap-2">
             <Code2 className="w-4 h-4 text-violet-400" />
-            <span className="text-sm font-semibold text-white">Policy-as-Code (YAML Editor)</span>
-            <span className="text-xs text-slate-500">Define policies using YAML with boolean logic, regex, and thresholds</span>
+            <span className="text-sm font-semibold text-white">Advanced</span>
+            <span className="text-xs text-slate-500">Expert mode — define policies with YAML, regex, and thresholds</span>
           </div>
           <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${editorMode === 'yaml' ? 'rotate-90' : ''}`} />
         </button>

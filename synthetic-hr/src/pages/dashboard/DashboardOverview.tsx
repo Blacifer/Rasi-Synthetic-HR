@@ -14,7 +14,7 @@ import {
   Siren,
   Sparkles,
   TrendingUp,
-  Users,
+
   X,
   XCircle,
   Zap,
@@ -340,37 +340,46 @@ const hasData = agents.length > 0;
   }, [agents, costData, incidents]);
 
   if (!hasData) {
+    const steps = [
+      { num: 1, label: 'Connect your first App', sub: 'Link Slack, Zendesk, or any integration', action: () => onNavigate?.('apps') },
+      { num: 2, label: 'Create your first Agent', sub: 'Pick a template or start from scratch', action: () => onAddAgent() },
+      { num: 3, label: 'Set your first Safety Rule', sub: 'Control what your agent can and cannot do', action: () => onNavigate?.('action-policies') },
+    ];
     return (
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold text-white">Overview</h1>
-          <p className="mt-2 text-slate-400">Your command center becomes useful after the first agent is connected and one tracked request has been observed.</p>
+          <h1 className="text-3xl font-bold text-white">Welcome to Rasi</h1>
+          <p className="mt-2 text-slate-400">Three steps to get your first AI agent running safely.</p>
         </div>
 
-        <div className="rounded-[28px] border border-white/10 bg-white/[0.04] backdrop-blur-xl p-12 text-center shadow-[0_18px_60px_rgba(2,6,23,0.25)]">
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-white/10 bg-black/20">
-            <Users className="h-10 w-10 text-slate-500" />
-          </div>
-          <h2 className="mb-4 text-2xl font-bold text-white">No governed agents yet</h2>
-          <p className="mx-auto mb-8 max-w-md text-slate-400">
-            Start guided setup to connect one agent, connect one app, run one safe test, and unlock live risk, spend, reliability, and incident telemetry.
-          </p>
-          <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <div className="rounded-[28px] border border-white/10 bg-white/[0.04] backdrop-blur-xl p-8 shadow-[0_18px_60px_rgba(2,6,23,0.25)] space-y-3">
+          {steps.map((step) => (
             <button
-              onClick={() => onNavigate?.('getting-started')}
-              className="btn-primary"
+              key={step.num}
+              onClick={step.action}
+              className="w-full flex items-center gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-5 py-4 text-left hover:bg-white/[0.07] hover:border-cyan-500/20 transition-all group"
             >
-              <Sparkles className="h-5 w-5" />
-              Start guided setup
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-sm font-bold text-cyan-300">
+                {step.num}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">{step.label}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{step.sub}</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-slate-600 group-hover:text-cyan-400 transition-colors shrink-0" />
             </button>
-            <button
-              onClick={onAddAgent}
-              className="btn-secondary"
-            >
-              <Bot className="h-5 w-5" />
-              Add your first agent
-            </button>
-          </div>
+          ))}
+        </div>
+
+        <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <button onClick={() => onNavigate?.('getting-started')} className="btn-primary">
+            <Sparkles className="h-5 w-5" />
+            Start guided setup
+          </button>
+          <button onClick={onAddAgent} className="btn-secondary">
+            <Bot className="h-5 w-5" />
+            Add your first agent
+          </button>
         </div>
       </div>
     );
@@ -1438,19 +1447,48 @@ const hasData = agents.length > 0;
         </section>
       </div>
 
-      {severeIncidents.length > 0 ? (
-        <section className="rounded-[28px] border border-rose-500/20 bg-rose-500/10 p-5">
-          <div className="flex items-start gap-3">
-            <ShieldAlert className="mt-0.5 h-5 w-5 text-rose-300" />
-            <div>
-              <p className="font-semibold text-rose-200">Escalation notice</p>
-              <p className="mt-1 text-sm leading-6 text-rose-100/80">
-                High-severity incidents are still open. The overview is intentionally surfacing real risk instead of smoothing it away with cosmetic “healthy” states.
-              </p>
+      {severeIncidents.length > 0 && (
+        <section className="rounded-[28px] border border-rose-500/20 bg-rose-500/10 p-5 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="mt-0.5 h-5 w-5 text-rose-300 shrink-0" />
+              <div>
+                <p className="font-semibold text-rose-200">Privacy &amp; Security Alerts</p>
+                <p className="mt-0.5 text-sm text-rose-100/80">
+                  {severeIncidents.length} high-severity {severeIncidents.length === 1 ? 'threat requires' : 'threats require'} your attention.
+                </p>
+              </div>
             </div>
+            <button
+              onClick={() => onNavigate?.('incidents')}
+              className="shrink-0 flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-200 hover:bg-rose-500/20 transition-colors"
+            >
+              View All
+              <ArrowRight className="h-3 w-3" />
+            </button>
+          </div>
+          <div className="space-y-2">
+            {severeIncidents.slice(0, 3).map((incident) => (
+              <div key={incident.id} className="flex items-center justify-between gap-3 rounded-xl border border-rose-500/10 bg-rose-500/5 px-4 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-rose-100 truncate">{incident.title || incident.incident_type || 'Security Alert'}</p>
+                  <p className="text-[11px] text-rose-300/70 capitalize">{incident.severity} severity - {incident.agent_name || 'Unknown agent'}</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    await api.incidents.updateMeta(incident.id, { status: 'acknowledged' });
+                    onNavigate?.('incidents');
+                  }}
+                  className="shrink-0 flex items-center gap-1 rounded-lg border border-rose-500/20 bg-rose-500/10 px-2.5 py-1 text-[11px] font-semibold text-rose-200 hover:bg-rose-500/20 transition-colors"
+                >
+                  <CheckCircle2 className="h-3 w-3" />
+                  Acknowledge
+                </button>
+              </div>
+            ))}
           </div>
         </section>
-      ) : null}
+      )}
     </div>
   );
 }

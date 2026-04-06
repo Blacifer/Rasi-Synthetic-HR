@@ -127,7 +127,7 @@ export default function ITHubPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">IT Hub</h1>
+          <h1 className="text-2xl font-bold text-white">IT Workspace</h1>
           <p className="text-sm text-slate-400 mt-1">Policy-driven access requests with AI risk evaluation and auto-approval.</p>
         </div>
         <button onClick={() => void load()} disabled={busy} className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm border border-slate-700 inline-flex items-center gap-2 disabled:opacity-60">

@@ -58,17 +58,22 @@ const CORE_ITEMS: NavItem[] = [
 
 const GROUPS: NavGroup[] = [
   {
-    label: 'Advanced',
+    label: 'Platform',
     items: [
       { id: 'templates', icon: Zap, label: 'Templates' },
       { id: 'agent-library', icon: Bot, label: 'Agent Library' },
       { id: 'playbooks', icon: FileText, label: 'Playbooks' },
-      { id: 'action-policies', icon: Shield, label: 'Action Policies' },
+      { id: 'action-policies', icon: Shield, label: 'Safety Rules' },
       { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
       { id: 'costs', icon: DollarSign, label: 'Costs' },
       { id: 'governed-actions', icon: Shield, label: 'Governed Actions' },
-      { id: 'approvals', icon: CheckSquare, label: 'Approvals' },
+      { id: 'approvals', icon: CheckSquare, label: 'HR Inbox' },
       { id: 'audit-log', icon: ScrollText, label: 'Audit Log' },
+    ],
+  },
+  {
+    label: 'Developer Tools',
+    items: [
       { id: 'api-access', icon: Key, label: 'API Access' },
       { id: 'developer', icon: PlugZap, label: 'Developer' },
       { id: 'jobs', icon: ClipboardList, label: 'Run History' },
