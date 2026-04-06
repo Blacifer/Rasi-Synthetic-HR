@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   MessageSquare, Search, Filter, Bot, User, Clock,
   CheckCircle, AlertTriangle, Eye, Download, X, Loader2,
-  Activity, Cpu, Wrench, ShieldCheck
+  Activity, Cpu, Wrench, ShieldCheck, ThumbsUp, ThumbsDown
 } from 'lucide-react';
 import type { AIAgent } from '../../types';
 import { api } from '../../lib/api-client';
@@ -150,6 +150,8 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
   const [detailTab, setDetailTab] = useState<'transcript' | 'trace'>('transcript');
   const [traces, setTraces] = useState<ReasoningTrace[]>([]);
   const [tracesLoading, setTracesLoading] = useState(false);
+  const [conversationRating, setConversationRating] = useState<1 | -1 | null>(null);
+  const [ratingSubmitting, setRatingSubmitting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -267,6 +269,7 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
     setConversationCache((current) => ({ ...current, [detail.id]: detail }));
     setConversationList((current) => current.map((conversation) => conversation.id === detail.id ? detail : conversation));
     setSelectedConversation(detail);
+    setConversationRating((response.data as any)?.rating ?? null);
   }, [agents, conversationCache]);
 
   useEffect(() => {
@@ -281,6 +284,20 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
     setSelectedConversation(null);
     setDetailTab('transcript');
     setTraces([]);
+    setConversationRating(null);
+  };
+
+  const handleRate = async (rating: 1 | -1) => {
+    if (!selectedConversation || ratingSubmitting) return;
+    setRatingSubmitting(true);
+    const response = await api.conversations.rate(selectedConversation.id, rating);
+    setRatingSubmitting(false);
+    if (response.success) {
+      setConversationRating(rating);
+      toast.success(rating === 1 ? 'Thanks for the positive feedback!' : 'Thanks for your feedback.');
+    } else {
+      toast.error('Could not save rating.');
+    }
   };
 
   const handleTabChange = async (tab: 'transcript' | 'trace') => {
@@ -611,6 +628,29 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
                         </div>
                       ))
                     )}
+                  </div>
+
+                  {/* Rate this conversation */}
+                  <div className="mt-4 pt-4 border-t border-slate-700/50 flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Was this conversation helpful?</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleRate(1)}
+                        disabled={ratingSubmitting}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${conversationRating === 1 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-emerald-500/40 hover:text-emerald-400'}`}
+                      >
+                        <ThumbsUp className="w-3.5 h-3.5" />
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => handleRate(-1)}
+                        disabled={ratingSubmitting}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${conversationRating === -1 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-rose-500/40 hover:text-rose-400'}`}
+                      >
+                        <ThumbsDown className="w-3.5 h-3.5" />
+                        No
+                      </button>
+                    </div>
                   </div>
                 </>
               ) : (

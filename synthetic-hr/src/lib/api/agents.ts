@@ -314,4 +314,28 @@ export const conversationApi = {
       method: 'GET',
     });
   },
+
+  /**
+   * Rate a conversation (thumbs up = 1, thumbs down = -1)
+   */
+  async rate(id: string, rating: 1 | -1, feedback_text?: string): Promise<ApiResponse<any>> {
+    return authenticatedFetch<any>(`/conversations/${id}/rate`, {
+      method: 'POST',
+      body: JSON.stringify({ rating, feedback_text }),
+    });
+  },
+
+  /**
+   * Get CSAT summary (aggregate thumbs up/down counts)
+   */
+  async csatSummary(): Promise<ApiResponse<{ total_rated: number; thumbs_up: number; thumbs_down: number; satisfaction_pct: number | null }>> {
+    return authenticatedFetch('/conversations/csat-summary', { method: 'GET' });
+  },
+
+  /**
+   * Get trending topics (top keywords from recent user messages)
+   */
+  async trendingTopics(): Promise<ApiResponse<{ topics: Array<{ word: string; count: number }> }>> {
+    return authenticatedFetch('/analytics/trending-topics', { method: 'GET' });
+  },
 };

@@ -14,7 +14,8 @@ import {
   Siren,
   Sparkles,
   TrendingUp,
-
+  ThumbsUp,
+  ThumbsDown,
   X,
   XCircle,
   Zap,
@@ -268,6 +269,8 @@ export default function DashboardOverview({
   // ROI widgets — caching savings + auto-healing interventions
   const [cachingSavingsUsd, setCachingSavingsUsd] = useState<number>(0);
   const [automationRulesTotal, setAutomationRulesTotal] = useState<number>(0);
+  const [csatData, setCsatData] = useState<{ total_rated: number; thumbs_up: number; thumbs_down: number; satisfaction_pct: number | null } | null>(null);
+  const [trendingTopics, setTrendingTopics] = useState<Array<{ word: string; count: number }>>([]);
 
   useEffect(() => {
     // Widget 1: cost avoided via semantic caching
@@ -285,6 +288,15 @@ export default function DashboardOverview({
       const n = (Array.isArray(proposed.data) ? proposed.data.length : 0)
               + (Array.isArray(accepted.data) ? accepted.data.length : 0);
       setAutomationRulesTotal(n);
+    }).catch(() => {});
+
+    // CSAT + trending topics
+    api.conversations.csatSummary().then((res) => {
+      if (res.success && res.data) setCsatData(res.data);
+    }).catch(() => {});
+
+    api.conversations.trendingTopics().then((res) => {
+      if (res.success && res.data?.topics) setTrendingTopics(res.data.topics);
     }).catch(() => {});
   }, []);
 
@@ -1104,7 +1116,7 @@ const hasData = agents.length > 0;
       )}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+        <section className="card-surface rounded-[28px] p-6 shadow-[0_10px_40px_rgba(2,6,23,0.25)]">
           <div className="flex items-center gap-2">
             <Siren className="h-4 w-4 text-blue-300 shrink-0" />
             <h2 className="text-base font-semibold text-white">Action Queue</h2>
@@ -1140,7 +1152,7 @@ const hasData = agents.length > 0;
           </div>
         </section>
 
-        <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+        <section className="card-surface rounded-[28px] p-6 shadow-[0_10px_40px_rgba(2,6,23,0.25)]">
           <div className="flex items-center gap-2">
             <Activity className="h-4 w-4 text-blue-300 shrink-0" />
             <h2 className="text-base font-semibold text-white">Reliability</h2>
@@ -1168,7 +1180,7 @@ const hasData = agents.length > 0;
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+        <section className="card-surface rounded-[28px] p-6 shadow-[0_10px_40px_rgba(2,6,23,0.25)]">
           <div className="flex items-center gap-2">
             <Layers3 className="h-4 w-4 text-blue-300 shrink-0" />
             <h2 className="text-base font-semibold text-white">Recent Activity</h2>
@@ -1213,7 +1225,7 @@ const hasData = agents.length > 0;
           </div>
         </section>
 
-        <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+        <section className="card-surface rounded-[28px] p-6 shadow-[0_10px_40px_rgba(2,6,23,0.25)]">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-blue-300 shrink-0" />
             <h2 className="text-base font-semibold text-white">Coverage Snapshot</h2>
@@ -1284,7 +1296,7 @@ const hasData = agents.length > 0;
 
       {/* Team Activity Feed */}
       {teamActivity.length > 0 && (
-        <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+        <section className="card-surface rounded-[28px] p-6 shadow-[0_10px_40px_rgba(2,6,23,0.25)]">
           <div className="flex items-center gap-2 mb-4">
             <UserCheck className="h-4 w-4 text-blue-300 shrink-0" />
             <h2 className="text-base font-semibold text-white">Team Activity</h2>
@@ -1317,7 +1329,7 @@ const hasData = agents.length > 0;
 
       {/* App Health widget */}
       {telemetry && telemetry.integrations.total > 0 ? (
-        <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+        <section className="card-surface rounded-[28px] p-6 shadow-[0_10px_40px_rgba(2,6,23,0.25)]">
           <div className="flex items-center justify-between gap-4 mb-5">
             <div>
               <SectionEyebrow label="Integration health" />
@@ -1372,7 +1384,7 @@ const hasData = agents.length > 0;
       ) : null}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+        <section className="card-surface rounded-[28px] p-6 shadow-[0_10px_40px_rgba(2,6,23,0.25)]">
           <div className="flex items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
@@ -1407,7 +1419,7 @@ const hasData = agents.length > 0;
           </div>
         </section>
 
-        <section className="rounded-[28px] border border-slate-800/90 bg-slate-900/50 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+        <section className="card-surface rounded-[28px] p-6 shadow-[0_10px_40px_rgba(2,6,23,0.25)]">
           <div className="flex items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
@@ -1489,6 +1501,71 @@ const hasData = agents.length > 0;
           </div>
         </section>
       )}
+
+      {/* CSAT + Trending Topics row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        {/* Employee Satisfaction (CSAT) */}
+        <section className="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingUp className="h-5 w-5 text-emerald-400" />
+            <h2 className="text-sm font-bold text-white tracking-wide uppercase">Employee Satisfaction</h2>
+          </div>
+          {csatData === null ? (
+            <div className="h-16 flex items-center justify-center">
+              <div className="w-5 h-5 rounded-full border-2 border-slate-600 border-t-emerald-400 animate-spin" />
+            </div>
+          ) : csatData.total_rated === 0 ? (
+            <p className="text-sm text-slate-400">No ratings yet. Employees can rate conversations after each session.</p>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-400">Based on {csatData.total_rated} rated conversation{csatData.total_rated !== 1 ? 's' : ''}</p>
+              <div className="flex items-center gap-3">
+                <span className="text-3xl font-bold text-white">{csatData.satisfaction_pct}%</span>
+                <span className="text-sm text-emerald-400 font-medium">Positive</span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-slate-700 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all"
+                  style={{ width: `${csatData.satisfaction_pct ?? 0}%` }}
+                />
+              </div>
+              <div className="flex items-center gap-4 text-xs text-slate-400">
+                <span className="flex items-center gap-1"><ThumbsUp className="w-3.5 h-3.5 text-emerald-400" /> {csatData.thumbs_up} positive</span>
+                <span className="flex items-center gap-1"><ThumbsDown className="w-3.5 h-3.5 text-rose-400" /> {csatData.thumbs_down} needs improvement</span>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Trending Topics */}
+        <section className="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="h-5 w-5 text-cyan-400" />
+            <h2 className="text-sm font-bold text-white tracking-wide uppercase">Trending Topics</h2>
+          </div>
+          {trendingTopics.length === 0 ? (
+            <p className="text-sm text-slate-400">No conversation data yet. Topics will appear once employees start chatting.</p>
+          ) : (
+            <>
+              <p className="text-xs text-slate-400 mb-3">What employees are asking about</p>
+              <div className="flex flex-wrap gap-2">
+                {trendingTopics.map(({ word, count }) => (
+                  <button
+                    key={word}
+                    onClick={() => onNavigate?.('conversations')}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-slate-700/60 border border-slate-600/50 text-xs font-medium text-slate-300 hover:border-cyan-500/40 hover:text-cyan-300 transition-colors capitalize"
+                  >
+                    {word}
+                    <span className="ml-1 text-slate-500">{count}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+
+      </div>
     </div>
   );
 }

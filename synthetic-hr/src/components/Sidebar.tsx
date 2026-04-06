@@ -107,7 +107,7 @@ function NavBtn({
         'relative flex items-center rounded-xl transition-colors duration-150 group',
         expanded ? 'w-full gap-3 px-3 py-2.5' : 'w-10 h-10 justify-center mx-auto',
         isActive
-          ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/25'
+          ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/25 shadow-[0_0_14px_rgba(34,211,238,0.12)]'
           : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.05] border border-transparent',
       )}
     >
