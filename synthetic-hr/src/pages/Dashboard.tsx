@@ -60,6 +60,7 @@ const GovernedActionsPage = lazy(() => import('./dashboard/GovernedActionsPage')
 const AuditLogPage = lazy(() => import('./dashboard/AuditLogPage'));
 const RuntimeWorkersPage = lazy(() => import('./dashboard/RuntimeWorkersPage'));
 const ModelCatalogPage = lazy(() => import('./dashboard/ModelCatalogPage'));
+const ReasoningTracesPage = lazy(() => import('./dashboard/ReasoningTracesPage'));
 
 interface DashboardProps {
   isDemoMode?: boolean;
@@ -1637,6 +1638,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="fine-tuning" element={<ModelFineTuningPage />} />
                   <Route path="caching" element={<CachingPage />} />
                   <Route path="models" element={<ModelCatalogPage />} />
+                  <Route path="traces" element={<ReasoningTracesPage agents={enrichedAgents} />} />
                   <Route path="pricing" element={<PricingPage onNavigate={navigateTo} />} />
                   <Route path="legal" element={<SafeHarborPage onNavigate={navigateTo} userRole={role} />} />
                   <Route path="*" element={<Navigate to="overview" replace />} />

@@ -494,6 +494,13 @@ export default function ActionPoliciesPage() {
   const [synthesizedRules, setSynthesizedRules] = useState<any[]>([]);
   const [showSynthesized, setShowSynthesized] = useState(false);
   const [synthesizedLoading, setSynthesizedLoading] = useState(false);
+  // OpenAPI ingestion
+  const [showOpenApi, setShowOpenApi] = useState(false);
+  const [openApiMode, setOpenApiMode] = useState<'url' | 'paste'>('url');
+  const [openApiInput, setOpenApiInput] = useState('');
+  const [openApiLoading, setOpenApiLoading] = useState(false);
+  const [openApiPreview, setOpenApiPreview] = useState<ActionPolicyRow[]>([]);
+  const [openApiChecked, setOpenApiChecked] = useState<Set<string>>(new Set());
   const [editor, setEditor] = useState<Editor>({
     service: 'internal',
     action: 'support.ticket.create',
@@ -570,6 +577,48 @@ export default function ActionPoliciesPage() {
   const dismissSynthesizedRule = async (id: string) => {
     await supabase.from('synthesized_rules').update({ status: 'dismissed' }).eq('id', id);
     setSynthesizedRules((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  const handleOpenApiAnalyze = async () => {
+    if (!openApiInput.trim()) return;
+    setOpenApiLoading(true);
+    try {
+      let payload: { source_url?: string; spec_json?: Record<string, unknown> };
+      if (openApiMode === 'url') {
+        payload = { source_url: openApiInput.trim() };
+      } else {
+        payload = { spec_json: JSON.parse(openApiInput) };
+      }
+      const res = await api.actionPolicies.ingestOpenApiSpec(payload);
+      if (!res.success) throw new Error(res.error || 'Failed to ingest spec');
+      const policies = (res.data as any)?.policies || res.data || [];
+      setOpenApiPreview(Array.isArray(policies) ? policies : []);
+      const allIds = new Set<string>((Array.isArray(policies) ? policies : []).map((p: ActionPolicyRow) => `${p.service}::${p.action}`));
+      setOpenApiChecked(allIds);
+      toast.success(`Generated ${Array.isArray(policies) ? policies.length : 0} policies from spec`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to analyze spec');
+    } finally {
+      setOpenApiLoading(false);
+    }
+  };
+
+  const handleOpenApiApplySelected = async () => {
+    const selected = openApiPreview.filter((p) => openApiChecked.has(`${p.service}::${p.action}`));
+    for (const p of selected) {
+      await api.actionPolicies.upsert({
+        service: p.service,
+        action: p.action,
+        enabled: p.enabled ?? true,
+        require_approval: p.require_approval ?? false,
+        required_role: p.required_role as any ?? 'manager',
+        notes: p.notes || 'Auto-generated from OpenAPI spec',
+      });
+    }
+    toast.success(`Applied ${selected.length} policies`);
+    setOpenApiPreview([]);
+    setOpenApiInput('');
+    load();
   };
 
   useEffect(() => {
@@ -1377,6 +1426,145 @@ export default function ActionPoliciesPage() {
             </div>
           </div>
         )}
+
+        {/* OpenAPI Spec → Auto-Policies */}
+        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/40">
+          <button
+            onClick={() => setShowOpenApi((v) => !v)}
+            className="flex w-full items-center justify-between px-6 py-4 text-left"
+          >
+            <div className="flex items-center gap-3">
+              <Code2 className="h-4 w-4 text-violet-400" />
+              <span className="text-sm font-semibold text-white">OpenAPI Spec → Auto-Policies</span>
+              <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-300">Beta</span>
+            </div>
+            <ChevronRight className={`h-4 w-4 text-slate-400 transition-transform ${showOpenApi ? 'rotate-90' : ''}`} />
+          </button>
+
+          {showOpenApi && (
+            <div className="border-t border-slate-700/60 px-6 pb-6 pt-4 space-y-4">
+              <p className="text-xs text-slate-400">Paste an OpenAPI spec URL or JSON to auto-generate governance policies for every endpoint.</p>
+
+              {/* Mode toggle */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setOpenApiMode('url')}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${openApiMode === 'url' ? 'border-violet-500/40 bg-violet-500/10 text-violet-300' : 'border-slate-700 bg-slate-800/40 text-slate-400 hover:text-slate-200'}`}
+                >
+                  URL
+                </button>
+                <button
+                  onClick={() => setOpenApiMode('paste')}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${openApiMode === 'paste' ? 'border-violet-500/40 bg-violet-500/10 text-violet-300' : 'border-slate-700 bg-slate-800/40 text-slate-400 hover:text-slate-200'}`}
+                >
+                  Paste JSON
+                </button>
+              </div>
+
+              {openApiMode === 'url' ? (
+                <input
+                  type="url"
+                  value={openApiInput}
+                  onChange={(e) => setOpenApiInput(e.target.value)}
+                  placeholder="https://api.example.com/openapi.json"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-violet-500/50 focus:outline-none"
+                />
+              ) : (
+                <textarea
+                  value={openApiInput}
+                  onChange={(e) => setOpenApiInput(e.target.value)}
+                  rows={6}
+                  placeholder='{"openapi":"3.0.0","paths":{...}}'
+                  className="w-full rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-2.5 font-mono text-xs text-white placeholder-slate-500 focus:border-violet-500/50 focus:outline-none"
+                />
+              )}
+
+              <button
+                onClick={handleOpenApiAnalyze}
+                disabled={openApiLoading || !openApiInput.trim()}
+                className="rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2 text-xs font-semibold text-violet-300 transition hover:bg-violet-500/20 disabled:opacity-40"
+              >
+                {openApiLoading ? 'Analyzing…' : 'Fetch & Analyze'}
+              </button>
+
+              {openApiPreview.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-white">{openApiPreview.length} policies generated — review before applying</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setOpenApiChecked(new Set(openApiPreview.map((p) => `${p.service}::${p.action}`)))}
+                        className="text-xs text-slate-400 hover:text-slate-200"
+                      >
+                        Select all
+                      </button>
+                      <button onClick={() => setOpenApiChecked(new Set())} className="text-xs text-slate-400 hover:text-slate-200">
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-slate-700 overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-700 bg-slate-800/60 text-left text-[10px] text-slate-400">
+                          <th className="px-3 py-2 w-8"></th>
+                          <th className="px-3 py-2">Service</th>
+                          <th className="px-3 py-2">Action</th>
+                          <th className="px-3 py-2">Approval</th>
+                          <th className="px-3 py-2">Role</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {openApiPreview.map((p) => {
+                          const key = `${p.service}::${p.action}`;
+                          return (
+                            <tr key={key} className="border-b border-slate-800 hover:bg-slate-800/30">
+                              <td className="px-3 py-2">
+                                <input
+                                  type="checkbox"
+                                  checked={openApiChecked.has(key)}
+                                  onChange={(e) => {
+                                    const next = new Set(openApiChecked);
+                                    if (e.target.checked) next.add(key); else next.delete(key);
+                                    setOpenApiChecked(next);
+                                  }}
+                                  className="accent-violet-500"
+                                />
+                              </td>
+                              <td className="px-3 py-2 text-slate-300 font-mono">{p.service}</td>
+                              <td className="px-3 py-2 text-slate-300 font-mono">{p.action}</td>
+                              <td className="px-3 py-2">
+                                {p.require_approval
+                                  ? <span className="text-amber-300">Yes</span>
+                                  : <span className="text-slate-500">No</span>}
+                              </td>
+                              <td className="px-3 py-2 text-slate-400">{p.required_role}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleOpenApiApplySelected}
+                      disabled={openApiChecked.size === 0}
+                      className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-40"
+                    >
+                      Apply Selected ({openApiChecked.size})
+                    </button>
+                    <button
+                      onClick={() => { setOpenApiPreview([]); setOpenApiInput(''); }}
+                      className="rounded-xl border border-slate-700 bg-slate-800/40 px-4 py-2 text-xs font-semibold text-slate-400 transition hover:text-slate-200"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

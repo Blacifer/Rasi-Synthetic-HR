@@ -251,6 +251,31 @@ export const agentApi = {
       body: JSON.stringify({ attackPrompt, category }),
     });
   },
+
+  async getTraces(params?: {
+    agent_id?: string;
+    model?: string;
+    from?: string;
+    to?: string;
+    min_latency?: number;
+    limit?: number;
+    offset?: number;
+    sort_by?: string;
+    sort_dir?: 'asc' | 'desc';
+  }): Promise<ApiResponse<{ traces: any[]; total: number; stats: any }>> {
+    const query = new URLSearchParams();
+    if (params?.agent_id) query.set('agent_id', params.agent_id);
+    if (params?.model) query.set('model', params.model);
+    if (params?.from) query.set('from', params.from);
+    if (params?.to) query.set('to', params.to);
+    if (params?.min_latency != null) query.set('min_latency', String(params.min_latency));
+    if (params?.limit != null) query.set('limit', String(params.limit));
+    if (params?.offset != null) query.set('offset', String(params.offset));
+    if (params?.sort_by) query.set('sort_by', params.sort_by);
+    if (params?.sort_dir) query.set('sort_dir', params.sort_dir);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return authenticatedFetch(`/traces${suffix}`, { method: 'GET' });
+  },
 };
 
 /**

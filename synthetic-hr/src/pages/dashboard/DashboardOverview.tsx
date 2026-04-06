@@ -5,6 +5,8 @@ import {
   ArrowRight,
   Bot,
   CheckCircle2,
+  Clock,
+  DollarSign,
   Layers3,
   RefreshCw,
   ShieldAlert,
@@ -18,6 +20,22 @@ import {
   Zap,
   UserCheck,
 } from 'lucide-react';
+import {
+  BarChart as RechartsBarChart,
+  Bar as RechartsBar,
+  XAxis as RechartsXAxis,
+  YAxis as RechartsYAxis,
+  Tooltip as RechartsTooltip,
+  Cell as RechartsCell,
+  ResponsiveContainer,
+} from 'recharts';
+
+const BarChart = RechartsBarChart as any;
+const Bar = RechartsBar as any;
+const HeatXAxis = RechartsXAxis as any;
+const HeatYAxis = RechartsYAxis as any;
+const HeatTooltip = RechartsTooltip as any;
+const HeatCell = RechartsCell as any;
 import type { AIAgent, Incident, CostData } from '../../types';
 import type { AuditLogEntry } from '../../lib/api/governance';
 import { USD_TO_INR } from '../../lib/currency';
@@ -247,6 +265,29 @@ export default function DashboardOverview({
     }).catch(() => {});
   }, []);
 
+  // ROI widgets — caching savings + auto-healing interventions
+  const [cachingSavingsUsd, setCachingSavingsUsd] = useState<number>(0);
+  const [automationRulesTotal, setAutomationRulesTotal] = useState<number>(0);
+
+  useEffect(() => {
+    // Widget 1: cost avoided via semantic caching
+    api.caching.getState().then((res) => {
+      if (res.success && res.data) {
+        setCachingSavingsUsd(res.data.telemetry?.stats?.estimatedSavedCostUsd ?? 0);
+      }
+    }).catch(() => {});
+
+    // Widget 2: auto-healing interventions (proposed + accepted synthesized rules)
+    Promise.all([
+      authenticatedFetch<any[]>('/rules/synthesized'),
+      authenticatedFetch<any[]>('/rules/synthesized?status=accepted'),
+    ]).then(([proposed, accepted]) => {
+      const n = (Array.isArray(proposed.data) ? proposed.data.length : 0)
+              + (Array.isArray(accepted.data) ? accepted.data.length : 0);
+      setAutomationRulesTotal(n);
+    }).catch(() => {});
+  }, []);
+
   const quotaPct = usageData && usageData.quota > 0 ? Math.round((usageData.used / usageData.quota) * 100) : 0;
   const isUnlimited = usageData?.quota === -1;
   const resetLabel = (() => {
@@ -390,6 +431,29 @@ const hasData = agents.length > 0;
     severeIncidents.length > 0 ? 'risk' :
       openIncidents.length > 0 ? 'warn' :
         'good';
+
+  // Widget 2 — time saved heuristic: 5 min per detected intervention
+  const timeSavedMinutes = automationRulesTotal * 5;
+  const timeSavedDisplay = timeSavedMinutes < 60
+    ? `${timeSavedMinutes} min`
+    : `${(timeSavedMinutes / 60).toFixed(1)}h`;
+
+  // Widget 3 — incident heatmap: group all incidents by hour of day
+  const incidentsByHour = useMemo(() => {
+    const counts = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      label: hour === 0 ? '12a' : hour < 12 ? `${hour}a` : hour === 12 ? '12p' : `${hour - 12}p`,
+      count: 0,
+    }));
+    for (const inc of incidents) {
+      try { counts[new Date(inc.created_at).getHours()].count++; } catch { /* skip malformed */ }
+    }
+    return counts;
+  }, [incidents]);
+  const heatmapPeak = incidentsByHour.reduce(
+    (a: { hour: number; label: string; count: number }, b: { hour: number; label: string; count: number }) =>
+      a.count >= b.count ? a : b
+  );
 
   // Animated counters — re-trigger on each data refresh
   const animatedIncidents = useCountUp(openIncidents.length);
@@ -867,6 +931,114 @@ const hasData = agents.length > 0;
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ── ROI / Value Visualization ────────────────────────────────────────── */}
+      <section className="space-y-4">
+        <SectionEyebrow label="Platform Value" />
+
+        {/* Widgets 1 & 2 — side by side */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+          {/* Widget 1: Cost Avoided via Caching */}
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] backdrop-blur-sm p-5 flex items-start gap-4">
+            <div className="shrink-0 w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center">
+              <DollarSign className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-500/80 font-semibold">Cost Avoided via Caching</p>
+              <p className="mt-2 text-3xl font-bold font-mono tabular-nums text-emerald-300">
+                {cachingSavingsUsd >= 1000
+                  ? `$${(cachingSavingsUsd / 1000).toFixed(1)}K`
+                  : `$${cachingSavingsUsd.toFixed(2)}`}
+              </p>
+              <p className="mt-1.5 text-sm text-emerald-400/70 leading-5">
+                Semantic cache saved this amount in model API costs
+              </p>
+            </div>
+          </div>
+
+          {/* Widget 2: Operator Time Saved */}
+          <div className="rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] backdrop-blur-sm p-5 flex items-start gap-4">
+            <div className="shrink-0 w-10 h-10 rounded-xl bg-violet-500/15 flex items-center justify-center">
+              <Clock className="w-5 h-5 text-violet-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-violet-500/80 font-semibold">Operator Time Saved</p>
+              <p className="mt-2 text-3xl font-bold font-mono tabular-nums text-violet-300">
+                {timeSavedDisplay}
+              </p>
+              <p className="mt-1.5 text-sm text-violet-400/70 leading-5">
+                {automationRulesTotal} auto-healing intervention{automationRulesTotal !== 1 ? 's' : ''} · 5 min each
+              </p>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Widget 3: Incident Heatmap */}
+        <div className="rounded-2xl border border-slate-700/60 bg-slate-950/50 backdrop-blur-sm p-5">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-semibold">Incidents by Hour of Day</p>
+            <span className="text-xs text-slate-600">{incidents.length} incident{incidents.length !== 1 ? 's' : ''} total</span>
+          </div>
+          <p className="text-xs text-slate-600 mb-4">Spot patterns — e.g. "The Finance agent fails every night at 3 AM"</p>
+
+          {incidents.length === 0 ? (
+            <p className="text-sm text-slate-600 py-4 text-center">No incidents recorded yet</p>
+          ) : (
+            <>
+              <div className="h-32">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={incidentsByHour} margin={{ top: 0, right: 0, bottom: 0, left: -24 }}>
+                    <HeatXAxis
+                      dataKey="label"
+                      tick={{ fill: '#475569', fontSize: 10 }}
+                      interval={2}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <HeatYAxis
+                      allowDecimals={false}
+                      tick={{ fill: '#475569', fontSize: 10 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <HeatTooltip
+                      cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                      contentStyle={{ background: '#0f172a', border: '1px solid rgba(100,116,139,0.3)', borderRadius: 8, fontSize: 12 }}
+                      formatter={(value: number, _: string, entry: any) => [
+                        `${value} incident${value !== 1 ? 's' : ''}`,
+                        `${entry?.payload?.hour}:00`,
+                      ]}
+                      labelFormatter={() => ''}
+                    />
+                    <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                      {incidentsByHour.map((entry: { hour: number; label: string; count: number }) => (
+                        <HeatCell
+                          key={entry.hour}
+                          fill={entry.count === 0
+                            ? 'rgba(100,116,139,0.15)'
+                            : entry.count >= heatmapPeak.count * 0.75
+                              ? '#f87171'
+                              : entry.count >= heatmapPeak.count * 0.4
+                                ? '#fb923c'
+                                : '#fbbf24'}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              {heatmapPeak.count > 0 && (
+                <p className="mt-3 text-xs text-slate-500">
+                  Peak: <span className="text-slate-300 font-semibold">{heatmapPeak.hour}:00</span>
+                  {' '}— {heatmapPeak.count} incident{heatmapPeak.count !== 1 ? 's' : ''}
+                </p>
+              )}
+            </>
+          )}
         </div>
       </section>
 

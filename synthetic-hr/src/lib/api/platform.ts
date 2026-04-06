@@ -701,4 +701,11 @@ export const actionPoliciesApi = {
   async remove(id: string): Promise<ApiResponse<{ id: string }>> {
     return authenticatedFetch(`/action-policies/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
+
+  async ingestOpenApiSpec(payload: { source_url?: string; spec_json?: Record<string, unknown> }): Promise<ApiResponse<{ policies: ActionPolicyRow[]; count: number }>> {
+    return authenticatedFetch('/openapi/ingest', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
 };

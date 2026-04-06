@@ -29,6 +29,7 @@ import workItemsRoutes from './routes/work-items';
 import playbooksRoutes, { handleShareToken, handlePublicPlaybookRun } from './routes/playbooks';
 import eventsRoutes from './routes/events';
 import slackWebhookRoutes from './routes/slack';
+import slackActionsRoutes from './routes/slack-actions';
 import marketplaceRoutes from './routes/marketplace';
 import actionPoliciesRoutes from './routes/action-policies';
 import approvalsRoutes from './routes/approvals';
@@ -36,6 +37,7 @@ import rulesRoutes from './routes/rules';
 import recruitmentRoutes from './routes/recruitment';
 import hubsRoutes from './routes/hubs';
 import trustRoutes from './routes/trust';
+import tracesRoutes from './routes/traces';
 import { initializeObservability, shutdownObservability, tracingMiddleware } from './lib/observability';
 import { validateEnvironment } from './lib/env-validation';
 import { authenticateToken, authErrorHandler, checkOrgAccess } from './middleware/auth';
@@ -269,6 +271,8 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 // Slack webhook needs the raw body Buffer for HMAC signature verification.
 // Must be registered BEFORE express.json() parses the body into an object.
 app.use('/events/slack', express.raw({ type: 'application/json', limit: '1mb' }), slackWebhookRoutes);
+// Slack interactive components (button clicks). Raw body required for HMAC verification.
+app.use('/events/slack-actions', express.raw({ type: 'application/x-www-form-urlencoded', limit: '1mb' }), slackActionsRoutes);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
@@ -440,6 +444,7 @@ app.use('/api/rules', rulesRoutes);
 app.use('/api/recruitment', recruitmentRoutes);
 app.use('/api/hubs', hubsRoutes);
 app.use('/api/trust', trustRoutes);
+app.use('/api', tracesRoutes);
 app.use('/api', escalationsRoutes);
 app.use('/api', invitesRoutes);
 if (connectorsEnabled) {

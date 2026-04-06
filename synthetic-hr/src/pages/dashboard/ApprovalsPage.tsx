@@ -4,7 +4,7 @@ import {
   CheckSquare, Clock, RefreshCw, CheckCircle2, XCircle,
   AlertCircle, Ban, ChevronDown, ChevronUp, Loader2,
   MessageSquare, BellOff, TrendingUp, Shield, ListTodo, Tag,
-  Square, CheckSquare2,
+  Square, CheckSquare2, UserCheck,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import type { ApprovalRequest } from '../../lib/api-client';
@@ -99,14 +99,22 @@ function RiskBadge({ score }: { score?: number | null }) {
   );
 }
 
-function SlaCountdown({ deadline }: { deadline?: string | null }) {
-  if (!deadline) return null;
-  const text = formatTimeUntil(deadline);
-  const overdue = new Date(deadline) < new Date();
+function SlaCountdown({ createdAt, slaHours, escalatedAt }: { createdAt: string; slaHours?: number | null; escalatedAt?: string | null }) {
+  const hours = slaHours ?? 24;
+  const dueAt = new Date(new Date(createdAt).getTime() + hours * 60 * 60 * 1000);
+  const now = new Date();
+  const hoursLeft = (dueAt.getTime() - now.getTime()) / (1000 * 60 * 60);
+  const overdue = hoursLeft <= 0;
+  const warning = !overdue && hoursLeft < hours * 0.5;
+  const color = overdue ? 'text-rose-400' : warning ? 'text-amber-400' : 'text-emerald-400';
+  const label = overdue
+    ? `Overdue by ${Math.abs(Math.round(hoursLeft))}h`
+    : `Due in ${Math.round(hoursLeft)}h`;
   return (
-    <span className={cn('inline-flex items-center gap-1 text-xs', overdue ? 'text-rose-400' : 'text-amber-400')}>
+    <span className={cn('inline-flex items-center gap-1 text-xs', color)}>
       <Shield className="w-3 h-3" />
-      SLA: {text}
+      {label}
+      {escalatedAt && <span className="ml-1 text-rose-400 font-medium">· Escalated</span>}
     </span>
   );
 }
@@ -123,7 +131,7 @@ function PendingCard({
   onCancel,
   onSnooze,
 }: {
-  request: ApprovalRequest & { risk_score?: number | null; sla_deadline?: string | null; snoozed_until?: string | null; sub_tasks?: Array<{title: string; completed: boolean}>; tags?: string[] };
+  request: ApprovalRequest & { risk_score?: number | null; sla_deadline?: string | null; sla_hours?: number | null; escalated_at?: string | null; delegate_to_user_id?: string | null; snoozed_until?: string | null; sub_tasks?: Array<{title: string; completed: boolean}>; tags?: string[] };
   selected: boolean;
   highlighted?: boolean;
   onSelect: (id: string) => void;
@@ -136,6 +144,9 @@ function PendingCard({
   const [showNote, setShowNote] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showSnooze, setShowSnooze] = useState(false);
+  const [showDelegate, setShowDelegate] = useState(false);
+  const [delegateEmail, setDelegateEmail] = useState('');
+  const [delegating, setDelegating] = useState(false);
   const [comment, setComment] = useState('');
   const [comments, setComments] = useState<Array<{id: string; content: string; created_at: string}>>([]);
   const [commentsLoaded, setCommentsLoaded] = useState(false);
@@ -207,7 +218,10 @@ function PendingCard({
             <span>From: <span className="text-slate-300">{request.requested_by}</span></span>
             {request.agent_id && <span>Agent: <span className="text-slate-400 font-mono text-[10px]">{request.agent_id.slice(0, 8)}…</span></span>}
             <span>Needs: <span className="text-amber-300">{ROLE_LABELS[request.required_role] || request.required_role}</span></span>
-            <SlaCountdown deadline={request.sla_deadline} />
+            <SlaCountdown createdAt={request.created_at} slaHours={request.sla_hours} escalatedAt={request.escalated_at} />
+            {request.delegate_to_user_id && (
+              <span className="inline-flex items-center gap-1 text-xs text-violet-400"><UserCheck className="w-3 h-3" />Delegated</span>
+            )}
           </div>
           {/* Tags */}
           {request.tags && request.tags.length > 0 && (
@@ -270,7 +284,43 @@ function PendingCard({
               <BellOff className="w-3 h-3" />
               Snooze
             </button>
+            <button onClick={() => setShowDelegate(v => !v)} className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors">
+              <UserCheck className="w-3 h-3" />
+              Delegate
+            </button>
           </div>
+          {showDelegate && (
+            <div className="flex gap-2 items-center">
+              <input
+                type="email"
+                value={delegateEmail}
+                onChange={(e) => setDelegateEmail(e.target.value)}
+                placeholder="Delegate to user ID or email…"
+                className="flex-1 px-3 py-1.5 rounded-lg bg-white/[0.05] border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500/50"
+              />
+              <button
+                disabled={delegating || !delegateEmail.trim()}
+                onClick={async () => {
+                  setDelegating(true);
+                  try {
+                    const res = await api.approvals.delegate(request.id, delegateEmail.trim());
+                    if (res?.success) {
+                      toast.success('Approval delegated');
+                      setShowDelegate(false);
+                      setDelegateEmail('');
+                    } else {
+                      toast.error(res?.error || 'Failed to delegate');
+                    }
+                  } finally {
+                    setDelegating(false);
+                  }
+                }}
+                className="px-3 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-300 text-xs hover:bg-violet-500/20 transition-colors disabled:opacity-40"
+              >
+                {delegating ? 'Delegating…' : 'Confirm'}
+              </button>
+            </div>
+          )}
           {showNote && (
             <textarea
               value={review.note}

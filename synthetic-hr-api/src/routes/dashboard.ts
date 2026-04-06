@@ -4,6 +4,7 @@ import { supabaseRestAsUser, eq, gte } from '../lib/supabase-rest';
 import { logger } from '../lib/logger';
 import { errorResponse, getOrgId, getUserJwt, clampDays, buildDaySeries, toIsoDay } from '../lib/route-helpers';
 import { checkCostAnomalies } from '../lib/reconciliation-alerts';
+import { checkApprovalSLAs } from '../lib/approval-sla';
 
 const router = express.Router();
 
@@ -208,6 +209,8 @@ router.get('/dashboard/telemetry', requirePermission('dashboard.read'), async (r
 
     // Fire-and-forget cost spike detection (non-blocking)
     checkCostAnomalies(orgId).catch((err: any) => logger.warn('Cost anomaly check error', { error: err?.message }));
+    // Fire-and-forget approval SLA escalation check (non-blocking)
+    checkApprovalSLAs(orgId).catch((err: any) => logger.warn('Approval SLA check error', { error: err?.message }));
 
     return res.json({
       success: true,

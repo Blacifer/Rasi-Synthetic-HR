@@ -37,6 +37,7 @@ import { toast } from '../../lib/toast';
 import type { PlaybookPackId, Playbook } from '../../lib/playbooks/types';
 import { PLAYBOOK_PACKS, PLAYBOOKS } from '../../lib/playbooks/registry';
 import type { AgentJob, CustomPlaybook, PlaybookSchedule, PlaybookTrigger } from '../../lib/api/platform';
+import { PLAYBOOK_TEMPLATES } from '../../config/playbookTemplates';
 
 // ─── Markdown renderer ────────────────────────────────────────────────────────
 
@@ -1122,7 +1123,7 @@ function CustomPlaybookCard({
 
 // ─── Sub-tabs ─────────────────────────────────────────────────────────────────
 
-type MainTab = 'run' | 'schedules' | 'triggers' | 'custom' | 'analytics';
+type MainTab = 'run' | 'schedules' | 'triggers' | 'custom' | 'analytics' | 'templates';
 
 const PACK_STORAGE_KEY = 'synthetic_hr.playbooks.pack';
 
@@ -1774,6 +1775,7 @@ export default function PlaybooksPage({
           { id: 'schedules', label: `Schedules${schedules.length ? ` (${schedules.length})` : ''}`, icon: Calendar },
           { id: 'triggers', label: `Triggers${triggers.length ? ` (${triggers.length})` : ''}`, icon: Cpu },
           { id: 'custom', label: 'Custom', icon: Settings },
+          { id: 'templates', label: 'Templates', icon: Sparkles },
           { id: 'analytics', label: 'Analytics', icon: BarChart2 },
         ] as Array<{ id: MainTab; label: string; icon: any }>).map(({ id, label, icon: Icon }) => (
           <button
@@ -2700,6 +2702,59 @@ export default function PlaybooksPage({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Templates tab ─────────────────────────────────────────────────────── */}
+      {mainTab === 'templates' && (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-lg font-bold text-white">Pre-Built Playbook Templates</h2>
+            <p className="mt-1 text-sm text-slate-400">Choose a template to jumpstart your workflow. You can customize every step before saving.</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {PLAYBOOK_TEMPLATES.map((tpl) => (
+              <div key={tpl.id} className="rounded-2xl border border-slate-700/60 bg-slate-900/40 p-5 flex flex-col gap-3 hover:border-slate-600 transition-colors">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${tpl.domainColor}`}>{tpl.domain}</span>
+                    <p className="mt-2 text-sm font-semibold text-white">{tpl.name}</p>
+                    <p className="mt-1 text-xs text-slate-400 leading-relaxed">{tpl.description}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <Zap className="h-3 w-3" />
+                  <span>{tpl.workflow.steps.length} steps</span>
+                </div>
+                <button
+                  onClick={() => {
+                    // Deep copy the template workflow to avoid mutation
+                    const workflowCopy = JSON.parse(JSON.stringify(tpl.workflow));
+                    api.playbooks.createCustom({
+                      name: tpl.name,
+                      description: tpl.description,
+                      output_description: `Output from the ${tpl.name} workflow`,
+                      category: tpl.domain.toLowerCase(),
+                      fields: JSON.parse(JSON.stringify(tpl.fields)),
+                      workflow: workflowCopy,
+                      enabled: true,
+                    }).then((r) => {
+                      if (r.success && r.data) {
+                        setCustomPlaybooks((prev) => [r.data!, ...prev]);
+                        setMainTab('custom');
+                        toast.success(`"${tpl.name}" added to your custom playbooks`);
+                      } else {
+                        toast.error(r.error || 'Failed to create playbook from template');
+                      }
+                    });
+                  }}
+                  className="mt-auto rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
+                >
+                  Use Template
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

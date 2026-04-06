@@ -16,7 +16,7 @@ import {
   Brain, BarChart3, Users, AlertTriangle, MessageSquare, DollarSign,
   Layers, Settings, Sparkles, Zap, Bot, CheckSquare, Shield, ScrollText,
   Key, PlugZap, FileText, ClipboardList, Database, Server,
-  User, LogOut, Sun, Moon, Bell, ChevronRight, Search,
+  User, LogOut, Sun, Moon, Bell, ChevronRight, Search, GitBranch,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -74,6 +74,7 @@ const GROUPS: NavGroup[] = [
       { id: 'jobs', icon: ClipboardList, label: 'Run History' },
       { id: 'blackbox', icon: Database, label: 'Black Box' },
       { id: 'runtime-workers', icon: Server, label: 'Runtime Workers' },
+      { id: 'traces', icon: GitBranch, label: 'Traces' },
     ],
   },
 ];

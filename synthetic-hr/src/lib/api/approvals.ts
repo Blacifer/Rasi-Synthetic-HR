@@ -126,4 +126,11 @@ export const approvalsApi = {
       body: JSON.stringify({ ids, note }),
     });
   },
+
+  async delegate(id: string, delegateToUserId: string): Promise<ApiResponse<{ id: string; delegate_to_user_id: string }>> {
+    return authenticatedFetch(`/approvals/${encodeURIComponent(id)}/delegate`, {
+      method: 'PATCH',
+      body: JSON.stringify({ delegate_to_user_id: delegateToUserId }),
+    });
+  },
 };

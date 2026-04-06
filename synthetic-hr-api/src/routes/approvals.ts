@@ -884,4 +884,50 @@ router.post('/bulk-deny', requirePermission('policies.manage'), async (req: Requ
   }
 });
 
+// PATCH /approvals/:id/delegate — re-assign approval to another user
+router.patch('/approvals/:id/delegate', requirePermission('approvals.write'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    const jwt = getUserJwt(req);
+    const { id } = req.params;
+    const { delegate_to_user_id } = req.body as { delegate_to_user_id: string };
+
+    if (!delegate_to_user_id) {
+      return res.status(400).json({ success: false, error: 'delegate_to_user_id is required' });
+    }
+
+    // Verify approval exists + belongs to org + is pending
+    const q = new URLSearchParams();
+    q.set('id', eq(id));
+    q.set('organization_id', eq(orgId!));
+    q.set('status', eq('pending'));
+    const rows = (await supabaseRestAsUser(jwt, 'approval_requests', q)) as any[];
+    if (!rows?.length) {
+      return res.status(404).json({ success: false, error: 'Approval not found or not pending' });
+    }
+
+    // Update delegate
+    const patchQ = new URLSearchParams();
+    patchQ.set('id', eq(id));
+    patchQ.set('organization_id', eq(orgId!));
+    await supabaseRestAsUser(jwt, 'approval_requests', patchQ, {
+      method: 'PATCH',
+      body: { delegate_to_user_id, updated_at: new Date().toISOString() },
+    });
+
+    auditLog.log({
+      user_id: req.user?.id || 'system',
+      action: 'approval.delegated',
+      resource_type: 'approval_request',
+      resource_id: id,
+      organization_id: orgId!,
+      metadata: { delegate_to_user_id },
+    });
+
+    return res.json({ success: true, data: { id, delegate_to_user_id } });
+  } catch (err: any) {
+    return errorResponse(res, err);
+  }
+});
+
 export default router;

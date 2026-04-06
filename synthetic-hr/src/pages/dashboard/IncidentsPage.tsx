@@ -5,6 +5,7 @@ import type { AIAgent, Incident, IncidentSeverity, IncidentType } from '../../ty
 import { toast } from '../../lib/toast';
 import { loadFromStorage, saveToStorage } from '../../utils/storage';
 import { api } from '../../lib/api-client';
+import { API_BASE_URL, getAuthHeaders } from '../../lib/api/_helpers';
 import { SkeletonIncidentRow } from '../../components/Skeleton';
 import { PageHero } from '../../components/dashboard/PageHero';
 
@@ -149,6 +150,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [sseConnected, setSseConnected] = useState(false);
   // incidentMeta is derived from DB-backed incident fields (owner/priority/source/notes/next_action
   // added by migration_014). No localStorage needed.
   const deriveMetaFromIncident = (incident: Incident): IncidentUiMeta => ({
@@ -234,6 +236,58 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
     const t = setTimeout(() => setBarAnimated(true), 60);
     return () => clearTimeout(t);
   }, [selectedIncidentId]);
+
+  // SSE real-time incident stream — fetch-based to support Bearer auth header
+  useEffect(() => {
+    const controller = new AbortController();
+    let buffer = '';
+
+    (async () => {
+      try {
+        const headers = await getAuthHeaders();
+        const response = await fetch(`${API_BASE_URL}/incidents/stream`, {
+          headers,
+          signal: controller.signal,
+        });
+        if (!response.ok || !response.body) return;
+        setSseConnected(true);
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop() ?? '';
+          for (const block of parts) {
+            let eventName = '';
+            let dataLine = '';
+            for (const line of block.split('\n')) {
+              if (line.startsWith('event:')) eventName = line.slice(6).trim();
+              if (line.startsWith('data:')) dataLine = line.slice(5).trim();
+            }
+            if (eventName === 'incident.new' && dataLine) {
+              try {
+                const incoming = JSON.parse(dataLine) as Incident;
+                setIncidents([incoming, ...incidents]);
+              } catch {
+                // malformed JSON — skip
+              }
+            }
+          }
+        }
+      } catch {
+        // fetch aborted or network error — parent polling is the silent fallback
+      } finally {
+        setSseConnected(false);
+      }
+    })();
+
+    return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const selectedIncident = incidents.find((incident) => incident.id === selectedIncidentId) || null;
   const selectedMeta = selectedIncident ? (incidentMeta[selectedIncident.id] || defaultMetaForIncident(selectedIncident)) : null;
@@ -541,6 +595,10 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
           </div>
         </div>
       )}
+      <div className="flex items-center gap-2 mb-1">
+        <span className={`inline-block w-2 h-2 rounded-full ${sseConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
+        <span className="text-xs text-slate-500">{sseConnected ? 'Live' : 'Polling'}</span>
+      </div>
       <PageHero
         eyebrow="Incident triage"
         title="Make the next investigation obvious"

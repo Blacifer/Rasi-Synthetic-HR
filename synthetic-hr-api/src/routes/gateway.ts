@@ -648,34 +648,8 @@ const routeViaOllama = async (
   };
 };
 
-// ── Per-agent in-memory rate limit counters ───────────────────────────────────
-interface AgentRateCounter { rpm: number; rpmReset: number; rpd: number; rpdReset: number }
-const agentRateCounters = new Map<string, AgentRateCounter>();
-
-function checkAgentRateLimit(agentId: string, config: Record<string, any>): { allowed: boolean; retryAfter?: number } {
-  const limitRpm = Number(config?.rate_limit_rpm) || 0;
-  const limitRpd = Number(config?.rate_limit_rpd) || 0;
-  if (!limitRpm && !limitRpd) return { allowed: true };
-
-  const now = Date.now();
-  const counter = agentRateCounters.get(agentId) || { rpm: 0, rpmReset: now + 60_000, rpd: 0, rpdReset: now + 86_400_000 };
-
-  // Reset windows
-  if (now >= counter.rpmReset) { counter.rpm = 0; counter.rpmReset = now + 60_000; }
-  if (now >= counter.rpdReset) { counter.rpd = 0; counter.rpdReset = now + 86_400_000; }
-
-  if (limitRpm > 0 && counter.rpm >= limitRpm) {
-    return { allowed: false, retryAfter: Math.ceil((counter.rpmReset - now) / 1000) };
-  }
-  if (limitRpd > 0 && counter.rpd >= limitRpd) {
-    return { allowed: false, retryAfter: Math.ceil((counter.rpdReset - now) / 1000) };
-  }
-
-  counter.rpm += 1;
-  counter.rpd += 1;
-  agentRateCounters.set(agentId, counter);
-  return { allowed: true };
-}
+// ── Per-agent rate limiting (Redis-backed when REDIS_URL is set, in-memory fallback) ──
+import { checkAgentRateLimitDistributed } from '../lib/rate-limiter';
 
 const checkAgentBudget = async (req: Request, res: Response): Promise<string | null | false> => {
   const agentId = req.header('x-rasi-agent-id') || req.body?.agent_id;
@@ -694,8 +668,8 @@ const checkAgentBudget = async (req: Request, res: Response): Promise<string | n
 
     const agent = agents[0];
 
-    // Per-agent rate limiting
-    const rl = checkAgentRateLimit(agentId, agent.config || {});
+    // Per-agent rate limiting (Redis-backed when REDIS_URL set, in-memory fallback otherwise)
+    const rl = await checkAgentRateLimitDistributed(agentId, agent.config || {});
     if (!rl.allowed) {
       res.status(429).json({
         error: { message: 'Agent rate limit exceeded', type: 'rate_limit_error', retry_after: rl.retryAfter }
