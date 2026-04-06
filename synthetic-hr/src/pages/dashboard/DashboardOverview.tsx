@@ -16,6 +16,8 @@ import {
   TrendingUp,
   ThumbsUp,
   ThumbsDown,
+  Upload,
+  FileText,
   X,
   XCircle,
   Zap,
@@ -271,6 +273,8 @@ export default function DashboardOverview({
   const [automationRulesTotal, setAutomationRulesTotal] = useState<number>(0);
   const [csatData, setCsatData] = useState<{ total_rated: number; thumbs_up: number; thumbs_down: number; satisfaction_pct: number | null } | null>(null);
   const [trendingTopics, setTrendingTopics] = useState<Array<{ word: string; count: number }>>([]);
+  const [quickDeployState, setQuickDeployState] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
+  const [quickDeployError, setQuickDeployError] = useState<string | null>(null);
 
   useEffect(() => {
     // Widget 1: cost avoided via semantic caching
@@ -319,6 +323,20 @@ export default function DashboardOverview({
   }, [loadOverviewState]);
 
 const hasData = agents.length > 0;
+
+  const handleQuickDeploy = async (file: File) => {
+    setQuickDeployState('uploading');
+    setQuickDeployError(null);
+    const result = await api.agents.quickDeploy(file);
+    if (result.success) {
+      setQuickDeployState('done');
+      // Give the user a moment to see success, then navigate to fleet
+      setTimeout(() => onNavigate?.('fleet'), 1500);
+    } else {
+      setQuickDeployState('error');
+      setQuickDeployError(result.error || 'Upload failed. Please try again.');
+    }
+  };
 
   const activityFeed = useMemo(() => {
     const items: ActivityItem[] = [
@@ -381,6 +399,65 @@ const hasData = agents.length > 0;
               <ArrowRight className="h-4 w-4 text-slate-600 group-hover:text-cyan-400 transition-colors shrink-0" />
             </button>
           ))}
+        </div>
+
+        {/* Quick Deploy */}
+        <div className="rounded-[28px] border border-cyan-500/20 bg-[radial-gradient(ellipse_at_top_left,rgba(34,211,238,0.07),transparent_60%)] bg-slate-900/60 backdrop-blur-xl p-8">
+          <div className="flex items-start gap-4 mb-5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-500/30 bg-cyan-500/10">
+              <Zap className="h-5 w-5 text-cyan-400" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">Quick Deploy from PDF</h3>
+              <p className="text-sm text-slate-400 mt-0.5">Upload your Employee Handbook or HR policy document and we will create a knowledgeable HR agent in seconds.</p>
+            </div>
+          </div>
+
+          {quickDeployState === 'idle' || quickDeployState === 'error' ? (
+            <label className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-white/10 bg-white/[0.02] px-6 py-8 text-center cursor-pointer hover:border-cyan-500/30 hover:bg-cyan-500/[0.03] transition-all group">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] group-hover:border-cyan-500/20 transition-colors">
+                <Upload className="h-5 w-5 text-slate-400 group-hover:text-cyan-400 transition-colors" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">Upload Employee Handbook (PDF)</p>
+                <p className="text-xs text-slate-500 mt-1">Max 20 MB · Text-based PDFs only</p>
+              </div>
+              {quickDeployError && (
+                <p className="text-xs text-rose-400 font-medium">{quickDeployError}</p>
+              )}
+              <input
+                type="file"
+                accept="application/pdf"
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleQuickDeploy(file);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          ) : quickDeployState === 'uploading' ? (
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] px-6 py-8 text-center">
+              <div className="w-10 h-10 rounded-full border-2 border-slate-700 border-t-cyan-400 animate-spin" />
+              <div>
+                <p className="text-sm font-semibold text-white">Ingesting document…</p>
+                <p className="text-xs text-slate-500 mt-1">Extracting knowledge and creating your HR agent</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.05] px-6 py-8 text-center">
+              <CheckCircle2 className="h-10 w-10 text-emerald-400" />
+              <div>
+                <p className="text-sm font-semibold text-white">HR Agent created!</p>
+                <p className="text-xs text-slate-400 mt-1">Taking you to your new agent…</p>
+              </div>
+            </div>
+          )}
+
+          <p className="mt-4 text-center text-xs text-slate-500">
+            <FileText className="inline h-3.5 w-3.5 mr-1 align-middle" />
+            The document text is stored securely as the agent&apos;s knowledge context — never shared externally.
+          </p>
         </div>
 
         <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">

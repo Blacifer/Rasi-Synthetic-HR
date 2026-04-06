@@ -1,5 +1,8 @@
 import crypto from 'crypto';
 import express, { Request, Response } from 'express';
+import multer from 'multer';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require('pdf-parse');
 import { z } from 'zod';
 import { incidentDetection } from '../services/incident-detection';
 import { logger } from '../lib/logger';
@@ -9,6 +12,15 @@ import { auditLog } from '../lib/audit-logger';
 import { supabaseRestAsUser, eq, gte, in_ } from '../lib/supabase-rest';
 import { getOrgId, getUserJwt, errorResponse, buildDaySeries, toIsoDay } from '../lib/route-helpers';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
+
+const pdfUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'application/pdf') cb(null, true);
+    else cb(new Error('Only PDF files are accepted'));
+  },
+});
 
 const router = express.Router();
 
@@ -1320,5 +1332,125 @@ router.patch('/agents/:id/connectors', requirePermission('agents.update'), async
     errorResponse(res, error, error?.message === 'Agent not found' ? 404 : 500);
   }
 });
+
+// ─── Quick Deploy: PDF → HR Agent ─────────────────────────────────────────────
+// POST /api/agents/quick-deploy  (multipart/form-data, field: "pdf")
+// Extracts text from the uploaded PDF, creates an HR Knowledge Bot agent
+// with the text stored in config.knowledge_context, then returns the new agent.
+router.post(
+  '/agents/quick-deploy',
+  requirePermission('agents.create'),
+  (req: Request, res: Response, next) => {
+    pdfUpload.single('pdf')(req, res, (err: any) => {
+      if (!err) return next();
+      const status = err?.message?.includes('Only PDF') ? 400 : 413;
+      res.status(status).json({ success: false, error: err.message });
+    });
+  },
+  async (req: Request, res: Response) => {
+    try {
+      const orgId = getOrgId(req);
+      const jwt = getUserJwt(req);
+      if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+      if (!req.file) {
+        return res.status(400).json({ success: false, error: 'No PDF file uploaded. Send a multipart/form-data request with field "pdf".' });
+      }
+
+      // Extract text from PDF
+      logger.info('Quick-deploy: parsing PDF', { org_id: orgId, size: req.file.size });
+      let knowledgeText = '';
+      try {
+        const parsed = await pdfParse(req.file.buffer);
+        knowledgeText = parsed.text.trim();
+      } catch (parseErr: any) {
+        logger.warn('Quick-deploy: PDF parse failed', { error: String(parseErr?.message || parseErr) });
+        return res.status(422).json({ success: false, error: 'Could not extract text from this PDF. Please try a different file.' });
+      }
+
+      if (!knowledgeText) {
+        return res.status(422).json({ success: false, error: 'The PDF appears to be empty or image-only. Please upload a text-based PDF.' });
+      }
+
+      // Truncate to a sensible context size (~40k chars ≈ ~10k tokens)
+      const MAX_CONTEXT_CHARS = 40_000;
+      const truncated = knowledgeText.length > MAX_CONTEXT_CHARS;
+      const contextText = truncated ? knowledgeText.slice(0, MAX_CONTEXT_CHARS) : knowledgeText;
+
+      const systemPrompt = `You are an HR Knowledge Bot for this organisation. You have been trained on the company's official HR documentation.
+
+When employees ask questions about HR policies, benefits, leave, payroll, onboarding, or any workplace topic, answer accurately and helpfully based on the knowledge context below.
+
+If a question is outside the scope of the provided documentation, say so honestly and recommend the employee contact HR directly.
+
+--- KNOWLEDGE CONTEXT ---
+${contextText}
+--- END OF CONTEXT ---
+
+Always be professional, empathetic, and concise. Do not make up policies that are not in the context above.`;
+
+      const agentName = req.body?.agent_name?.trim() || 'HR Knowledge Bot';
+
+      // Create the agent
+      const agentBody = {
+        organization_id: orgId,
+        name: agentName,
+        description: 'Answers employee questions based on uploaded HR documentation.',
+        agent_type: 'hr',
+        platform: 'api',
+        model_name: 'anthropic/claude-3-5-haiku',
+        system_prompt: systemPrompt,
+        status: 'active',
+        risk_level: 'low',
+        risk_score: 20,
+        config: {
+          display_provider: 'Rasi AI',
+          knowledge_context: contextText,
+          knowledge_source: req.file.originalname,
+          knowledge_chars: contextText.length,
+          knowledge_truncated: truncated,
+          budget_limit: null,
+          auto_throttle: false,
+        },
+        metadata: {
+          publish_status: 'ready',
+          primary_pack: 'hr' as const,
+          quick_deploy: true,
+        },
+      };
+
+      const rawData = await supabaseRestAsUser(jwt, 'ai_agents', '', {
+        method: 'POST',
+        body: agentBody,
+      });
+
+      const newAgent = Array.isArray(rawData) ? rawData[0] : null;
+      if (!newAgent) {
+        return res.status(500).json({ success: false, error: 'Agent creation failed.' });
+      }
+
+      auditLog.agentCreated(req.user?.id || 'unknown', newAgent.id, orgId, {
+        name: agentName,
+        platform: 'api',
+        model_name: 'anthropic/claude-3-5-haiku',
+        performed_by_email: req.user?.email || 'unknown',
+      });
+
+      logger.info('Quick-deploy: agent created', { agent_id: newAgent.id, org_id: orgId, chars: contextText.length, truncated });
+
+      res.status(201).json({
+        success: true,
+        data: newAgent,
+        meta: {
+          chars_ingested: contextText.length,
+          truncated,
+          source_filename: req.file.originalname,
+        },
+      });
+    } catch (error: any) {
+      errorResponse(res, error);
+    }
+  }
+);
 
 export default router;

@@ -1,4 +1,4 @@
-import { authenticatedFetch } from './_helpers';
+import { authenticatedFetch, getAuthHeaders, API_BASE_URL } from './_helpers';
 import type { ApiResponse } from './_helpers';
 import type { AIAgent, AgentVersion, AgentWorkspaceData } from '../../types';
 
@@ -271,6 +271,39 @@ export const agentApi = {
     if (params?.sort_dir) query.set('sort_dir', params.sort_dir);
     const suffix = query.toString() ? `?${query.toString()}` : '';
     return authenticatedFetch(`/traces${suffix}`, { method: 'GET' });
+  },
+
+  /**
+   * Quick Deploy: upload a PDF and get back a new HR Knowledge Bot agent.
+   * Uses multipart/form-data — cannot go through authenticatedFetch (no Content-Type override).
+   */
+  async quickDeploy(
+    file: File,
+    agentName?: string
+  ): Promise<ApiResponse<AIAgent & { meta?: { chars_ingested: number; truncated: boolean; source_filename: string } }>> {
+    try {
+      const headers = await getAuthHeaders() as Record<string, string>;
+      // Remove Content-Type so fetch sets the correct multipart boundary
+      delete headers['Content-Type'];
+
+      const form = new FormData();
+      form.append('pdf', file);
+      if (agentName) form.append('agent_name', agentName);
+
+      const response = await fetch(`${API_BASE_URL}/agents/quick-deploy`, {
+        method: 'POST',
+        headers,
+        body: form,
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        return { success: false, error: payload?.error || `Upload failed (${response.status})` };
+      }
+      return { success: true, data: payload.data, ...payload };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Network error' };
+    }
   },
 };
 
