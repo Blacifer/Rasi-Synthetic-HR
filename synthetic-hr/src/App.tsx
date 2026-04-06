@@ -14,6 +14,7 @@ const AcceptInvitePage = lazy(() => import('./pages/AcceptInvitePage'));
 const OAuthCallbackPage = lazy(() => import('./pages/OAuthCallbackPage'));
 const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'));
 const SharePage = lazy(() => import('./pages/Share'));
+const PublicChatPage = lazy(() => import('./pages/PublicChatPage'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
@@ -299,6 +300,7 @@ function App() {
           <Route path="/oauth/popup" element={<OAuthCallbackPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/share/:token" element={<SharePage />} />
+          <Route path="/chat/:token" element={<PublicChatPage />} />
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />

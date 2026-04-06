@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronUp, Activity, Zap, Lock, Server, Eye, Phone, Bot,
   Brain, Target, TrendingUp, X, Plus, Search, Filter, Download, Copy, Trash2, Key,
   ShieldAlert, ShoppingBag, ZapOff, Play, Rocket, Link2, MessageSquare, BarChart3, PauseCircle, Loader2, Clock3,
-  Globe, Code2, Terminal, ArrowLeft, RefreshCw, Info, Ban
+  Globe, Code2, Terminal, ArrowLeft, RefreshCw, Info, Ban, Share2, Check
 } from 'lucide-react';
 import type { AIAgent, AgentPackId, AgentWorkspaceAnalytics, AgentWorkspaceConversation, AgentWorkspaceIncident, AgentWorkspaceSummary } from '../../types';
 import { toast } from '../../lib/toast';
@@ -346,6 +346,8 @@ export default function FleetPage({
   const [expandedActions, setExpandedActions] = useState<Set<string>>(new Set());
   const [actionCatalog, setActionCatalog] = useState<Array<{ service: string; action: string; enabled: boolean }>>([]);
   const [savingAction, setSavingAction] = useState<string | null>(null);
+  const [shareModal, setShareModal] = useState<{ agent: AIAgent; token: string | null; enabled: boolean; loading: boolean; copied: boolean } | null>(null);
+
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -904,6 +906,23 @@ export default function FleetPage({
       toast.error(message);
     } finally {
       setPolicySaving(false);
+    }
+  };
+
+  const openShareModal = async (agent: AIAgent) => {
+    setShareModal({ agent, token: null, enabled: true, loading: true, copied: false });
+    const res = await api.agents.getPortalLink(agent.id);
+    if (res.success && res.data) {
+      setShareModal({ agent, token: res.data.share_token, enabled: res.data.is_enabled, loading: false, copied: false });
+    } else {
+      // Create one
+      const created = await api.agents.createPortalLink(agent.id);
+      if (created.success && created.data) {
+        setShareModal({ agent, token: created.data.share_token, enabled: created.data.is_enabled, loading: false, copied: false });
+      } else {
+        setShareModal(null);
+        toast.error('Could not create share link.');
+      }
     }
   };
 
@@ -1558,6 +1577,14 @@ export default function FleetPage({
                           </button>
                         )}
                       </div>
+                      <button
+                        onClick={() => void openShareModal(agent)}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all bg-white/5 text-slate-300 border border-white/10 hover:bg-cyan-500/10 hover:border-cyan-500/25 hover:text-cyan-300"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        Share Portal
+                      </button>
+
                       <div className="flex items-center gap-2 pt-1">
                         {agent.status !== 'terminated' && (
                           agent.status === 'active' ? (
@@ -2166,6 +2193,103 @@ export default function FleetPage({
                 Skip for now
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Portal Modal */}
+      {shareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-lg font-bold text-white">Share Portal</h3>
+                <p className="text-xs text-slate-400 mt-0.5">{shareModal.agent.name}</p>
+              </div>
+              <button onClick={() => setShareModal(null)} className="rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {shareModal.loading ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="w-6 h-6 text-cyan-400 animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {/* Public link */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Public Chat Link</label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-xs bg-slate-900 border border-white/10 rounded-xl px-3 py-2.5 text-cyan-300 truncate font-mono">
+                      {window.location.origin}/chat/{shareModal.token}
+                    </code>
+                    <button
+                      onClick={() => {
+                        void navigator.clipboard.writeText(`${window.location.origin}/chat/${shareModal.token}`);
+                        setShareModal(prev => prev ? { ...prev, copied: true } : null);
+                        setTimeout(() => setShareModal(prev => prev ? { ...prev, copied: false } : null), 2000);
+                      }}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold bg-white/5 border border-white/10 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/25 hover:text-cyan-300 transition-all"
+                    >
+                      {shareModal.copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      {shareModal.copied ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Embed code */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Embed on Internal Wiki</label>
+                  <div className="relative">
+                    <code className="block text-xs bg-slate-900 border border-white/10 rounded-xl px-3 py-2.5 text-slate-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
+                      {`<iframe\n  src="${window.location.origin}/chat/${shareModal.token}"\n  width="400" height="600"\n  frameborder="0"\n/>`}
+                    </code>
+                    <button
+                      onClick={() => {
+                        void navigator.clipboard.writeText(`<iframe\n  src="${window.location.origin}/chat/${shareModal.token}"\n  width="400" height="600"\n  frameborder="0"\n/>`);
+                        toast.success('Embed code copied!');
+                      }}
+                      className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-slate-700 border border-white/10 text-slate-300 hover:bg-slate-600 transition-all"
+                    >
+                      <Code2 className="w-3 h-3" />
+                      Copy code
+                    </button>
+                  </div>
+                </div>
+
+                {/* Enable toggle */}
+                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-200">Link enabled</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Disable to block all access to this portal</p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const next = !shareModal.enabled;
+                      setShareModal(prev => prev ? { ...prev, enabled: next } : null);
+                      const res = await api.agents.updatePortalLink(shareModal.agent.id, next);
+                      if (!res.success) {
+                        setShareModal(prev => prev ? { ...prev, enabled: !next } : null);
+                        toast.error('Failed to update portal link.');
+                      }
+                    }}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${shareModal.enabled ? 'bg-cyan-500' : 'bg-slate-600'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${shareModal.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    onClick={() => setShareModal(null)}
+                    className="px-5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-sm font-semibold transition-colors"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

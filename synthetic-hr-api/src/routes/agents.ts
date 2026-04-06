@@ -1453,4 +1453,84 @@ Always be professional, empathetic, and concise. Do not make up policies that ar
   }
 );
 
+// ─── Agent Portal Link Management (admin) ─────────────────────────────────────
+
+// GET /api/agents/:id/portal — fetch portal link for this agent (null if not created)
+router.get('/agents/:id/portal', requirePermission('agents.read'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    const jwt = getUserJwt(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const q = new URLSearchParams();
+    q.set('agent_id', eq(id));
+    q.set('organization_id', eq(orgId));
+    q.set('select', 'id,share_token,is_enabled,created_at');
+    const rows = await supabaseRestAsUser(jwt, 'agent_portal_links', q);
+    const link = Array.isArray(rows) ? rows[0] ?? null : null;
+
+    res.json({ success: true, data: link });
+  } catch (error: any) {
+    errorResponse(res, error);
+  }
+});
+
+// POST /api/agents/:id/portal — create portal link (idempotent)
+router.post('/agents/:id/portal', requirePermission('agents.update'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    const jwt = getUserJwt(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    // Check if one already exists
+    const q = new URLSearchParams();
+    q.set('agent_id', eq(id));
+    q.set('organization_id', eq(orgId));
+    const existing = await supabaseRestAsUser(jwt, 'agent_portal_links', q);
+    if (Array.isArray(existing) && existing[0]) {
+      return res.json({ success: true, data: existing[0] });
+    }
+
+    const created = await supabaseRestAsUser(jwt, 'agent_portal_links', '', {
+      method: 'POST',
+      body: { organization_id: orgId, agent_id: id, created_by: req.user?.id || null },
+      headers: { 'Prefer': 'return=representation' },
+    });
+
+    res.status(201).json({ success: true, data: Array.isArray(created) ? created[0] : created });
+  } catch (error: any) {
+    errorResponse(res, error);
+  }
+});
+
+// PATCH /api/agents/:id/portal — toggle is_enabled
+router.patch('/agents/:id/portal', requirePermission('agents.update'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    const jwt = getUserJwt(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const { is_enabled } = req.body as { is_enabled: boolean };
+    if (typeof is_enabled !== 'boolean') {
+      return res.status(400).json({ success: false, error: 'is_enabled must be a boolean' });
+    }
+
+    const patchQ = new URLSearchParams();
+    patchQ.set('agent_id', eq(id));
+    patchQ.set('organization_id', eq(orgId));
+    const updated = await supabaseRestAsUser(jwt, 'agent_portal_links', patchQ, {
+      method: 'PATCH',
+      body: { is_enabled },
+      headers: { 'Prefer': 'return=representation' },
+    });
+
+    res.json({ success: true, data: Array.isArray(updated) ? updated[0] : updated });
+  } catch (error: any) {
+    errorResponse(res, error);
+  }
+});
+
 export default router;

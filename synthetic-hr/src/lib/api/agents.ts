@@ -273,6 +273,24 @@ export const agentApi = {
     return authenticatedFetch(`/traces${suffix}`, { method: 'GET' });
   },
 
+  /** Get portal link for an agent (null data if not yet created) */
+  async getPortalLink(agentId: string): Promise<ApiResponse<{ share_token: string; is_enabled: boolean; created_at: string } | null>> {
+    return authenticatedFetch(`/agents/${agentId}/portal`, { method: 'GET' });
+  },
+
+  /** Create a portal link for an agent (idempotent) */
+  async createPortalLink(agentId: string): Promise<ApiResponse<{ share_token: string; is_enabled: boolean; created_at: string }>> {
+    return authenticatedFetch(`/agents/${agentId}/portal`, { method: 'POST' });
+  },
+
+  /** Toggle portal link enabled/disabled */
+  async updatePortalLink(agentId: string, is_enabled: boolean): Promise<ApiResponse<{ share_token: string; is_enabled: boolean }>> {
+    return authenticatedFetch(`/agents/${agentId}/portal`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_enabled }),
+    });
+  },
+
   /**
    * Quick Deploy: upload a PDF and get back a new HR Knowledge Bot agent.
    * Uses multipart/form-data — cannot go through authenticatedFetch (no Content-Type override).

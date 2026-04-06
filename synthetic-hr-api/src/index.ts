@@ -37,6 +37,7 @@ import rulesRoutes from './routes/rules';
 import recruitmentRoutes from './routes/recruitment';
 import hubsRoutes from './routes/hubs';
 import trustRoutes from './routes/trust';
+import portalRoutes from './routes/portal';
 import tracesRoutes from './routes/traces';
 import { initializeObservability, shutdownObservability, tracingMiddleware } from './lib/observability';
 import { validateEnvironment } from './lib/env-validation';
@@ -373,6 +374,9 @@ app.use('/auth', authRoutes);
 
 // Public playbook share links (no auth — token-gated)
 app.get('/share/:token', handleShareToken);
+
+// Public employee chat portal (token-gated, no JWT)
+app.use('/portal', portalRoutes);
 
 // Public playbook API endpoint (API key auth — no user JWT required)
 app.post('/public/playbooks/:slug', validateApiKey, handlePublicPlaybookRun);

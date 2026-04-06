@@ -263,7 +263,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
           const colors = getColorClasses(template.color);
           const Icon = template.icon;
           const baseModel = resolveModel(template.model);
-          const baseModelLabel = baseModel ? `${baseModel.name} (${baseModel.provider})` : template.model;
+          const baseModelLabel = baseModel ? `${baseModel.name} · Rasi AI` : template.model;
 
           return (
             <div
@@ -511,13 +511,8 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
                                     {selectedModel?.id === model.id && <CheckCircle2 className="w-4 h-4 text-cyan-400" />}
                                   </div>
                                   <div className="flex items-center gap-2 text-xs">
-                                    <span className={`capitalize ${model.provider === 'openai' ? 'text-emerald-400' :
-                                      model.provider === 'anthropic' ? 'text-orange-400' :
-                                        model.provider === 'google' ? 'text-blue-400' :
-                                          model.provider === 'meta-llama' ? 'text-indigo-400' :
-                                            'text-purple-400'
-                                      }`}>
-                                      {model.provider}
+                                    <span className="text-cyan-400">
+                                      Rasi AI
                                     </span>
                                     {model.pricing && (
                                       <span className="text-slate-500 border-l border-slate-700 pl-2">
@@ -684,7 +679,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
 
 	                          {selectedModel && (
 	                            <p className="text-[11px] text-slate-500 text-center mt-3">
-	                              Pricing for <span className="text-slate-300">{selectedModel.name}</span> (<span className="text-slate-400">{selectedModel.provider}</span>)
+	                              Pricing for <span className="text-slate-300">{selectedModel.name}</span> via <span className="text-cyan-400">Rasi AI</span>
 	                            </p>
 	                          )}
 	                          {selectedModel && monthlyCost.status === 'priced' && (

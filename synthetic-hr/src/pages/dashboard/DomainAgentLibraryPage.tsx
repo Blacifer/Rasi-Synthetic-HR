@@ -266,7 +266,7 @@ function AgentCard({
                         >
                           <span>
                             <span className="font-medium">{m.name}</span>
-                            <span className="text-slate-500 ml-1.5">{m.provider}</span>
+                            <span className="text-cyan-400 ml-1.5">Rasi AI</span>
                             {m.id === agent.modelName && (
                               <span className="ml-2 text-[10px] font-semibold text-emerald-400">Recommended</span>
                             )}
