@@ -303,6 +303,8 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
                     onClick={(_a) => {
                       if (app.appId === 'slack' && onNavigate) {
                         onNavigate('/dashboard/apps/slack/workspace');
+                      } else if (app.appId === 'jira' && onNavigate) {
+                        onNavigate('/dashboard/apps/jira/workspace');
                       } else {
                         setDrawerApp(app);
                       }
@@ -340,6 +342,8 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
             setConnectTarget(null);
             if (app.appId === 'slack' && onNavigate) {
               onNavigate('/dashboard/apps/slack/workspace');
+            } else if (app.appId === 'jira' && onNavigate) {
+              onNavigate('/dashboard/apps/jira/workspace');
             } else {
               setDrawerApp(app);
             }
