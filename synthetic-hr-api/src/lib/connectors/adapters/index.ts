@@ -7,6 +7,7 @@
 import './slack';
 import './jira';
 import './github';
+import './hubspot';
 
 export { getRegisteredAdapter, listRegisteredAdapters } from '../adapter';
 export type { ConnectorAdapter, HealthResult } from '../adapter';

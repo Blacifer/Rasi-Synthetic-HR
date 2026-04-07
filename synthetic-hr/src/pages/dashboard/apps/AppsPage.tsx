@@ -307,6 +307,8 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
                         onNavigate('/dashboard/apps/jira/workspace');
                       } else if (app.appId === 'github' && onNavigate) {
                         onNavigate('/dashboard/apps/github/workspace');
+                      } else if (app.appId === 'hubspot' && onNavigate) {
+                        onNavigate('/dashboard/apps/hubspot/workspace');
                       } else {
                         setDrawerApp(app);
                       }
@@ -348,6 +350,8 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
               onNavigate('/dashboard/apps/jira/workspace');
             } else if (app.appId === 'github' && onNavigate) {
               onNavigate('/dashboard/apps/github/workspace');
+            } else if (app.appId === 'hubspot' && onNavigate) {
+              onNavigate('/dashboard/apps/hubspot/workspace');
             } else {
               setDrawerApp(app);
             }
