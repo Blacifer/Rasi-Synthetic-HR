@@ -1,5 +1,5 @@
 import { useRef, useMemo, useState, useEffect } from 'react';
-import { ArrowRight, ChevronDown, Plus, Search, Sparkles, Star, X } from 'lucide-react';
+import { ArrowRight, ChevronDown, MessageSquarePlus, Plus, Search, Sparkles, Star, X } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import type { AIAgent } from '../../../../types';
 import type { UnifiedApp } from '../types';
@@ -25,13 +25,10 @@ function BrowseCard({ app, popLabel, onConnect, onManage }: {
 }) {
   return (
     <button
-      disabled={app.comingSoon}
-      onClick={() => { if (app.comingSoon) return; if (app.connected) onManage(app); else onConnect(app); }}
+      onClick={() => { if (app.connected) onManage(app); else onConnect(app); }}
       className={cn(
         'group text-left rounded-2xl border p-4 flex items-start gap-3 transition-all',
-        app.comingSoon
-          ? 'border-white/5 bg-white/[0.01] opacity-50 cursor-default'
-          : app.connected
+        app.connected
           ? 'border-emerald-500/20 bg-emerald-500/[0.03] hover:bg-emerald-500/[0.07] cursor-pointer'
           : 'border-white/8 bg-white/[0.02] hover:bg-white/[0.06] hover:border-white/15 cursor-pointer',
       )}
@@ -43,9 +40,7 @@ function BrowseCard({ app, popLabel, onConnect, onManage }: {
             <p className="text-sm font-semibold text-white leading-tight truncate">{app.name}</p>
             {popLabel && <p className="text-[10px] text-slate-500 mt-0.5">{popLabel}</p>}
           </div>
-          {app.comingSoon ? (
-            <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full border border-slate-600/40 bg-slate-700/20 text-slate-500 font-medium">Soon</span>
-          ) : app.connected ? (
+          {app.connected ? (
             <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full border border-emerald-400/25 bg-emerald-500/15 text-emerald-300 font-medium">Connected</span>
           ) : app.badge ? (
             <span className={cn('shrink-0 text-[10px] px-2 py-0.5 rounded-full border font-medium', BADGE_STYLE[app.badge] || BADGE_STYLE['Verified'])}>{app.badge}</span>
@@ -124,7 +119,7 @@ export function BrowseView({ apps, agents, featured: featuredProp, initialCatego
   }, [apps, agents]);
 
   const filtered = useMemo(() => {
-    let list = [...apps];
+    let list = [...apps].filter(a => !a.comingSoon);
     if (filterType !== 'all') list = list.filter((a) => a.authType === filterType);
     if (filterCategory !== 'all') list = list.filter((a) => a.category === filterCategory);
     if (search) {
@@ -152,6 +147,18 @@ export function BrowseView({ apps, agents, featured: featuredProp, initialCatego
       : [],
     [featuredProp, apps, search, filterCategory, filterType]
   );
+
+  const groupedByDomain = useMemo(() => {
+    if (search || filterCategory !== 'all' || filterType !== 'all') return null;
+    const groups: Record<string, UnifiedApp[]> = {};
+    const domainOrder = ['communication', 'it', 'hr', 'sales', 'finance', 'support', 'recruitment', 'compliance', 'marketing', 'productivity', 'analytics', 'legal'];
+    for (const app of filtered) {
+      const cat = app.category || 'productivity';
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(app);
+    }
+    return domainOrder.filter(d => groups[d]?.length).map(d => ({ domain: d, apps: groups[d], meta: CATEGORY_META[d] }));
+  }, [filtered, search, filterCategory, filterType]);
 
   function popLabel(a: UnifiedApp): string | null {
     const r = popularityMap[a.id];
@@ -306,6 +313,23 @@ export function BrowseView({ apps, agents, featured: featuredProp, initialCatego
               <Search className="w-8 h-8 mx-auto mb-3 opacity-30" />
               <p className="text-sm">No apps found{search ? ` for "${search}"` : ''}.</p>
             </div>
+          ) : groupedByDomain ? (
+            <div className="space-y-6">
+              {groupedByDomain.map(({ domain, apps: domainApps, meta }) => (
+                <div key={domain} className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <meta.Icon className={cn('w-4 h-4', meta.color)} />
+                    <h3 className="text-sm font-semibold text-white">{meta.label}</h3>
+                    <span className="text-xs text-slate-500">{domainApps.length} app{domainApps.length !== 1 ? 's' : ''}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {domainApps.map((a: UnifiedApp) => (
+                      <BrowseCard key={a.id} app={a} popLabel={popLabel(a)} onConnect={onConnect} onManage={onManage} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
               {filtered.map((a: UnifiedApp) => (
@@ -313,6 +337,15 @@ export function BrowseView({ apps, agents, featured: featuredProp, initialCatego
               ))}
             </div>
           )}
+        </div>
+
+        {/* Request integration CTA */}
+        <div className="text-center py-8 border-t border-white/5">
+          <MessageSquarePlus className="w-5 h-5 text-slate-500 mx-auto mb-2" />
+          <p className="text-sm text-slate-400 mb-1">Don't see an app you need?</p>
+          <button className="text-sm text-cyan-400 hover:text-cyan-300 font-medium transition-colors">
+            Request an integration →
+          </button>
         </div>
       </div>
     </div>

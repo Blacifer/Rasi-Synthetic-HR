@@ -2,9 +2,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { Command } from 'cmdk';
 import {
   BarChart3, Users, AlertTriangle, DollarSign, MessageSquare, Shield,
-  FileText, Database, Key, Settings, Zap, Bot, CheckSquare, ScrollText,
-  Server, PlugZap, ClipboardList, TrendingUp, Sparkles, Search, ArrowRight,
-  Plus, Building2, ShieldCheck,
+  Database, Key, Settings, CheckSquare, ScrollText,
+  Server, PlugZap, ClipboardList, Sparkles, Search, ArrowRight,
+  Plus, Building2, ShieldCheck, Wand2, Layers,
 } from 'lucide-react';
 
 interface CommandPaletteProps {
@@ -17,24 +17,21 @@ const NAV_ITEMS = [
   { id: 'agents', label: 'Agents', icon: Users },
   { id: 'incidents', label: 'Incidents', icon: AlertTriangle },
   { id: 'apps', label: 'Apps', icon: Building2 },
+  { id: 'hubs', label: 'Hubs', icon: Layers },
   { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'getting-started', label: 'Getting Started', icon: Sparkles },
   { id: 'conversations', label: 'Conversations', icon: MessageSquare },
   { id: 'costs', label: 'Costs', icon: DollarSign },
   { id: 'governed-actions', label: 'Governed Actions', icon: ShieldCheck },
-  { id: 'action-policies', label: 'Action Policies', icon: Shield },
+  { id: 'action-policies', label: 'Policies', icon: Shield },
   { id: 'approvals', label: 'Approvals', icon: CheckSquare },
   { id: 'audit-log', label: 'Audit Log', icon: ScrollText },
-  { id: 'playbooks', label: 'Playbooks', icon: FileText },
-  { id: 'jobs', label: 'Run History', icon: ClipboardList },
+  { id: 'agent-studio', label: 'Agent Studio', icon: Wand2 },
+  { id: 'execution-history', label: 'Execution History', icon: ClipboardList },
   { id: 'blackbox', label: 'Black Box', icon: Database },
-  { id: 'api-access', label: 'API Access', icon: Key },
+  { id: 'api-webhooks', label: 'API & Webhooks', icon: Key },
   { id: 'developer', label: 'Developer', icon: PlugZap },
-  { id: 'runtime-workers', label: 'Runtime Workers', icon: Server },
-  { id: 'safe-harbor', label: 'Safe Harbor', icon: ShieldCheck },
-  { id: 'model-comparison', label: 'Model Comparison', icon: TrendingUp },
-  { id: 'agent-library', label: 'Agent Library', icon: Bot },
-  { id: 'templates', label: 'Agent Templates', icon: Zap },
+  { id: 'platform', label: 'Platform', icon: Server },
 ];
 
 const QUICK_ACTIONS = [

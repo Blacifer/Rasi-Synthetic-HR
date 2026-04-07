@@ -23,9 +23,6 @@ const DashboardOverview = lazy(() => import('./dashboard/DashboardOverview'));
 const GettingStartedPage = lazy(() => import('./dashboard/GettingStartedPage'));
 const ConnectAgentPage = lazy(() => import('./dashboard/ConnectAgentPage'));
 const FleetPage = lazy(() => import('./dashboard/FleetPage'));
-const AgentTemplatesPage = lazy(() => import('./dashboard/AgentTemplatesPage'));
-const PlaybooksPage = lazy(() => import('./dashboard/PlaybooksPage'));
-const JobsInboxPage = lazy(() => import('./dashboard/JobsInboxPage'));
 const WorkItemsPage = lazy(() => import('./dashboard/WorkItemsPage'));
 const ActionPoliciesPage = lazy(() => import('./dashboard/ActionPoliciesPage'));
 const IncidentsPage = lazy(() => import('./dashboard/IncidentsPage'));
@@ -33,35 +30,23 @@ const PersonaPage = lazy(() => import('./dashboard/PersonaPage'));
 const CostsPage = lazy(() => import('./dashboard/CostsPage'));
 const ShadowModePage = lazy(() => import('./dashboard/ShadowModePage'));
 const BlackBoxPage = lazy(() => import('./dashboard/BlackBoxPage'));
-const ApiKeysPage = lazy(() => import('./dashboard/ApiKeysPage'));
 const PricingPage = lazy(() => import('./dashboard/PricingPage'));
 const SafeHarborPage = lazy(() => import('./dashboard/SafeHarborPage'));
 const SettingsPage = lazy(() => import('./dashboard/SettingsPage'));
 const ApiAnalyticsPage = lazy(() => import('./dashboard/ApiAnalyticsPage'));
-const WebhooksPage = lazy(() => import('./dashboard/WebhooksPage'));
-const BatchProcessingPage = lazy(() => import('./dashboard/BatchProcessingPage'));
-const ModelFineTuningPage = lazy(() => import('./dashboard/ModelFineTuningPage'));
-const CachingPage = lazy(() => import('./dashboard/CachingPage'));
 const ConversationsPage = lazy(() => import('./dashboard/ConversationsPage'));
 const CoverageStatusPage = lazy(() => import('./dashboard/CoverageStatusPage'));
 const DeveloperPage = lazy(() => import('./dashboard/DeveloperPage'));
-const DomainAgentLibraryPage = lazy(() => import('./dashboard/DomainAgentLibraryPage'));
 const AppsPage = lazy(() => import('./dashboard/apps'));
-const MarketingHubPage = lazy(() => import('./dashboard/MarketingHubPage'));
-const HRHubPage = lazy(() => import('./dashboard/HRHubPage'));
-const RecruitmentHubPage = lazy(() => import('./dashboard/RecruitmentHubPage'));
-const SupportHubPage = lazy(() => import('./dashboard/SupportHubPage'));
-const SalesHubPage = lazy(() => import('./dashboard/SalesHubPage'));
-const ITHubPage = lazy(() => import('./dashboard/ITHubPage'));
-const FinanceHubPage = lazy(() => import('./dashboard/FinanceHubPage'));
-const ComplianceHubPage = lazy(() => import('./dashboard/ComplianceHubPage'));
-const IdentityHubPage = lazy(() => import('./dashboard/IdentityHubPage'));
 const ApprovalsPage = lazy(() => import('./dashboard/ApprovalsPage'));
 const GovernedActionsPage = lazy(() => import('./dashboard/GovernedActionsPage'));
 const AuditLogPage = lazy(() => import('./dashboard/AuditLogPage'));
-const RuntimeWorkersPage = lazy(() => import('./dashboard/RuntimeWorkersPage'));
-const ModelCatalogPage = lazy(() => import('./dashboard/ModelCatalogPage'));
-const ReasoningTracesPage = lazy(() => import('./dashboard/ReasoningTracesPage'));
+const HubsPage = lazy(() => import('./dashboard/hubs/HubsPage'));
+const AgentStudioPage = lazy(() => import('./dashboard/AgentStudioPage'));
+const PlatformPage = lazy(() => import('./dashboard/PlatformPage'));
+const ApiWebhooksPage = lazy(() => import('./dashboard/ApiWebhooksPage'));
+const ExecutionHistoryPage = lazy(() => import('./dashboard/ExecutionHistoryPage'));
+const SlackWorkspace = lazy(() => import('./dashboard/apps/workspaces/slack/SlackWorkspace'));
 
 interface DashboardProps {
   isDemoMode?: boolean;
@@ -425,6 +410,89 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     navigate(`/dashboard/${normalizedPage}`);
   }, [navigate]);
 
+  const [error, setError] = useState<string | null>(null);
+
+  const addNotification = async (type: string, title: string, message: string) => {
+    const newNotification: DashboardNotification = {
+      id: crypto.randomUUID(),
+      type: type === 'error' ? 'error' : type === 'warning' ? 'warning' : type === 'success' ? 'success' : 'info',
+      title,
+      message,
+      timestamp: new Date().toISOString(),
+      read: false,
+      source: 'local',
+    };
+    const updated = [newNotification, ...notifications].slice(0, 50);
+    setNotifications(updated);
+    const readIds = new Set(updated.filter((notification) => notification.read).map((notification) => notification.id));
+    writeNotificationState(user?.organizationName, readIds);
+  };
+
+  const handleTemplateDeploy = useCallback(async (template: any) => {
+    const TEMPLATE_TYPE_TO_PACK: Record<string, string> = {
+      customer_support: 'support', customer_success: 'support', call_center: 'support', healthcare: 'support',
+      sales: 'sales', marketing: 'sales',
+      hr: 'recruitment', recruiting: 'recruitment', onboarding: 'recruitment', learning: 'recruitment',
+      legal: 'compliance', compliance: 'compliance', security: 'compliance', security_ops: 'compliance',
+      finance: 'finance', procurement: 'finance', logistics: 'finance', refund: 'finance', payroll: 'finance',
+      it_support: 'it', devops: 'it', data_analyst: 'it', data_analysis: 'it', engineering: 'it', qa: 'it', documentation: 'it', facilities: 'it',
+    };
+    try {
+      const created = await api.agents.create({
+        name: template.name, description: template.description, agent_type: template.type,
+        platform: template.platform, model_name: template.model, budget_limit: template.budget,
+        primary_pack: TEMPLATE_TYPE_TO_PACK[template.type] || null,
+        integration_ids: (template as any).integration_ids || [],
+        system_prompt: (template as any).system_prompt || '', config: {},
+      });
+      if (created.success && created.data) {
+        const newId = (created.data as any).id;
+        if (newId) {
+          const newAgent: AIAgent = {
+            id: newId, name: template.name, description: template.description,
+            agent_type: template.type, platform: template.platform, model_name: template.model,
+            status: (created.data as any).status || 'active', lifecycle_state: 'idle',
+            risk_level: (created.data as any).risk_level || 'low', risk_score: (created.data as any).risk_score || 50,
+            created_at: (created.data as any).created_at || new Date().toISOString(),
+            conversations: 0, satisfaction: 0, uptime: 100, budget_limit: template.budget, current_spend: 0, auto_throttle: false,
+          };
+          if (isDemoMode) { setDemoAgents(prev => [...prev, newAgent]); }
+          else { void queryClient.invalidateQueries({ queryKey: queryKeys.agents }); }
+          addNotification('success', 'Agent Added To Fleet', `${template.name} is now available for governance and monitoring`);
+          navigateTo('agents', { userInitiated: false });
+        }
+      } else { throw new Error('Agent creation rejected by server'); }
+    } catch (err) { console.error('Template deploy error:', err); setError('Failed to add agent from template.'); }
+  }, [isDemoMode, queryClient, navigateTo, addNotification, setError]);
+
+  const handleLibraryAgentDeploy = useCallback(async (agentData: any) => {
+    try {
+      const created = await api.agents.create({
+        name: agentData.name, description: agentData.description, agent_type: agentData.agent_type,
+        platform: agentData.platform, model_name: agentData.model_name,
+        primary_pack: (agentData as any).primary_pack || null,
+        integration_ids: (agentData as any).integration_ids || [],
+        config: { ...agentData.config, system_prompt: agentData.system_prompt },
+      });
+      if (created.success && created.data) {
+        const d = created.data as any;
+        const newAgent: AIAgent = {
+          id: d.id, name: agentData.name, description: agentData.description,
+          agent_type: agentData.agent_type, platform: agentData.platform, model_name: agentData.model_name,
+          status: d.status || 'active', lifecycle_state: 'idle',
+          risk_level: d.risk_level || 'low', risk_score: d.risk_score || 50,
+          created_at: d.created_at || new Date().toISOString(),
+          conversations: 0, satisfaction: 0, uptime: 100, budget_limit: d.budget_limit || 500, current_spend: 0, auto_throttle: false,
+        };
+        if (isDemoMode) { setDemoAgents(prev => [...prev, newAgent]); }
+        else { void queryClient.invalidateQueries({ queryKey: queryKeys.agents }); }
+        addNotification('success', 'Domain Agent Deployed', `${agentData.name} has been added to your fleet.`);
+        setDomainAgentPreselect(null);
+        navigateTo('agents', { userInitiated: false });
+      } else { throw new Error('Agent creation rejected by server'); }
+    } catch (err) { console.error('Domain agent deploy error:', err); throw err; }
+  }, [isDemoMode, queryClient, navigateTo, addNotification]);
+
   const suggestPackForAgent = useCallback((agent: AIAgent): IntegrationPackId => {
     const type = String(agent.agent_type || '').toLowerCase();
     const name = String(agent.name || '').toLowerCase();
@@ -742,36 +810,6 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
     setNotifications(updated);
     writeNotificationState(user?.organizationName, updated.map((notification) => notification.id));
   };
-
-  const addNotification = async (type: string, title: string, message: string) => {
-    const newNotification: DashboardNotification = {
-      id: crypto.randomUUID(),
-      type: type === 'error' ? 'error' : type === 'warning' ? 'warning' : type === 'success' ? 'success' : 'info',
-      title,
-      message,
-      timestamp: new Date().toISOString(),
-      read: false,
-      source: 'local',
-    };
-    const updated = [newNotification, ...notifications].slice(0, 50);
-    setNotifications(updated);
-    const readIds = new Set(updated.filter((notification) => notification.read).map((notification) => notification.id));
-    writeNotificationState(user?.organizationName, readIds);
-
-    // Sync to Appwrite
-    /*try {
-      await appwriteDB.createNotification({
-        type,
-        title,
-        message,
-        read: false
-      });
-    } catch (awError) {
-      console.warn('Failed to sync notification to Appwrite:', awError);
-    }*/
-  };
-
-  const [error, setError] = useState<string | null>(null);
 
   const saveAgents = async (newAgentsOrUpdater: AIAgent[] | ((currentAgents: AIAgent[]) => AIAgent[])) => {
     try {
@@ -1402,8 +1440,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
             <Suspense fallback={<DashboardSectionLoading />}>
               {[
                 'persona', 'shadow', 'api-analytics',
-                'webhooks', 'batch',
-                'fine-tuning', 'caching', 'pricing', 'legal'
+                'pricing', 'legal'
               ].includes(currentPage) && (
 	                  <div className="mb-6">
 	                    <button
@@ -1457,163 +1494,34 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                     />
                   } />
                   <Route path="fleet" element={<Navigate to="/dashboard/agents" replace />} />
-                  <Route path="templates" element={
-                    <AgentTemplatesPage
-                      onDeploy={async (template) => {
-                      const TEMPLATE_TYPE_TO_PACK: Record<string, string> = {
-                        // Support
-                        customer_support: 'support',
-                        customer_success: 'support',
-                        call_center: 'support',
-                        healthcare: 'support',
-                        // Sales
-                        sales: 'sales',
-                        marketing: 'sales',
-                        // Recruitment
-                        hr: 'recruitment',
-                        recruiting: 'recruitment',
-                        onboarding: 'recruitment',
-                        learning: 'recruitment',
-                        // Compliance
-                        legal: 'compliance',
-                        compliance: 'compliance',
-                        security: 'compliance',
-                        security_ops: 'compliance',
-                        // Finance
-                        finance: 'finance',
-                        procurement: 'finance',
-                        logistics: 'finance',
-                        refund: 'finance',
-                        payroll: 'finance',
-                        // IT
-                        it_support: 'it',
-                        devops: 'it',
-                        data_analyst: 'it',
-                        data_analysis: 'it',
-                        engineering: 'it',
-                        qa: 'it',
-                        documentation: 'it',
-                        facilities: 'it',
-                      };
-                      try {
-                        const created = await api.agents.create({
-                          name: template.name,
-                          description: template.description,
-                          agent_type: template.type,
-                          platform: template.platform,
-                          model_name: template.model,
-                          budget_limit: template.budget,
-                          primary_pack: TEMPLATE_TYPE_TO_PACK[template.type] || null,
-                          integration_ids: (template as any).integration_ids || [],
-                          system_prompt: (template as any).system_prompt || '',
-                          config: {},
-                        });
-                        if (created.success && created.data) {
-                          const newId = (created.data as any).id;
-                          if (newId) {
-                            const newAgent: AIAgent = {
-                              id: newId,
-                              name: template.name,
-                              description: template.description,
-                              agent_type: template.type,
-                              platform: template.platform,
-                              model_name: template.model,
-                              status: (created.data as any).status || 'active',
-                              lifecycle_state: 'idle',
-                              risk_level: (created.data as any).risk_level || 'low',
-                              risk_score: (created.data as any).risk_score || 50,
-                              created_at: (created.data as any).created_at || new Date().toISOString(),
-                              conversations: 0,
-                              satisfaction: 0,
-                              uptime: 100,
-                              budget_limit: template.budget,
-                              current_spend: 0,
-                              auto_throttle: false,
-                            };
-                            if (isDemoMode) {
-                              setDemoAgents(prev => [...prev, newAgent]);
-                            } else {
-                              void queryClient.invalidateQueries({ queryKey: queryKeys.agents });
-                            }
-                            addNotification('success', 'Agent Added To Fleet', `${template.name} is now available for governance and monitoring`);
-                            navigateTo('agents', { userInitiated: false });
-                          }
-                        } else {
-                          throw new Error('Agent creation rejected by server');
-                        }
-                      } catch (err) {
-                        console.error('Template deploy error:', err);
-                        setError('Failed to add agent from template.');
-                      }
-                    }} />
-                  } />
-                  <Route path="agent-library" element={
-                    <DomainAgentLibraryPage
+                  {/* Agent Studio — consolidates Templates + Agent Library + Playbooks */}
+                  <Route path="agent-studio" element={
+                    <AgentStudioPage
+                      onDeployTemplate={handleTemplateDeploy}
+                      onDeployLibraryAgent={handleLibraryAgentDeploy}
+                      agents={enrichedAgents}
+                      onNavigate={navigateTo}
                       initialPackId={domainAgentPreselect?.packId}
                       initialAgentId={domainAgentPreselect?.agentId}
-                      onNavigate={navigateTo}
-                      onDeploy={async (agentData) => {
-                        try {
-                          const created = await api.agents.create({
-                            name: agentData.name,
-                            description: agentData.description,
-                            agent_type: agentData.agent_type,
-                            platform: agentData.platform,
-                            model_name: agentData.model_name,
-                            primary_pack: (agentData as any).primary_pack || null,
-                            integration_ids: (agentData as any).integration_ids || [],
-                            config: { ...agentData.config, system_prompt: agentData.system_prompt },
-                          });
-                          if (created.success && created.data) {
-                            const d = created.data as any;
-                            const newAgent: AIAgent = {
-                              id: d.id,
-                              name: agentData.name,
-                              description: agentData.description,
-                              agent_type: agentData.agent_type,
-                              platform: agentData.platform,
-                              model_name: agentData.model_name,
-                              status: d.status || 'active',
-                              lifecycle_state: 'idle',
-                              risk_level: d.risk_level || 'low',
-                              risk_score: d.risk_score || 50,
-                              created_at: d.created_at || new Date().toISOString(),
-                              conversations: 0,
-                              satisfaction: 0,
-                              uptime: 100,
-                              budget_limit: d.budget_limit || 500,
-                              current_spend: 0,
-                              auto_throttle: false,
-                            };
-                            if (isDemoMode) {
-                              setDemoAgents(prev => [...prev, newAgent]);
-                            } else {
-                              void queryClient.invalidateQueries({ queryKey: queryKeys.agents });
-                            }
-                            addNotification('success', 'Domain Agent Deployed', `${agentData.name} has been added to your fleet.`);
-                            setDomainAgentPreselect(null);
-                            navigateTo('agents', { userInitiated: false });
-                          } else {
-                            throw new Error('Agent creation rejected by server');
-                          }
-                        } catch (err) {
-                          console.error('Domain agent deploy error:', err);
-                          throw err;
-                        }
-                      }}
                     />
                   } />
+                  <Route path="templates" element={<Navigate to="/dashboard/agent-studio?tab=templates" replace />} />
+                  <Route path="agent-library" element={<Navigate to="/dashboard/agent-studio?tab=library" replace />} />
+                  <Route path="playbooks" element={<Navigate to="/dashboard/agent-studio?tab=playbooks" replace />} />
                   <Route path="connectors" element={<Navigate to="/dashboard/apps" replace />} />
                   <Route path="apps" element={<AppsPage onNavigate={navigateTo} agents={enrichedAgents} />} />
-                  <Route path="marketing-hub" element={<MarketingHubPage />} />
-                  <Route path="hr-hub" element={<HRHubPage />} />
-                  <Route path="recruitment" element={<RecruitmentHubPage />} />
-                  <Route path="support-hub" element={<SupportHubPage />} />
-                  <Route path="sales-hub" element={<SalesHubPage />} />
-                  <Route path="it-hub" element={<ITHubPage />} />
-                  <Route path="finance-hub" element={<FinanceHubPage />} />
-                  <Route path="compliance-hub" element={<ComplianceHubPage />} />
-                  <Route path="identity-hub" element={<IdentityHubPage />} />
+                  <Route path="apps/slack/workspace" element={<SlackWorkspace />} />
+                  {/* Unified Hubs Page — replaces individual hub pages */}
+                  <Route path="hubs" element={<HubsPage />} />
+                  <Route path="marketing-hub" element={<Navigate to="/dashboard/hubs?domain=marketing" replace />} />
+                  <Route path="hr-hub" element={<Navigate to="/dashboard/hubs?domain=hr" replace />} />
+                  <Route path="recruitment" element={<Navigate to="/dashboard/hubs?domain=recruitment" replace />} />
+                  <Route path="support-hub" element={<Navigate to="/dashboard/hubs?domain=support" replace />} />
+                  <Route path="sales-hub" element={<Navigate to="/dashboard/hubs?domain=sales" replace />} />
+                  <Route path="it-hub" element={<Navigate to="/dashboard/hubs?domain=it" replace />} />
+                  <Route path="finance-hub" element={<Navigate to="/dashboard/hubs?domain=finance" replace />} />
+                  <Route path="compliance-hub" element={<Navigate to="/dashboard/hubs?domain=compliance" replace />} />
+                  <Route path="identity-hub" element={<Navigate to="/dashboard/hubs?domain=identity" replace />} />
                   <Route path="marketplace" element={<Navigate to="/dashboard/apps" replace />} />
                   <Route path="integrations" element={<Navigate to="/dashboard/apps" replace />} />
                   <Route path="conversations" element={<ConversationsPage agents={enrichedAgents} onNavigate={navigateTo} initialAgentId={fleetWorkspaceAgentId} />} />
@@ -1621,27 +1529,32 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="governed-actions" element={<GovernedActionsPage onNavigate={navigateTo} currentUserId={user?.id} currentRole={role} />} />
                   <Route path="approvals" element={<ApprovalsPage />} />
                   <Route path="costs" element={<CostsPage agents={enrichedAgents} incidents={incidents} onNavigate={navigateTo} />} />
-                  <Route path="api-access" element={<ApiKeysPage apiKeys={apiKeys} setApiKeys={saveApiKeys} initialView="keys" onNavigate={navigateTo} />} />
+                  {/* API & Webhooks — consolidated */}
+                  <Route path="api-webhooks" element={<ApiWebhooksPage apiKeys={apiKeys} setApiKeys={saveApiKeys} onNavigate={navigateTo} />} />
+                  <Route path="api-access" element={<Navigate to="/dashboard/api-webhooks?tab=keys" replace />} />
+                  <Route path="webhooks" element={<Navigate to="/dashboard/api-webhooks?tab=webhooks" replace />} />
                   <Route path="settings/*" element={<SettingsPage onNavigate={navigateTo} isDemoMode={!!isDemoMode} />} />
                   <Route path="developer" element={<DeveloperPage onNavigate={navigateTo} />} />
-                  <Route path="playbooks" element={<PlaybooksPage agents={enrichedAgents} onNavigate={(page) => navigateTo(page)} />} />
                   <Route path="blackbox" element={<BlackBoxPage incidents={incidents} onNavigate={navigateTo} />} />
-                  <Route path="runtime-workers" element={<RuntimeWorkersPage />} />
+                  {/* Execution History — consolidated Run History + Traces */}
+                  <Route path="execution-history" element={<ExecutionHistoryPage agents={enrichedAgents} />} />
+                  <Route path="jobs" element={<Navigate to="/dashboard/execution-history?tab=runs" replace />} />
+                  <Route path="traces" element={<Navigate to="/dashboard/execution-history?tab=traces" replace />} />
+                  {/* Platform — consolidated Models + Fine-tuning + Runtime + Caching + Batch */}
+                  <Route path="platform" element={<PlatformPage />} />
+                  <Route path="runtime-workers" element={<Navigate to="/dashboard/platform?tab=runtime" replace />} />
+                  <Route path="models" element={<Navigate to="/dashboard/platform?tab=models" replace />} />
+                  <Route path="fine-tuning" element={<Navigate to="/dashboard/platform?tab=fine-tuning" replace />} />
+                  <Route path="caching" element={<Navigate to="/dashboard/platform?tab=caching" replace />} />
+                  <Route path="batch" element={<Navigate to="/dashboard/platform?tab=batch" replace />} />
                   <Route path="audit-log" element={<AuditLogPage />} />
                   <Route path="coverage" element={<CoverageStatusPage />} />
-                  <Route path="jobs" element={<JobsInboxPage agents={agents} />} />
                   <Route path="work-items" element={<WorkItemsPage />} />
                   <Route path="action-policies" element={<ActionPoliciesPage />} />
                   {/* Settings sub-pages */}
                   <Route path="persona" element={<PersonaPage agents={enrichedAgents} initialAgentId={fleetWorkspaceAgentId} />} />
                   <Route path="shadow" element={<ShadowModePage />} />
                   <Route path="api-analytics" element={<ApiAnalyticsPage isDemoMode={!!isDemoMode} />} />
-                  <Route path="webhooks" element={<WebhooksPage />} />
-                  <Route path="batch" element={<BatchProcessingPage />} />
-                  <Route path="fine-tuning" element={<ModelFineTuningPage />} />
-                  <Route path="caching" element={<CachingPage />} />
-                  <Route path="models" element={<ModelCatalogPage />} />
-                  <Route path="traces" element={<ReasoningTracesPage agents={enrichedAgents} />} />
                   <Route path="pricing" element={<PricingPage onNavigate={navigateTo} />} />
                   <Route path="legal" element={<SafeHarborPage onNavigate={navigateTo} userRole={role} />} />
                   <Route path="*" element={<Navigate to="overview" replace />} />

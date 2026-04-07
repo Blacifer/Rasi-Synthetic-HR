@@ -13,8 +13,7 @@ export function AppCard({ app, onClick }: AppCardProps) {
   return (
     <button
       onClick={onClick}
-      disabled={app.comingSoon}
-      className="group w-full text-left rounded-2xl border border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/[0.12] transition-all duration-150 p-4 flex flex-col gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="group w-full text-left rounded-2xl border border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/[0.12] transition-all duration-150 p-4 flex flex-col gap-3"
     >
       <AppLogo appId={app.appId} logoLetter={app.logoLetter} colorHex={app.colorHex} size="lg" />
 
@@ -44,13 +43,7 @@ export function AppCard({ app, onClick }: AppCardProps) {
         </div>
       )}
 
-      {app.comingSoon && (
-        <span className="text-[10px] font-medium text-slate-500 border border-white/10 bg-white/5 px-1.5 py-0.5 rounded-md">
-          Coming soon
-        </span>
-      )}
-
-      {app.connected && !app.comingSoon && (
+      {app.connected && (
         <div className="flex items-center gap-1.5">
           {app.status === 'error' ? (
             <AlertCircle className="w-3 h-3 text-rose-400" />

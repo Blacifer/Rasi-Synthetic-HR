@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
-import { AlertCircle, Bot, Loader2, MoreHorizontal, Zap } from 'lucide-react';
+import { AlertCircle, Bot, ExternalLink, Loader2, MoreHorizontal, Zap } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import type { UnifiedApp } from '../types';
 import { trustTierTone, maturityTone, guardrailTone, getTrustTierLabel, getMaturityLabel, useOutsideClick } from '../helpers';
 import { AppLogo } from './AppLogo';
+import { StatusBadge } from '../workspaces/shared';
 
 interface ConnectedAppRowProps {
   app: UnifiedApp;
@@ -47,21 +48,14 @@ export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisco
               {getMaturityLabel(app.maturity)}
             </span>
           )}
-          {healthResult === 'ok' && (
-            <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" title="Health check passed" />
-          )}
-          {healthResult === 'error' && (
-            <span className="w-2 h-2 rounded-full bg-rose-400 shrink-0" title="Health check failed" />
-          )}
-          {healthResult == null && (
-            <span
-              className={cn(
-                'w-2 h-2 rounded-full shrink-0',
-                app.supportsHealthTest === false ? 'bg-slate-500/60' : 'bg-amber-400/50',
-              )}
-              title={app.supportsHealthTest === false ? 'Health test unavailable' : 'Not yet tested'}
-            />
-          )}
+          <StatusBadge
+            status={
+              healthResult === 'ok' ? 'healthy'
+                : healthResult === 'error' ? 'error'
+                : app.supportsHealthTest === false ? 'unknown'
+                : 'pending'
+            }
+          />
         </div>
         {agentNames.length > 0 && (
           <div className="flex items-center gap-1 mt-0.5">
@@ -70,6 +64,9 @@ export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisco
               {agentNames.slice(0, 3).join(', ')}{agentNames.length > 3 ? ` +${agentNames.length - 3}` : ''}
             </p>
           </div>
+        )}
+        {app.integrationData?.last_tested_at && (
+          <p className="text-[11px] text-slate-600 mt-0.5">Last tested {new Date(app.integrationData.last_tested_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
         )}
         {app.lastErrorMsg && (
           <p className="text-[11px] text-rose-400 mt-0.5 truncate">{app.lastErrorMsg}</p>
@@ -98,7 +95,12 @@ export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisco
             <Loader2 className="w-3 h-3 animate-spin" /> Syncing
           </span>
         ) : (
-          <span className="text-sm font-medium text-emerald-400">Connected</span>
+          <button
+            onClick={() => onClick(app)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white text-xs font-medium transition-colors"
+          >
+            <ExternalLink className="w-3 h-3" /> Open workspace
+          </button>
         )}
 
         <div ref={menuRef} className="relative">
