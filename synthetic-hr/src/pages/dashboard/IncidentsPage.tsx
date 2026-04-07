@@ -601,7 +601,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
       {/* Keyboard shortcuts help overlay */}
       {showShortcutsHelp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowShortcutsHelp(false)}>
-          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+          <div className="w-full max-w-sm rounded-2xl border border-white/[0.12] bg-slate-900/80 p-6 shadow-2xl glass glass-glow">
             <h3 className="mb-4 text-sm font-bold uppercase tracking-[0.18em] text-slate-400">Keyboard Shortcuts</h3>
             <div className="space-y-2">
               {[['J', 'Next incident'], ['K', 'Previous incident'], ['R', 'Resolve selected'], ['A', 'Cycle owner/assign'], ['Esc', 'Close panel'], ['?', 'Toggle this help']].map(([key, desc]) => (
@@ -652,7 +652,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
 
       <div className="grid gap-6 xl:grid-cols-[0.78fr_1.22fr]">
         <div className="space-y-6">
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
+          <div className="rounded-2xl border border-white/[0.10] bg-white/[0.05] glass glass-glow p-6">
             {showSimulationTools ? (
               <>
                 <div className="flex items-start justify-between gap-4">
@@ -742,7 +742,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
+        <div className="rounded-2xl border border-white/[0.10] bg-white/[0.05] glass glass-glow p-6">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -846,7 +846,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.04] glass-sm p-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-center gap-3">
                     <button
                       onClick={toggleSelectAllVisible}

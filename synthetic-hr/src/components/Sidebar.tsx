@@ -104,12 +104,16 @@ function NavBtn({
       aria-current={isActive ? 'page' : undefined}
       whileTap={{ scale: 0.95 }}
       className={cn(
-        'relative flex items-center rounded-xl transition-colors duration-150 group',
+        'relative flex items-center rounded-xl transition-all duration-200 group',
         expanded ? 'w-full gap-3 px-3 py-2.5' : 'w-10 h-10 justify-center mx-auto',
         isActive
-          ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/25 shadow-[0_0_14px_rgba(34,211,238,0.12)]'
-          : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.05] border border-transparent',
+          ? 'bg-cyan-500/12 text-cyan-300 border border-cyan-500/25 shadow-[0_0_20px_rgba(34,211,238,0.12)]'
+          : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.06] border border-transparent',
       )}
+      style={isActive ? {
+        backdropFilter: 'blur(20px) saturate(150%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(150%)',
+      } : undefined}
     >
       {isActive && (
         <motion.span
@@ -194,7 +198,8 @@ export function Sidebar({
         <div className={cn('flex items-center mb-5 px-3 pt-4', expanded ? 'justify-between' : 'justify-center')}>
           {expanded ? (
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/20 flex items-center justify-center shadow-[0_0_12px_rgba(34,211,238,0.15)]">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500/25 to-blue-500/25 border border-cyan-500/25 flex items-center justify-center shadow-[0_0_16px_rgba(34,211,238,0.20)]"
+                style={{ backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
                 <Brain className="w-5 h-5 text-cyan-300" />
               </div>
               <div>
@@ -203,7 +208,8 @@ export function Sidebar({
               </div>
             </div>
           ) : (
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/20 flex items-center justify-center shadow-[0_0_12px_rgba(34,211,238,0.15)]">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500/25 to-blue-500/25 border border-cyan-500/25 flex items-center justify-center shadow-[0_0_16px_rgba(34,211,238,0.20)]"
+              style={{ backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
               <Brain className="w-5 h-5 text-cyan-300" />
             </div>
           )}
@@ -222,7 +228,8 @@ export function Sidebar({
         {expanded ? (
           <button
             onClick={dispatchSearch}
-            className="mx-2 mb-3 flex items-center gap-2 w-full px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.07] text-slate-500 text-xs hover:border-white/[0.12] hover:text-slate-400 transition-colors backdrop-blur-sm"
+            className="mx-2 mb-3 flex items-center gap-2 w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-slate-500 text-xs hover:border-white/[0.15] hover:bg-white/[0.06] hover:text-slate-400 transition-all"
+            style={{ backdropFilter: 'blur(16px) saturate(150%)', WebkitBackdropFilter: 'blur(16px) saturate(150%)' }}
           >
             <Search className="w-3.5 h-3.5 shrink-0" />
             <span className="flex-1 text-left">Search...</span>

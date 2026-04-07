@@ -48,7 +48,7 @@ export function OverviewSection({
             <button
               key={card.label}
               onClick={card.action}
-              className="group text-left rounded-2xl border border-white/[0.06] bg-white/[0.025] hover:bg-white/[0.04] hover:border-white/[0.12] p-5 transition-all"
+              className="group text-left rounded-2xl border border-white/[0.10] bg-white/[0.05] glass glass-glow hover:bg-white/[0.04] hover:border-white/[0.12] p-5 transition-all"
             >
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.06]">
@@ -70,7 +70,7 @@ export function OverviewSection({
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="xl:col-span-2 rounded-2xl border border-white/[0.06] bg-white/[0.025] p-6">
+        <div className="xl:col-span-2 rounded-2xl border border-white/[0.10] bg-white/[0.05] glass glass-glow p-6">
           <h3 className="text-base font-semibold text-white">Recommended actions</h3>
           <p className="text-xs text-slate-500 mt-1">Complete these to improve your workspace security and reliability.</p>
           <div className="mt-4 space-y-3">
@@ -78,13 +78,13 @@ export function OverviewSection({
               <button
                 key={item.key}
                 onClick={item.action}
-                className="w-full text-left rounded-xl px-4 py-3 border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] transition-colors"
+                className="w-full text-left rounded-xl px-4 py-3 border border-white/[0.08] bg-white/[0.04] glass-sm hover:bg-white/[0.04] transition-colors"
               >
                 <p className="text-sm font-medium text-white">{item.title}</p>
                 <p className="text-xs text-slate-400 mt-1">{item.detail}</p>
               </button>
             )) : (
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] glass-sm p-5">
                 <p className="text-sm font-medium text-emerald-300">All set</p>
                 <p className="mt-1 text-sm text-slate-400">
                   Workspace access, alerts, and security are configured. Refine settings in the sections on the left.
@@ -94,7 +94,7 @@ export function OverviewSection({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-6">
+        <div className="rounded-2xl border border-white/[0.10] bg-white/[0.05] glass glass-glow p-6">
           <h3 className="text-base font-semibold text-white">At a glance</h3>
           <div className="mt-4 space-y-3 text-sm">
             <div className="flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2.5">

@@ -561,7 +561,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar */}
         <div className="flex-shrink-0 lg:w-52">
-          <div className="border border-white/[0.06] bg-white/[0.025] rounded-2xl p-3 sticky top-4">
+          <div className="border border-white/[0.10] bg-white/[0.05] rounded-2xl p-3 sticky top-4 glass glass-glow">
             <nav className="space-y-1">
               {tabItems.map(tab => {
                 const Icon = tab.icon;
@@ -580,11 +580,11 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
                     key={tab.id}
                     onClick={() => navigateToTab(tab.id)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${isActive
-                      ? 'bg-white/[0.08] text-white border border-white/[0.10]'
-                      : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                      ? 'bg-cyan-500/12 text-cyan-300 border border-cyan-500/25 shadow-[0_0_16px_rgba(34,211,238,0.08)]'
+                      : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
                       }`}
                   >
-                    <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : ''}`} />
+                    <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-cyan-300' : ''}`} />
                     {tab.label}
                     {isDirty && (
                       <span className="ml-auto w-2 h-2 rounded-full bg-amber-400" />

@@ -1251,22 +1251,22 @@ export default function FleetPage({
 
       {agents.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
+          <div className="rounded-2xl border border-white/[0.10] bg-white/[0.05] glass glass-glow p-5">
             <div className="text-xs uppercase tracking-widest text-slate-500">Active agents</div>
             <div className="mt-2 text-2xl font-semibold text-white">{agents.filter((agent) => agent.status === 'active').length}</div>
             <div className="mt-1 text-xs text-slate-500">Currently running right now</div>
           </div>
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
+          <div className="rounded-2xl border border-white/[0.10] bg-white/[0.05] glass glass-glow p-5">
             <div className="text-xs uppercase tracking-widest text-slate-500">Live agents</div>
             <div className="mt-2 text-2xl font-semibold text-white">{liveAgentCount}</div>
             <div className="mt-1 text-xs text-slate-500">Handling traffic on connected channels</div>
           </div>
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
+          <div className="rounded-2xl border border-white/[0.10] bg-white/[0.05] glass glass-glow p-5">
             <div className="text-xs uppercase tracking-widest text-slate-500">Need attention</div>
             <div className="mt-2 text-2xl font-semibold text-white">{attentionAgentCount}</div>
             <div className="mt-1 text-xs text-slate-500">High-risk or elevated governance attention</div>
           </div>
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
+          <div className="rounded-2xl border border-white/[0.10] bg-white/[0.05] glass glass-glow p-5">
             <div className="text-xs uppercase tracking-widest text-slate-500">Not connected</div>
             <div className="mt-2 text-2xl font-semibold text-white">{disconnectedAgentCount}</div>
             <div className="mt-1 text-xs text-slate-500">Ready for a first channel or deploy step</div>
@@ -1275,7 +1275,7 @@ export default function FleetPage({
       )}
 
       {handoffCard && (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
+        <div className="rounded-2xl border border-white/[0.10] bg-white/[0.05] glass glass-glow p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-2xl">
               <p className="text-xs font-medium uppercase tracking-widest text-slate-500">{handoffCard.eyebrow}</p>
@@ -1436,9 +1436,10 @@ export default function FleetPage({
                 transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
                 whileHover={{ y: agent.status !== 'terminated' ? -2 : 0, transition: { duration: 0.15 } }}
                 className={`relative border rounded-2xl overflow-hidden transition-all ${highlightedAgentId === agent.id
-                  ? 'border-white/20 ring-1 ring-white/10 bg-white/[0.04]'
-                  : 'border-white/[0.06] bg-white/[0.025]'
+                  ? 'border-white/20 ring-1 ring-white/10 bg-white/[0.06]'
+                  : 'border-white/[0.10] bg-white/[0.04]'
                   } ${agent.status === 'terminated' ? 'opacity-60' : ''}`}
+                style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', boxShadow: '0 4px 24px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.06)' }}
               >
                 {/* Main card row */}
                 <div className="p-5">
@@ -1506,17 +1507,17 @@ export default function FleetPage({
                       <p className="text-slate-300 text-sm">{whatIsHappening}</p>
                       <p className="text-slate-500 text-sm mt-1">{agent.description}</p>
                       <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-3">
+                        <div className="rounded-xl border border-white/[0.10] bg-white/[0.05] glass-sm px-3 py-3">
                           <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Model</div>
                           <div className="mt-2 text-sm font-medium text-white truncate">{modelDisplayName}</div>
                           <div className="mt-1 text-xs text-slate-500 truncate">{providerLabel}</div>
                         </div>
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-3">
+                        <div className="rounded-xl border border-white/[0.10] bg-white/[0.05] glass-sm px-3 py-3">
                           <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Activity</div>
                           <div className="mt-2 text-sm font-medium text-white">{agent.conversations.toLocaleString()} conversations</div>
                           <div className="mt-1 text-xs text-slate-500">{connectedTargetCount} connected target{connectedTargetCount === 1 ? '' : 's'}</div>
                         </div>
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-3">
+                        <div className="rounded-xl border border-white/[0.10] bg-white/[0.05] glass-sm px-3 py-3">
                           <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Controls</div>
                           <div className="mt-2 text-sm font-medium text-white">
                             {agent.budget_limit > 0 ? `₹${agent.budget_limit.toLocaleString()} budget cap` : 'No budget cap set'}

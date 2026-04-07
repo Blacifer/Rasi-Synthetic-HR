@@ -382,7 +382,7 @@ const hasData = agents.length > 0;
           <p className="mt-2 text-slate-400">Three steps to get your first AI agent running safely.</p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-8  space-y-3">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-8 space-y-3" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', boxShadow: '0 8px 32px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.10)' }}>
           {steps.map((step) => (
             <button
               key={step.num}
@@ -402,7 +402,7 @@ const hasData = agents.length > 0;
         </div>
 
         {/* Quick Deploy */}
-        <div className="rounded-2xl border border-cyan-500/20 bg-[radial-gradient(ellipse_at_top_left,rgba(34,211,238,0.07),transparent_60%)] bg-slate-900/60 backdrop-blur-xl p-8">
+        <div className="rounded-2xl border border-cyan-500/20 bg-slate-900/40 p-8" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', backgroundImage: 'radial-gradient(ellipse at top left, rgba(34,211,238,0.10), transparent 60%)', boxShadow: '0 8px 32px rgba(0,0,0,0.20), inset 0 1px 0 rgba(34,211,238,0.10)' }}>
           <div className="flex items-start gap-4 mb-5">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-500/30 bg-cyan-500/10">
               <Zap className="h-5 w-5 text-cyan-400" />
@@ -697,10 +697,10 @@ const hasData = agents.length > 0;
   return (
     <div className="space-y-8">
       {primaryAction && (
-        <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 shadow-sm">
+        <section className="rounded-2xl border border-white/[0.10] bg-white/[0.05] p-6" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', boxShadow: '0 8px 32px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-2xl">
-              <p className="text-xs font-medium uppercase tracking-widest text-amber-400/80">{primaryActionLabel}</p>
+              <p className="text-xs font-medium uppercase tracking-widest text-cyan-400/80">{primaryActionLabel}</p>
               <h2 className="mt-2 text-lg font-semibold text-white">{primaryAction.title}</h2>
               <p className="mt-1 text-sm text-slate-400">{primaryAction.description}</p>
             </div>
@@ -756,9 +756,9 @@ const hasData = agents.length > 0;
 
       {/* Morning Briefing — shown once per calendar day */}
       {showBriefing && (
-        <div className="relative flex items-start gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-5 py-4 shadow-sm">
+        <div className="relative flex items-start gap-4 rounded-2xl border border-white/[0.10] bg-white/[0.05] px-5 py-4" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', boxShadow: '0 8px 32px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
           {/* Accent bar */}
-          <div className="absolute left-0 inset-y-0 w-1 rounded-l-2xl bg-gradient-to-b from-cyan-400 to-blue-500" />
+          <div className="absolute left-0 inset-y-0 w-1 rounded-l-2xl bg-gradient-to-b from-cyan-400 to-blue-500" style={{ boxShadow: '0 0 8px rgba(34,211,238,0.30)' }} />
           <div className="flex-1 min-w-0 pl-2">
             <p className="text-sm font-semibold text-slate-200">
               {greeting}, {firstName}. Here&apos;s where things stand.
@@ -940,7 +940,7 @@ const hasData = agents.length > 0;
         </span>
       </div>
 
-      <section className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
+      <section className="rounded-2xl border border-white/[0.10] bg-white/[0.05] p-6" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', boxShadow: '0 8px 32px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
         <div className="grid gap-6 xl:grid-cols-2">
           <div>
             <p className="text-xs font-medium uppercase tracking-widest text-slate-500 mb-3">Command center</p>
@@ -1042,7 +1042,7 @@ const hasData = agents.length > 0;
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
           {/* Widget 1: Cost Avoided via Caching */}
-          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] backdrop-blur-sm p-5 flex items-start gap-4">
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-5 flex items-start gap-4" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', boxShadow: '0 8px 32px rgba(0,0,0,0.16), inset 0 1px 0 rgba(16,185,129,0.08)' }}>
             <div className="shrink-0 w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center">
               <DollarSign className="w-5 h-5 text-emerald-400" />
             </div>
@@ -1060,7 +1060,7 @@ const hasData = agents.length > 0;
           </div>
 
           {/* Widget 2: Operator Time Saved */}
-          <div className="rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] backdrop-blur-sm p-5 flex items-start gap-4">
+          <div className="rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] p-5 flex items-start gap-4" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', boxShadow: '0 8px 32px rgba(0,0,0,0.16), inset 0 1px 0 rgba(139,92,246,0.08)' }}>
             <div className="shrink-0 w-10 h-10 rounded-xl bg-violet-500/15 flex items-center justify-center">
               <Clock className="w-5 h-5 text-violet-400" />
             </div>
@@ -1344,7 +1344,7 @@ const hasData = agents.length > 0;
         const moneySaved = Math.round(hoursSaved * LABOR_RATE_PER_HOUR);
         const netSaving = moneySaved - Math.round(totalCost);
         return (
-          <section className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
+          <section className="relative overflow-hidden rounded-2xl border border-white/[0.10] bg-white/[0.05] p-6" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', boxShadow: '0 8px 32px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-400">Automation savings</p>
