@@ -2,11 +2,38 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Receipt, CreditCard, TrendingUp, RefreshCw, Plus, X, Check, Loader2, Sparkles, AlertTriangle,
 } from 'lucide-react';
+import { DollarSign as DollarIcon } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
+import { HubLiveMetrics } from './hubs/HubLiveMetrics';
+import type { IntegrationConfig } from './hubs/HubLiveMetrics';
 import type { HubInvoice, HubExpense } from '../../types';
 
 type TabId = 'invoices' | 'expenses' | 'runway';
+
+const FINANCE_INTEGRATIONS: IntegrationConfig[] = [
+  {
+    connectorId: 'quickbooks',
+    appName: 'QuickBooks',
+    icon: <DollarIcon className="w-3.5 h-3.5 text-green-400" />,
+    workspacePath: '/dashboard/apps/quickbooks/workspace',
+    brandBg: 'bg-green-500/20',
+    metrics: [
+      { label: 'Unpaid Invoices', action: 'list_invoices', params: { limit: 100 }, transform: d => {
+        if (!Array.isArray(d)) return '—';
+        return d.filter((inv: any) => Number(inv.Balance) > 0).length;
+      }},
+      { label: 'Revenue Total', action: 'list_invoices', params: { limit: 100 }, transform: d => {
+        if (!Array.isArray(d)) return '—';
+        const sum = d.reduce((s: number, inv: any) => s + Number(inv.TotalAmt || 0), 0);
+        if (sum >= 10000000) return `₹${(sum / 10000000).toFixed(1)}Cr`;
+        if (sum >= 100000) return `₹${(sum / 100000).toFixed(1)}L`;
+        return `₹${sum.toLocaleString('en-IN')}`;
+      }},
+      { label: 'Customers', action: 'list_customers', params: { limit: 1 }, transform: d => Array.isArray(d) ? d.length : '—' },
+    ],
+  },
+];
 
 function cx(...v: Array<string | false | null | undefined>) { return v.filter(Boolean).join(' '); }
 
@@ -143,6 +170,8 @@ export default function FinanceHubPage() {
           <RefreshCw className={cx('w-4 h-4', busy && 'animate-spin')} /> Refresh
         </button>
       </div>
+
+      <HubLiveMetrics configs={FINANCE_INTEGRATIONS} />
 
       <div className="flex flex-wrap gap-2">
         {tabs.map(t => (

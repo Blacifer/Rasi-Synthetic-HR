@@ -2,11 +2,39 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Shield, Sparkles, FileCheck, Settings2, RefreshCw, Plus, X, Check, Loader2, Clock,
 } from 'lucide-react';
+import { GitBranch, SquareKanban } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
+import { HubLiveMetrics } from './hubs/HubLiveMetrics';
+import type { IntegrationConfig } from './hubs/HubLiveMetrics';
 import type { AccessRequestHub } from '../../types';
 
 type TabId = 'queue' | 'log' | 'settings';
+
+const IT_INTEGRATIONS: IntegrationConfig[] = [
+  {
+    connectorId: 'jira',
+    appName: 'Jira',
+    icon: <SquareKanban className="w-3.5 h-3.5 text-blue-400" />,
+    workspacePath: '/dashboard/apps/jira/workspace',
+    brandBg: 'bg-blue-500/20',
+    metrics: [
+      { label: 'Open Issues', action: 'list_issues', params: { jql: 'status != Done', limit: 1 }, transform: d => Array.isArray(d) ? d.length : (d?.total ?? '—') },
+      { label: 'In Progress', action: 'list_issues', params: { jql: 'status = "In Progress"', limit: 1 }, transform: d => Array.isArray(d) ? d.length : (d?.total ?? '—') },
+    ],
+  },
+  {
+    connectorId: 'github',
+    appName: 'GitHub',
+    icon: <GitBranch className="w-3.5 h-3.5 text-slate-300" />,
+    workspacePath: '/dashboard/apps/github/workspace',
+    brandBg: 'bg-slate-700/60',
+    metrics: [
+      { label: 'Open PRs', action: 'list_pulls', params: { state: 'open', limit: 50 }, transform: d => Array.isArray(d) ? d.length : 0 },
+      { label: 'Open Issues', action: 'list_issues', params: { state: 'open', limit: 50 }, transform: d => Array.isArray(d) ? d.length : 0 },
+    ],
+  },
+];
 
 function cx(...v: Array<string | false | null | undefined>) { return v.filter(Boolean).join(' '); }
 
@@ -134,6 +162,8 @@ export default function ITHubPage() {
           <RefreshCw className={cx('w-4 h-4', busy && 'animate-spin')} /> Refresh
         </button>
       </div>
+
+      <HubLiveMetrics configs={IT_INTEGRATIONS} />
 
       <div className="flex flex-wrap gap-2">
         {tabs.map(t => (

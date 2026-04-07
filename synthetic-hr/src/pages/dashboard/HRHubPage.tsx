@@ -5,8 +5,35 @@ import {
 } from 'lucide-react';
 import { toast } from '../../lib/toast';
 import { authenticatedFetch } from '../../lib/api/_helpers';
+import { HubLiveMetrics } from './hubs/HubLiveMetrics';
+import type { IntegrationConfig } from './hubs/HubLiveMetrics';
 
 type TabId = 'attendance' | 'leave' | 'payroll' | 'headcount';
+
+const HR_INTEGRATIONS: IntegrationConfig[] = [
+  {
+    connectorId: 'zoho-people',
+    appName: 'Zoho People',
+    icon: <Users className="w-3.5 h-3.5 text-red-400" />,
+    workspacePath: '/dashboard/apps/zoho/workspace',
+    brandBg: 'bg-red-500/20',
+    metrics: [
+      { label: 'Employees', action: 'list_employees', params: { limit: 1 }, transform: d => Array.isArray(d) ? d.length : (d?.total ?? '—') },
+      { label: 'Pending Leave', action: 'list_leave_requests', params: { status: 'pending' }, transform: d => Array.isArray(d) ? d.length : 0 },
+    ],
+  },
+  {
+    connectorId: 'notion',
+    appName: 'Notion',
+    icon: <Database className="w-3.5 h-3.5 text-slate-300" />,
+    workspacePath: '/dashboard/apps/notion/workspace',
+    brandBg: 'bg-slate-700/60',
+    metrics: [
+      { label: 'HR Pages', action: 'search', params: { query: 'HR' }, transform: d => Array.isArray(d) ? d.length : 0 },
+      { label: 'Databases', action: 'list_databases', transform: d => Array.isArray(d) ? d.length : 0 },
+    ],
+  },
+];
 
 function cx(...v: Array<string | false | null | undefined>) { return v.filter(Boolean).join(' '); }
 
@@ -191,6 +218,10 @@ export default function HRHubPage() {
             <RefreshCw className={cx('w-3.5 h-3.5', busy && 'animate-spin')} />
             Refresh
           </button>
+        </div>
+
+        <div className="mt-4">
+          <HubLiveMetrics configs={HR_INTEGRATIONS} />
         </div>
 
         {/* Tabs */}
