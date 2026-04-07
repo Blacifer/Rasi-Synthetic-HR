@@ -14,9 +14,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import {
   Brain, BarChart3, Users, AlertTriangle, MessageSquare, DollarSign,
-  Layers, Settings, Sparkles, Zap, Bot, CheckSquare, Shield, ScrollText,
-  Key, PlugZap, FileText, ClipboardList, Database, Server,
-  User, LogOut, Sun, Moon, Bell, ChevronRight, Search, GitBranch,
+  Layers, Settings, Sparkles, Wand2, CheckSquare, Shield, ScrollText,
+  Key, PlugZap, ClipboardList, Database, Server,
+  User, LogOut, Sun, Moon, Bell, ChevronRight, Search,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -53,6 +53,7 @@ const CORE_ITEMS: NavItem[] = [
   { id: 'agents', icon: Users, label: 'Agents' },
   { id: 'incidents', icon: AlertTriangle, label: 'Incidents' },
   { id: 'apps', icon: Layers, label: 'Apps' },
+  { id: 'hubs', icon: Sparkles, label: 'Hubs' },
   { id: 'settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -60,26 +61,22 @@ const GROUPS: NavGroup[] = [
   {
     label: 'Platform',
     items: [
-      { id: 'templates', icon: Zap, label: 'Templates' },
-      { id: 'agent-library', icon: Bot, label: 'Agent Library' },
-      { id: 'playbooks', icon: FileText, label: 'Playbooks' },
-      { id: 'action-policies', icon: Shield, label: 'Safety Rules' },
+      { id: 'agent-studio', icon: Wand2, label: 'Agent Studio' },
+      { id: 'action-policies', icon: Shield, label: 'Policies' },
+      { id: 'governed-actions', icon: Shield, label: 'Governed Actions' },
       { id: 'conversations', icon: MessageSquare, label: 'Conversations' },
       { id: 'costs', icon: DollarSign, label: 'Costs' },
-      { id: 'governed-actions', icon: Shield, label: 'Governed Actions' },
-      { id: 'approvals', icon: CheckSquare, label: 'HR Inbox' },
+      { id: 'approvals', icon: CheckSquare, label: 'Approvals' },
       { id: 'audit-log', icon: ScrollText, label: 'Audit Log' },
     ],
   },
   {
     label: 'Developer Tools',
     items: [
-      { id: 'api-access', icon: Key, label: 'API Access' },
+      { id: 'api-webhooks', icon: Key, label: 'API & Webhooks' },
       { id: 'developer', icon: PlugZap, label: 'Developer' },
-      { id: 'jobs', icon: ClipboardList, label: 'Run History' },
-      { id: 'blackbox', icon: Database, label: 'Black Box' },
-      { id: 'runtime-workers', icon: Server, label: 'Runtime Workers' },
-      { id: 'traces', icon: GitBranch, label: 'Traces' },
+      { id: 'execution-history', icon: ClipboardList, label: 'Execution History' },
+      { id: 'platform', icon: Server, label: 'Platform' },
     ],
   },
 ];

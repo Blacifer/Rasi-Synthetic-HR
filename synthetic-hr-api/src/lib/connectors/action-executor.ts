@@ -10,6 +10,11 @@ import { checkCircuitBreaker, recordSuccess, recordFailure } from '../circuit-br
 import { enqueueRetry } from '../retry-worker';
 import { connectorActionFingerprint } from '../preflight-gate';
 import { supabaseRest, eq, gte } from '../supabase-rest';
+import { getRegisteredAdapter, isReadAction as isReadActionType } from './adapter';
+
+// Import adapters to register them
+import './adapters/slack';
+import './adapters/jira';
 
 export type ActionResult = {
   success: boolean;
@@ -111,9 +116,20 @@ export async function executeConnectorAction(
 
   // -------------------------------------------------------------------
   // Execute the connector action
+  // Prefer registered adapter if available, fall back to legacy switch
   // -------------------------------------------------------------------
   let result: ActionResult;
   try {
+    const adapter = getRegisteredAdapter(connectorId);
+    if (adapter) {
+      // Route through the adapter's read/write split
+      if (isReadActionType(action)) {
+        result = await adapter.executeRead(action, params, credentials);
+      } else {
+        result = await adapter.executeWrite(action, params, credentials);
+      }
+    } else {
+    // Legacy switch-case for connectors not yet migrated to adapters
     switch (connectorId) {
       case 'zendesk': result = await zendeskAction(action, params, credentials); break;
       case 'slack': result = await slackAction(action, params, credentials); break;
@@ -132,6 +148,7 @@ export async function executeConnectorAction(
       case 'linkedin-recruiter': result = await linkedinRecruiterAction(action, params, credentials); break;
       default:
         return { success: false, error: `Connector "${connectorId}" actions are not yet supported`, statusCode: 501 };
+    }
     }
   } catch (err: any) {
     logger.error('Connector action failed', { connectorId, action, error: err.message });

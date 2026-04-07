@@ -12,7 +12,7 @@ import { StatsBar } from './components/StatsBar';
 import { AgentContextBanner } from './components/AgentContextBanner';
 import { CategorySidebar } from './components/CategorySidebar';
 import { ConnectedAppRow } from './components/ConnectedAppRow';
-import { ConnectModal } from './components/ConnectModal';
+import { ConnectWizard } from './connect-wizard/ConnectWizard';
 import { BrowseView } from './components/BrowseView';
 import { MobileBottomSheet } from './components/MobileBottomSheet';
 import { DetailDrawer } from './drawer/DetailDrawer';
@@ -300,7 +300,13 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
                     key={app.id}
                     app={app}
                     agentNames={agentNamesFor(app)}
-                    onClick={(_a) => setDrawerApp(app)}
+                    onClick={(_a) => {
+                      if (app.appId === 'slack' && onNavigate) {
+                        onNavigate('/dashboard/apps/slack/workspace');
+                      } else {
+                        setDrawerApp(app);
+                      }
+                    }}
                     onConfigure={(_a) => setConnectTarget(app)}
                     onDisconnect={(_a) => void handleDisconnect(app)}
                     healthResult={healthMap.get(app.appId) ?? null}
@@ -321,19 +327,23 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
         </div>
       </div>
 
-      {/* Connect modal */}
+      {/* Connect wizard */}
       {connectTarget && (
-        <ConnectModal
+        <ConnectWizard
           app={connectTarget}
+          agents={agents}
           onConnect={async (app, creds) => {
             await handleConnect(app, creds);
-            setConnectTarget(null);
-          }}
-          onDisconnect={async (app) => {
-            await handleDisconnect(app);
-            setConnectTarget(null);
           }}
           onClose={() => setConnectTarget(null)}
+          onOpenWorkspace={(app) => {
+            setConnectTarget(null);
+            if (app.appId === 'slack' && onNavigate) {
+              onNavigate('/dashboard/apps/slack/workspace');
+            } else {
+              setDrawerApp(app);
+            }
+          }}
         />
       )}
 
