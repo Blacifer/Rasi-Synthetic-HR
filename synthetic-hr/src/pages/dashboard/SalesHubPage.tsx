@@ -3,11 +3,29 @@ import {
   Building2, Sparkles, TrendingDown, Settings2, RefreshCw, Plus, X, Check, Loader2,
   ChevronRight,
 } from 'lucide-react';
+import { Briefcase } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
+import { HubLiveMetrics } from './hubs/HubLiveMetrics';
+import type { IntegrationConfig } from './hubs/HubLiveMetrics';
 import type { SalesLeadHub } from '../../types';
 
 type TabId = 'pipeline' | 'heatmap' | 'settings';
+
+const SALES_INTEGRATIONS: IntegrationConfig[] = [
+  {
+    connectorId: 'hubspot',
+    appName: 'HubSpot',
+    icon: <Briefcase className="w-3.5 h-3.5 text-orange-400" />,
+    workspacePath: '/dashboard/apps/hubspot/workspace',
+    brandBg: 'bg-orange-500/20',
+    metrics: [
+      { label: 'Total Deals', action: 'list_deals', params: { limit: 1 }, transform: d => d?.results?.length ?? (Array.isArray(d) ? d.length : '—') },
+      { label: 'Contacts', action: 'list_contacts', params: { limit: 1 }, transform: d => d?.results?.length ?? (Array.isArray(d) ? d.length : '—') },
+      { label: 'Companies', action: 'list_companies', params: { limit: 1 }, transform: d => d?.results?.length ?? (Array.isArray(d) ? d.length : '—') },
+    ],
+  },
+];
 
 function cx(...v: Array<string | false | null | undefined>) { return v.filter(Boolean).join(' '); }
 
@@ -142,6 +160,8 @@ export default function SalesHubPage() {
           <RefreshCw className={cx('w-4 h-4', busy && 'animate-spin')} /> Refresh
         </button>
       </div>
+
+      <HubLiveMetrics configs={SALES_INTEGRATIONS} />
 
       <div className="flex flex-wrap gap-2">
         {tabs.map(t => (
