@@ -305,9 +305,15 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
   const selectedIncident = incidents.find((incident) => incident.id === selectedIncidentId) || null;
   const selectedMeta = selectedIncident ? (incidentMeta[selectedIncident.id] || defaultMetaForIncident(selectedIncident)) : null;
 
-  const openCount = incidents.filter((incident) => incident.status === 'open' || incident.status === 'investigating').length;
-  const criticalCount = incidents.filter((incident) => incident.severity === 'critical' && incident.status !== 'resolved').length;
-  const needsReviewCount = incidents.filter((incident) => {
+  // Filter out simulated incidents from top-level stats when simulation visibility is off
+  const visibleIncidents = incidents.filter((incident) => {
+    const meta = incidentMeta[incident.id] || defaultMetaForIncident(incident);
+    return SIMULATIONS_ENABLED ? (includeSimulated || meta.source !== 'manual_test') : meta.source !== 'manual_test';
+  });
+
+  const openCount = visibleIncidents.filter((incident) => incident.status === 'open' || incident.status === 'investigating').length;
+  const criticalCount = visibleIncidents.filter((incident) => incident.severity === 'critical' && incident.status !== 'resolved').length;
+  const needsReviewCount = visibleIncidents.filter((incident) => {
     const meta = incidentMeta[incident.id] || defaultMetaForIncident(incident);
     return incident.status !== 'resolved' && meta.owner === 'Unassigned';
   }).length;
@@ -615,7 +621,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
       <PageHero
         eyebrow="Incident triage"
         title="Make the next investigation obvious"
-        subtitle="Review incidents from live traffic and enforcement rules, then move each case through ownership, priority, evidence, and resolution without losing context."
+        subtitle="Review incidents, assign owners, and track resolution across your governed agents."
         recommendation={{
           label: 'Recommended next step',
           title: recommendedIncident
@@ -646,12 +652,12 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
 
       <div className="grid gap-6 xl:grid-cols-[0.78fr_1.22fr]">
         <div className="space-y-6">
-          <div className="rounded-3xl border border-slate-800/80 bg-slate-950/45 p-6">
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
             {showSimulationTools ? (
               <>
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h2 className="text-lg font-bold text-white">Simulation tools</h2>
+                    <h2 className="text-lg font-semibold text-white">Simulation tools</h2>
                     <p className="mt-2 text-sm text-slate-400">Use only when you want to test the detector without waiting for live traffic.</p>
                   </div>
                   <button
@@ -736,12 +742,13 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
           </div>
         </div>
 
-        <div className="rounded-3xl border border-slate-700/80 bg-slate-900/60 p-6">
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-xl font-bold text-white">Incident log</h2>
-                <p className="mt-1 text-sm text-slate-400">{filteredIncidents.length} of {incidents.length} incident records visible</p>
+                <h2 className="text-xl font-semibold text-white">Incident log</h2>
+                <p className="mt-1 text-sm text-slate-400">{filteredIncidents.length} of {visibleIncidents.length} incident records visible</p>
+                <p className="mt-1 text-xs text-slate-500">Incidents are detected from live agent conversations, webhooks, audit rules, and manual tests.</p>
               </div>
               <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-center">
                 {hasActiveFilters && (

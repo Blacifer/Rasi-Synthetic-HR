@@ -62,6 +62,53 @@ export function formatPricing(pricing?: ModelDefinition['pricing']): string {
 }
 
 /**
+ * Resolve a raw model identifier (e.g. "claude-3-5-sonnet-20241022" or
+ * "anthropic/claude-3-5-sonnet") to a human-friendly display name like
+ * "Claude 3.5 Sonnet". Falls back to a title-cased version of the raw name.
+ */
+export function getModelDisplayName(raw: string): string {
+  if (!raw) return 'Unknown';
+
+  // 1. Exact match by id
+  const exact = FALLBACK_MODELS.find((m) => m.id === raw);
+  if (exact) return exact.name;
+
+  // 2. Try prefixing with provider
+  for (const model of FALLBACK_MODELS) {
+    if (raw === model.id.split('/')[1]) return model.name;
+  }
+
+  // 3. Strip date suffixes (-YYYYMMDD) and try again
+  const stripped = raw.replace(/-\d{8}$/, '');
+  for (const model of FALLBACK_MODELS) {
+    const modelSlug = model.id.split('/')[1] || '';
+    if (stripped === modelSlug || stripped === model.id) return model.name;
+  }
+
+  // 4. Partial match — check if the raw slug starts with a known model slug
+  for (const model of FALLBACK_MODELS) {
+    const modelSlug = model.id.split('/')[1] || '';
+    if (modelSlug && stripped.startsWith(modelSlug)) return model.name;
+  }
+
+  // 5. Try "provider/stripped"
+  const prefix = raw.split('/')[0];
+  if (prefix && prefix !== raw) {
+    const slug = stripped.split('/').pop() || stripped;
+    for (const model of FALLBACK_MODELS) {
+      const modelSlug = model.id.split('/')[1] || '';
+      if (slug === modelSlug) return model.name;
+    }
+  }
+
+  // 6. Fallback: title-case the raw name
+  return stripped
+    .replace(/^[^/]*\//, '')       // remove provider prefix
+    .replace(/[-_]/g, ' ')         // hyphens/underscores to spaces
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
  * Fallback model list — used when the live API is unavailable.
  * Covers the major models users are most likely to choose.
  */

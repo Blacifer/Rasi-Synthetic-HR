@@ -382,7 +382,7 @@ const hasData = agents.length > 0;
           <p className="mt-2 text-slate-400">Three steps to get your first AI agent running safely.</p>
         </div>
 
-        <div className="rounded-[28px] border border-white/10 bg-white/[0.04] backdrop-blur-xl p-8 shadow-[0_18px_60px_rgba(2,6,23,0.25)] space-y-3">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-8  space-y-3">
           {steps.map((step) => (
             <button
               key={step.num}
@@ -402,7 +402,7 @@ const hasData = agents.length > 0;
         </div>
 
         {/* Quick Deploy */}
-        <div className="rounded-[28px] border border-cyan-500/20 bg-[radial-gradient(ellipse_at_top_left,rgba(34,211,238,0.07),transparent_60%)] bg-slate-900/60 backdrop-blur-xl p-8">
+        <div className="rounded-2xl border border-cyan-500/20 bg-[radial-gradient(ellipse_at_top_left,rgba(34,211,238,0.07),transparent_60%)] bg-slate-900/60 backdrop-blur-xl p-8">
           <div className="flex items-start gap-4 mb-5">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-500/30 bg-cyan-500/10">
               <Zap className="h-5 w-5 text-cyan-400" />
@@ -634,10 +634,10 @@ const hasData = agents.length > 0;
     severeIncidents.length > 0
       ? {
         id: 'incidents-critical',
-        title: 'Review high-severity incident evidence',
+        title: 'Review high-severity incidents',
         description: `${severeIncidents.length} incident(s) are still high or critical.`,
         tone: 'risk' as const,
-        action: () => onNavigate?.('blackbox'),
+        action: () => onNavigate?.('incidents'),
       }
       : null,
     agentsWithoutBudget.length > 0
@@ -697,12 +697,12 @@ const hasData = agents.length > 0;
   return (
     <div className="space-y-8">
       {primaryAction && (
-        <section className="rounded-[28px] border border-cyan-500/20 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_45%),rgba(8,47,73,0.45)] p-5 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+        <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-2xl">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-300">{primaryActionLabel}</p>
-              <h2 className="mt-2 text-xl font-bold text-white">{primaryAction.title}</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-300">{primaryAction.description}</p>
+              <p className="text-xs font-medium uppercase tracking-widest text-amber-400/80">{primaryActionLabel}</p>
+              <h2 className="mt-2 text-lg font-semibold text-white">{primaryAction.title}</h2>
+              <p className="mt-1 text-sm text-slate-400">{primaryAction.description}</p>
             </div>
             <div className="flex flex-wrap gap-3">
               <button
@@ -726,9 +726,9 @@ const hasData = agents.length > 0;
 
       {/* Ambient system health bar */}
       <motion.div
-        className="h-0.5 rounded-full -mt-2 mb-0"
-        animate={{ backgroundColor: ambientColor, opacity: [0.6, 1, 0.6] }}
-        transition={{ backgroundColor: { duration: 1.5, ease: 'easeInOut' }, opacity: { duration: 3, repeat: Infinity, ease: 'easeInOut' } }}
+        className="h-px rounded-full -mt-4 mb-0 opacity-30"
+        animate={{ backgroundColor: ambientColor }}
+        transition={{ backgroundColor: { duration: 1.5, ease: 'easeInOut' } }}
         style={{ backgroundColor: ambientColor }}
       />
 
@@ -922,12 +922,12 @@ const hasData = agents.length > 0;
       })()}
 
       {/* System Health Banner */}
-      <div className={`flex items-center justify-between rounded-2xl border px-4 py-2.5 text-xs font-semibold ${healthClasses}`}>
+      <div className={`flex items-center justify-between rounded-xl border px-4 py-2 text-xs ${healthClasses}`}>
         <div className="flex items-center gap-2.5">
-          <span className={`w-2 h-2 rounded-full animate-pulse ${dotClasses}`} />
-          <span className="font-mono tracking-[0.16em]">{healthLabel}</span>
-          <span className="opacity-40">·</span>
-          <span className="font-normal opacity-70">{agents.length} agent{agents.length !== 1 ? 's' : ''} governed</span>
+          <span className={`w-1.5 h-1.5 rounded-full ${dotClasses}`} />
+          <span className="font-mono tracking-wider text-[11px]">{healthLabel}</span>
+          <span className="opacity-30">·</span>
+          <span className="font-normal opacity-60">{agents.length} agent{agents.length !== 1 ? 's' : ''} governed</span>
           {openIncidents.length > 0 && (
             <>
               <span className="opacity-40">·</span>
@@ -940,20 +940,22 @@ const hasData = agents.length > 0;
         </span>
       </div>
 
-      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.06),transparent_28%),linear-gradient(135deg,rgba(2,6,23,0.90),rgba(2,6,23,0.98))] p-6 shadow-[0_18px_60px_rgba(2,6,23,0.26)]">
+      <section className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
         <div className="grid gap-6 xl:grid-cols-2">
           <div>
-            <SectionEyebrow label="Live command center" />
-            <div className="flex flex-wrap items-center gap-3">
-              <ActionPill
-                label={heroTone === 'risk' ? 'Needs intervention' : heroTone === 'warn' ? 'Watch closely' : 'Stable now'}
-                tone={heroTone}
-              />
-              <ActionPill label={`Risk score ${avgRiskScore}/100`} tone={avgRiskScore >= 70 ? 'risk' : avgRiskScore >= 40 ? 'warn' : 'good'} />
+            <p className="text-xs font-medium uppercase tracking-widest text-slate-500 mb-3">Command center</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium ${heroTone === 'risk' ? 'bg-rose-500/10 text-rose-400' : heroTone === 'warn' ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${heroTone === 'risk' ? 'bg-rose-400' : heroTone === 'warn' ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                {heroTone === 'risk' ? 'Needs intervention' : heroTone === 'warn' ? 'Watch closely' : 'Stable'}
+              </span>
+              <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium ${avgRiskScore >= 70 ? 'bg-rose-500/10 text-rose-400' : avgRiskScore >= 40 ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                Risk {avgRiskScore}/100
+              </span>
             </div>
-            <h1 className="mt-3 text-2xl font-bold text-white">Overview</h1>
-            <p className="mt-1 max-w-xl text-sm text-slate-400">
-              Know what is running, what needs attention, and what to do next across your governed agents.
+            <h1 className="mt-3 text-2xl font-semibold text-white">Overview</h1>
+            <p className="mt-1 max-w-xl text-sm text-slate-400 leading-relaxed">
+              What&apos;s running, what needs attention, and what to do next.
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
               <div className="inline-flex items-center gap-1.5">
@@ -1078,10 +1080,10 @@ const hasData = agents.length > 0;
         {/* Widget 3: Incident Heatmap */}
         <div className="card-surface p-5">
           <div className="flex items-center justify-between mb-1">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-semibold">Incidents by Hour of Day</p>
-            <span className="text-xs text-slate-600">{incidents.length} incident{incidents.length !== 1 ? 's' : ''} total</span>
+            <p className="text-sm font-semibold text-slate-200">Incidents by hour of day</p>
+            <span className="text-xs text-slate-400">{incidents.length} incident{incidents.length !== 1 ? 's' : ''} total</span>
           </div>
-          <p className="text-xs text-slate-600 mb-4">Spot patterns — e.g. "The Finance agent fails every night at 3 AM"</p>
+          <p className="text-xs text-slate-400 mb-4">Spot patterns — e.g. "The Finance agent fails every night at 3 AM"</p>
 
           {incidents.length === 0 ? (
             <p className="text-sm text-slate-600 py-4 text-center">No incidents recorded yet</p>
@@ -1092,14 +1094,14 @@ const hasData = agents.length > 0;
                   <BarChart data={incidentsByHour} margin={{ top: 0, right: 0, bottom: 0, left: -24 }}>
                     <HeatXAxis
                       dataKey="label"
-                      tick={{ fill: '#475569', fontSize: 10 }}
+                      tick={{ fill: '#94a3b8', fontSize: 11 }}
                       interval={2}
                       axisLine={false}
                       tickLine={false}
                     />
                     <HeatYAxis
                       allowDecimals={false}
-                      tick={{ fill: '#475569', fontSize: 10 }}
+                      tick={{ fill: '#94a3b8', fontSize: 11 }}
                       axisLine={false}
                       tickLine={false}
                     />
@@ -1112,7 +1114,7 @@ const hasData = agents.length > 0;
                       ]}
                       labelFormatter={() => ''}
                     />
-                    <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                    <Bar dataKey="count" radius={[6, 6, 2, 2]}>
                       {incidentsByHour.map((entry: { hour: number; label: string; count: number }) => (
                         <HeatCell
                           key={entry.hour}
@@ -1193,7 +1195,7 @@ const hasData = agents.length > 0;
       )}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <section className="card-surface rounded-[28px] p-6 shadow-[0_10px_40px_rgba(2,6,23,0.25)]">
+        <section className="card-surface rounded-2xl p-6 ">
           <div className="flex items-center gap-2">
             <Siren className="h-4 w-4 text-blue-300 shrink-0" />
             <h2 className="text-base font-semibold text-white">Action Queue</h2>
@@ -1229,7 +1231,7 @@ const hasData = agents.length > 0;
           </div>
         </section>
 
-        <section className="card-surface rounded-[28px] p-6 shadow-[0_10px_40px_rgba(2,6,23,0.25)]">
+        <section className="card-surface rounded-2xl p-6 ">
           <div className="flex items-center gap-2">
             <Activity className="h-4 w-4 text-blue-300 shrink-0" />
             <h2 className="text-base font-semibold text-white">Reliability</h2>
@@ -1257,7 +1259,7 @@ const hasData = agents.length > 0;
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <section className="card-surface rounded-[28px] p-6 shadow-[0_10px_40px_rgba(2,6,23,0.25)]">
+        <section className="card-surface rounded-2xl p-6 ">
           <div className="flex items-center gap-2">
             <Layers3 className="h-4 w-4 text-blue-300 shrink-0" />
             <h2 className="text-base font-semibold text-white">Recent Activity</h2>
@@ -1302,7 +1304,7 @@ const hasData = agents.length > 0;
           </div>
         </section>
 
-        <section className="card-surface rounded-[28px] p-6 shadow-[0_10px_40px_rgba(2,6,23,0.25)]">
+        <section className="card-surface rounded-2xl p-6 ">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-blue-300 shrink-0" />
             <h2 className="text-base font-semibold text-white">Coverage Snapshot</h2>
@@ -1342,7 +1344,7 @@ const hasData = agents.length > 0;
         const moneySaved = Math.round(hoursSaved * LABOR_RATE_PER_HOUR);
         const netSaving = moneySaved - Math.round(totalCost);
         return (
-          <section className="relative overflow-hidden rounded-[28px] border border-emerald-500/20 bg-[radial-gradient(ellipse_at_top_left,rgba(16,185,129,0.12),transparent_55%),radial-gradient(ellipse_at_bottom_right,rgba(6,182,212,0.08),transparent_50%)] bg-slate-900/60 p-6 shadow-[0_10px_40px_rgba(2,6,23,0.18)]">
+          <section className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-400">Automation savings</p>
@@ -1373,7 +1375,7 @@ const hasData = agents.length > 0;
 
       {/* Team Activity Feed */}
       {teamActivity.length > 0 && (
-        <section className="card-surface rounded-[28px] p-6 shadow-[0_10px_40px_rgba(2,6,23,0.25)]">
+        <section className="card-surface rounded-2xl p-6 ">
           <div className="flex items-center gap-2 mb-4">
             <UserCheck className="h-4 w-4 text-blue-300 shrink-0" />
             <h2 className="text-base font-semibold text-white">Team Activity</h2>
@@ -1406,7 +1408,7 @@ const hasData = agents.length > 0;
 
       {/* App Health widget */}
       {telemetry && telemetry.integrations.total > 0 ? (
-        <section className="card-surface rounded-[28px] p-6 shadow-[0_10px_40px_rgba(2,6,23,0.25)]">
+        <section className="card-surface rounded-2xl p-6 ">
           <div className="flex items-center justify-between gap-4 mb-5">
             <div>
               <SectionEyebrow label="Integration health" />
@@ -1461,7 +1463,7 @@ const hasData = agents.length > 0;
       ) : null}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <section className="card-surface rounded-[28px] p-6 shadow-[0_10px_40px_rgba(2,6,23,0.25)]">
+        <section className="card-surface rounded-2xl p-6 ">
           <div className="flex items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
@@ -1496,7 +1498,7 @@ const hasData = agents.length > 0;
           </div>
         </section>
 
-        <section className="card-surface rounded-[28px] p-6 shadow-[0_10px_40px_rgba(2,6,23,0.25)]">
+        <section className="card-surface rounded-2xl p-6 ">
           <div className="flex items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
@@ -1537,7 +1539,7 @@ const hasData = agents.length > 0;
       </div>
 
       {severeIncidents.length > 0 && (
-        <section className="rounded-[28px] border border-rose-500/20 bg-rose-500/10 p-5 space-y-3">
+        <section className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-5 space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
               <ShieldAlert className="mt-0.5 h-5 w-5 text-rose-300 shrink-0" />

@@ -30,15 +30,14 @@ export function PageHero({
   actions?: HeroAction[];
 }) {
   return (
-    <section className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.94),rgba(2,6,23,0.98))] p-6 shadow-[0_18px_60px_rgba(2,6,23,0.24)]">
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),transparent_42%)]" />
+    <section className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
       <div className="relative z-10 grid gap-6 xl:grid-cols-[1.35fr_0.9fr]">
         <div>
           {eyebrow ? (
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-300">{eyebrow}</p>
+            <p className="text-xs font-medium uppercase tracking-widest text-slate-500">{eyebrow}</p>
           ) : null}
-          <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">{title}</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300 sm:text-base">{subtitle}</p>
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">{title}</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">{subtitle}</p>
 
           {actions.length > 0 ? (
             <div className="mt-5 flex flex-wrap gap-3">
@@ -47,8 +46,8 @@ export function PageHero({
                   key={action.label}
                   onClick={action.onClick}
                   className={action.variant === 'secondary'
-                    ? 'inline-flex items-center gap-2 rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:bg-white/[0.09]'
-                    : 'inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300'}
+                    ? 'inline-flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:bg-white/[0.08]'
+                    : 'btn-primary px-4 py-2.5 text-sm'}
                 >
                   {action.icon}
                   {action.label}
@@ -60,8 +59,8 @@ export function PageHero({
           {stats.length > 0 ? (
             <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {stats.map((stat) => (
-                <div key={stat.label} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 backdrop-blur-sm">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{stat.label}</p>
+                <div key={stat.label} className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-4 py-4">
+                  <p className="text-xs font-medium uppercase tracking-widest text-slate-500">{stat.label}</p>
                   <p className="mt-2 text-2xl font-semibold text-white">{stat.value}</p>
                   {stat.detail ? <p className="mt-1 text-xs text-slate-400">{stat.detail}</p> : null}
                 </div>
@@ -71,11 +70,11 @@ export function PageHero({
         </div>
 
         {recommendation ? (
-          <div className="rounded-3xl border border-cyan-400/20 bg-cyan-400/[0.08] p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-200">{recommendation.label}</p>
-            <h2 className="mt-3 text-xl font-semibold text-white">{recommendation.title}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-300">{recommendation.detail}</p>
-            <div className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-cyan-200">
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
+            <p className="text-xs font-medium uppercase tracking-widest text-slate-500">{recommendation.label}</p>
+            <h2 className="mt-3 text-lg font-semibold text-white">{recommendation.title}</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-400">{recommendation.detail}</p>
+            <div className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition-colors">
               Focus next
               <ArrowRight className="h-4 w-4" />
             </div>

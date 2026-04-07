@@ -242,8 +242,8 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
           },
           {
             label: 'Alert coverage',
-            value: configuredChannels >= 2 ? 'Healthy routing' : 'Incomplete routing',
-            detail: `${configuredChannels}/3 channel types configured · reconciliation alerts ${reconciliationAlertConfig.channels.inApp ? 'live' : 'limited'}`,
+            value: configuredChannels >= 2 ? 'Healthy' : 'Incomplete',
+            detail: `${configuredChannels}/3 alert channels configured`,
             action: () => navigateToTab('alerts'),
             cta: configuredChannels >= 2 ? 'Tune alerts' : 'Finish setup',
           },
@@ -535,16 +535,22 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       <PageHero
-        eyebrow="Workspace control center"
-        title="Operate access, alerts, security, and billing with confidence"
-        subtitle="Settings should feel calm and decisive. Use this area to understand what is configured, what is missing, and what needs your next action."
-        recommendation={{
-          label: 'Recommended next step',
-          title: activeTab === 'overview' ? 'Start with the highest-risk gap on the overview.' : `Review ${tabItems.find((tab) => tab.id === activeTab)?.label || 'this section'} before moving deeper.`,
-          detail: activeTab === 'overview'
-            ? 'Treat this page like a control center: finish the next most important setup gap, then move on.'
-            : 'Each section is designed to answer what is configured, what needs attention, and what to do next.',
-        }}
+        eyebrow="Settings"
+        title="Manage your workspace"
+        subtitle="Configure access, alerts, security, and billing in one place."
+        recommendation={(() => {
+          const recAction = (() => {
+            if (!twoFactorEnabled) return { title: 'Enable two-factor authentication', detail: 'Protect admin access with 2FA before adding more team members.' };
+            const configuredChannels = [slackWebhook, pagerdutyKey, alertEmail].filter(Boolean).length;
+            if (configuredChannels < 2) return { title: 'Set up more alert channels', detail: `Only ${configuredChannels}/3 alert channels configured. Add Slack, email, or PagerDuty.` };
+            return null;
+          })();
+          return recAction ? {
+            label: 'Recommended next step',
+            title: recAction.title,
+            detail: recAction.detail,
+          } : undefined;
+        })()}
         stats={[
           { label: '2FA', value: twoFactorEnabled ? 'Enabled' : 'Off', detail: `${sessions.length} active session${sessions.length !== 1 ? 's' : ''}` },
           { label: 'Alert channels', value: `${[slackWebhook, pagerdutyKey, alertEmail].filter(Boolean).length}/3`, detail: 'Configured routing types' },
@@ -555,7 +561,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar */}
         <div className="flex-shrink-0 lg:w-52">
-          <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-3 sticky top-4">
+          <div className="border border-white/[0.06] bg-white/[0.025] rounded-2xl p-3 sticky top-4">
             <nav className="space-y-1">
               {tabItems.map(tab => {
                 const Icon = tab.icon;
@@ -574,11 +580,11 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
                     key={tab.id}
                     onClick={() => navigateToTab(tab.id)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${isActive
-                      ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                      ? 'bg-white/[0.08] text-white border border-white/[0.10]'
+                      : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
                       }`}
                   >
-                    <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-cyan-400' : ''}`} />
+                    <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : ''}`} />
                     {tab.label}
                     {isDirty && (
                       <span className="ml-auto w-2 h-2 rounded-full bg-amber-400" />
@@ -586,7 +592,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
                     {tab.badge && (
                       <span className="text-[10px] px-1.5 py-0.5 bg-rose-500/20 text-rose-400 rounded-full font-bold">{tab.badge}</span>
                     )}
-                    {isActive && <ChevronRight className="w-3.5 h-3.5 ml-auto text-cyan-400/60" />}
+                    {isActive && <ChevronRight className="w-3.5 h-3.5 ml-auto text-slate-400" />}
                   </button>
                 );
               })}

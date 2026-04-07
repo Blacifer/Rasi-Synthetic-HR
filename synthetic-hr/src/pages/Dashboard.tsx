@@ -18,6 +18,7 @@ import { guessPackForIntegration, type IntegrationPackId } from '../lib/integrat
 import { loadFromStorage, saveToStorage, STORAGE_KEYS } from '../utils/storage';
 import { OnboardingTour } from '../components/OnboardingTour';
 
+import { MfaNudgeBanner } from '../components/MfaNudgeBanner';
 const DashboardOverview = lazy(() => import('./dashboard/DashboardOverview'));
 const GettingStartedPage = lazy(() => import('./dashboard/GettingStartedPage'));
 const ConnectAgentPage = lazy(() => import('./dashboard/ConnectAgentPage'));
@@ -1385,6 +1386,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
               </button>
             </div>
           )}
+          <MfaNudgeBanner onNavigateToSecurity={() => navigateTo('settings/security')} />
           <div className="p-8">
           {loading ? (
             <DashboardSectionLoading />
