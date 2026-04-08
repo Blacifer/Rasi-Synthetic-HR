@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CalendarDays, ShieldCheck, FileSearch, RefreshCw, Plus, X, Check, Loader2, Sparkles, AlertTriangle, Clock,
-  Fingerprint, UserCheck, Trash2, Eye, FileOutput, AlertOctagon,
+  Fingerprint, UserCheck, Trash2, Eye, FileOutput, AlertOctagon, FileBarChart, Bell, BellOff,
+  IndianRupee, Send, RotateCw,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 import type { HubDeadline, HubEvidence } from '../../types';
 import type { ConsentRecord, DataPrincipalRequest, DpdpDashboard } from '../../lib/api/dpdp';
+import { filingsApi } from '../../lib/api/filings';
+import type { FilingDeadline, FilingSubmission, FilingAlert, FilingDashboard } from '../../lib/api/filings';
 
-type TabId = 'calendar' | 'posture' | 'evidence' | 'dpdp';
+type TabId = 'calendar' | 'posture' | 'evidence' | 'dpdp' | 'filings';
 
 function cx(...v: Array<string | false | null | undefined>) { return v.filter(Boolean).join(' '); }
 
@@ -64,6 +67,13 @@ export default function ComplianceHubPage() {
   const [dpdpDash, setDpdpDash] = useState<DpdpDashboard | null>(null);
   const [dpdpSubTab, setDpdpSubTab] = useState<'overview' | 'consents' | 'requests'>('overview');
 
+  // Filings state
+  const [filingDeadlines, setFilingDeadlines] = useState<FilingDeadline[]>([]);
+  const [filingSubmissions, setFilingSubmissions] = useState<FilingSubmission[]>([]);
+  const [filingAlerts, setFilingAlerts] = useState<FilingAlert[]>([]);
+  const [filingDash, setFilingDash] = useState<FilingDashboard | null>(null);
+  const [filingSubTab, setFilingSubTab] = useState<'overview' | 'submissions' | 'deadlines' | 'alerts'>('overview');
+
   const load = useCallback(async () => {
     setBusy(true);
     try {
@@ -81,6 +91,18 @@ export default function ComplianceHubPage() {
       if (conRes.data) setConsents(conRes.data);
       if (reqRes.data) setDprRequests(reqRes.data);
       if (dashRes.data) setDpdpDash(dashRes.data);
+
+      // Filing data
+      const [fdRes, fsRes, faRes, fdashRes] = await Promise.all([
+        filingsApi.listDeadlines(),
+        filingsApi.listSubmissions(),
+        filingsApi.listAlerts(true),
+        filingsApi.getDashboard(),
+      ]);
+      if (fdRes.data) setFilingDeadlines(fdRes.data);
+      if (fsRes.data) setFilingSubmissions(fsRes.data);
+      if (faRes.data) setFilingAlerts(faRes.data);
+      if (fdashRes.data) setFilingDash(fdashRes.data);
     } catch { toast.error('Failed to load compliance data'); }
     setBusy(false);
   }, []);
@@ -174,11 +196,68 @@ export default function ComplianceHubPage() {
 
   const overdueRequests = useMemo(() => dprRequests.filter(r => (r.status === 'pending' || r.status === 'in_progress') && new Date(r.due_at) < new Date()), [dprRequests]);
 
+  async function handleSeedFilings() {
+    setBusy(true);
+    try {
+      const res = await filingsApi.seedDeadlines();
+      if (res.data) { toast.success(`Seeded ${res.data.seeded} statutory filings`); load(); }
+    } catch { toast.error('Already seeded or seed failed'); }
+    setBusy(false);
+  }
+
+  async function handleGenerateSubmissions() {
+    setBusy(true);
+    try {
+      const res = await filingsApi.generateSubmissions();
+      if (res.data) { toast.success(`Generated ${res.data.generated} submissions`); load(); }
+    } catch { toast.error('Generation failed'); }
+    setBusy(false);
+  }
+
+  async function handleUpdateSubmission(id: string, data: Partial<FilingSubmission>) {
+    setBusy(true);
+    try {
+      const res = await filingsApi.updateSubmission(id, data);
+      if (res.data) {
+        setFilingSubmissions(prev => prev.map(s => s.id === id ? res.data! : s));
+        toast.success('Submission updated');
+        // refresh dashboard
+        const d = await filingsApi.getDashboard();
+        if (d.data) setFilingDash(d.data);
+      }
+    } catch { toast.error('Update failed'); }
+    setBusy(false);
+  }
+
+  async function handleMarkAlertRead(id: string) {
+    try {
+      await filingsApi.markAlertRead(id);
+      setFilingAlerts(prev => prev.filter(a => a.id !== id));
+    } catch { toast.error('Failed to dismiss'); }
+  }
+
+  async function handleMarkAllAlertsRead() {
+    try {
+      await filingsApi.markAllAlertsRead();
+      setFilingAlerts([]);
+      toast.success('All alerts dismissed');
+    } catch { toast.error('Failed'); }
+  }
+
+  const filteredSubmissions = useMemo(() => {
+    let items = [...filingSubmissions];
+    if (statusFilter !== 'all') items = items.filter(s => s.status === statusFilter);
+    return items.sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+  }, [filingSubmissions, statusFilter]);
+
+  const overdueSubmissions = useMemo(() => filingSubmissions.filter(s => s.status === 'overdue'), [filingSubmissions]);
+
   const tabs: { id: TabId; label: string; icon: any }[] = [
     { id: 'calendar', label: 'Calendar', icon: CalendarDays },
     { id: 'posture', label: 'Posture', icon: ShieldCheck },
     { id: 'evidence', label: 'Evidence', icon: FileSearch },
     { id: 'dpdp', label: 'DPDP', icon: Fingerprint },
+    { id: 'filings', label: 'Filings', icon: FileBarChart },
   ];
 
   const postureColor = (s: number) => s >= 80 ? 'text-emerald-400' : s >= 50 ? 'text-amber-400' : 'text-rose-400';
@@ -645,6 +724,289 @@ export default function ComplianceHubPage() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Filings Tab */}
+      {tab === 'filings' && (
+        <div className="space-y-6">
+          {/* Sub-tabs */}
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1 bg-slate-800/40 rounded-lg p-1 w-fit">
+              {([['overview', 'Overview'], ['submissions', 'Submissions'], ['deadlines', 'Deadlines'], ['alerts', 'Alerts']] as const).map(([id, label]) => (
+                <button key={id} onClick={() => { setFilingSubTab(id); setStatusFilter('all'); }}
+                  className={cx('px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                    filingSubTab === id ? 'bg-slate-700/80 text-white' : 'text-slate-400 hover:text-slate-200')}>
+                  {label}
+                  {id === 'alerts' && filingAlerts.length > 0 && (
+                    <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 text-[10px]">{filingAlerts.length}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              {filingDeadlines.length === 0 && (
+                <button onClick={handleSeedFilings} disabled={busy}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium transition-colors">
+                  <Sparkles className="h-4 w-4" /> Seed India Filings
+                </button>
+              )}
+              {filingDeadlines.length > 0 && (
+                <button onClick={handleGenerateSubmissions} disabled={busy}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition-colors">
+                  <RotateCw className={cx('h-4 w-4', busy && 'animate-spin')} /> Generate Period
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Filings Overview */}
+          {filingSubTab === 'overview' && filingDash && (
+            <div className="space-y-6">
+              <div className="flex justify-center">
+                <div className={cx('w-36 h-36 rounded-full ring-4 flex flex-col items-center justify-center',
+                  filingDash.compliance_score >= 80 ? 'ring-emerald-500/40' : filingDash.compliance_score >= 50 ? 'ring-amber-500/40' : 'ring-rose-500/40')}>
+                  <span className={cx('text-3xl font-bold', filingDash.compliance_score >= 80 ? 'text-emerald-400' : filingDash.compliance_score >= 50 ? 'text-amber-400' : 'text-rose-400')}>
+                    {filingDash.compliance_score}
+                  </span>
+                  <span className="text-xs text-slate-400 mt-1">Filing Score</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { label: 'Active Deadlines', value: filingDash.active_deadlines, color: 'text-cyan-400', icon: CalendarDays },
+                  { label: 'Pending', value: filingDash.pending, color: 'text-amber-400', icon: Clock },
+                  { label: 'Overdue', value: filingDash.overdue, color: 'text-rose-400', icon: AlertOctagon },
+                  { label: 'Submitted', value: filingDash.submitted, color: 'text-emerald-400', icon: Check },
+                ].map(s => (
+                  <div key={s.label} className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-4 text-center">
+                    <s.icon className={cx('h-5 w-5 mx-auto mb-2', s.color)} />
+                    <div className={cx('text-2xl font-bold', s.color)}>{s.value}</div>
+                    <div className="text-xs text-slate-500 mt-1">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Amount filed */}
+              {filingDash.total_amount_filed > 0 && (
+                <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-4 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Total Amount Filed</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Cumulative statutory payments this period</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <IndianRupee className="h-5 w-5 text-emerald-400" />
+                    <span className="text-2xl font-bold text-emerald-400">{filingDash.total_amount_filed.toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Unread alerts */}
+              {filingDash.unread_alerts > 0 && (
+                <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Bell className="h-5 w-5 text-amber-400" />
+                    <span className="text-sm text-white font-medium">{filingDash.unread_alerts} unread filing alert{filingDash.unread_alerts !== 1 ? 's' : ''}</span>
+                  </div>
+                  <button onClick={() => { setFilingSubTab('alerts'); }} className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">View alerts →</button>
+                </div>
+              )}
+
+              {/* Overdue filings */}
+              {overdueSubmissions.length > 0 && (
+                <div className="bg-rose-500/5 border border-rose-500/20 rounded-xl p-4">
+                  <h3 className="text-sm font-semibold text-rose-400 mb-3 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" /> Overdue Filings — Penalties May Apply
+                  </h3>
+                  <div className="space-y-2">
+                    {overdueSubmissions.map(s => (
+                      <div key={s.id} className="flex items-center justify-between">
+                        <div className="text-sm">
+                          <span className="text-white font-medium">{s.filing_deadlines?.title || s.period_label}</span>
+                          <span className="text-slate-400 ml-2">{s.period_label}</span>
+                        </div>
+                        <span className="text-xs text-rose-400 font-medium">{daysLabel(s.due_date)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {filingDeadlines.length === 0 && (
+                <div className="text-center py-16 text-slate-500">
+                  <p>No filing deadlines configured yet.</p>
+                  <p className="mt-2 text-xs">Click "Seed India Filings" to populate statutory deadlines.</p>
+                </div>
+              )}
+            </div>
+          )}
+          {filingSubTab === 'overview' && !filingDash && filingDeadlines.length === 0 && (
+            <div className="text-center py-16 text-slate-500">
+              <FileBarChart className="h-10 w-10 mx-auto mb-3 text-slate-600" />
+              <p>No filing deadlines configured.</p>
+              <p className="mt-1 text-xs">Seed your India statutory calendar to get started.</p>
+            </div>
+          )}
+
+          {/* Submissions list */}
+          {filingSubTab === 'submissions' && (
+            <div className="space-y-4">
+              <div className="flex gap-2 flex-wrap">
+                {['all', 'pending', 'in_progress', 'submitted', 'accepted', 'overdue', 'waived'].map(s => (
+                  <button key={s} onClick={() => setStatusFilter(s)}
+                    className={cx('px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+                      statusFilter === s ? 'bg-cyan-600/20 text-cyan-300 border-cyan-500/40' : 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:text-slate-200')}>
+                    {s === 'all' ? 'All' : s.replace('_', ' ').replace(/^\w/, c => c.toUpperCase())}
+                  </button>
+                ))}
+              </div>
+
+              {filteredSubmissions.length === 0 ? (
+                <div className="text-center py-16 text-slate-500">No submissions found. Generate submissions for the current period.</div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredSubmissions.map(s => {
+                    const isOverdue = s.status === 'overdue';
+                    return (
+                      <div key={s.id} className={cx('bg-slate-800/30 border rounded-xl p-4 transition-colors',
+                        isOverdue ? 'border-rose-500/40 bg-rose-500/5' : 'border-slate-700/50 hover:border-slate-600/60')}>
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-semibold text-white truncate">{s.filing_deadlines?.title || 'Filing'}</h3>
+                              {s.filing_deadlines?.form_name && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">{s.filing_deadlines.form_name}</span>
+                              )}
+                              <span className={cx('text-xs px-2 py-0.5 rounded-full border', statusBadge(s.status === 'submitted' || s.status === 'accepted' ? 'completed' : s.status))}>{s.status.replace('_', ' ')}</span>
+                            </div>
+                            <div className="flex items-center gap-4 text-xs text-slate-500 mt-1">
+                              <span className="text-slate-300 font-medium">{s.period_label}</span>
+                              {s.filing_deadlines?.authority && <span>{s.filing_deadlines.authority}</span>}
+                              <span className="flex items-center gap-1"><CalendarDays className="h-3 w-3" /> Due {new Date(s.due_date).toLocaleDateString()}</span>
+                              <span className={cx('font-medium', s.status === 'overdue' ? 'text-rose-400' : daysColor(s.due_date))}>
+                                <Clock className="h-3 w-3 inline mr-1" />{daysLabel(s.due_date)}
+                              </span>
+                              {s.amount != null && <span className="flex items-center gap-0.5"><IndianRupee className="h-3 w-3" />{s.amount.toLocaleString('en-IN')}</span>}
+                            </div>
+                            {s.reference_number && <div className="text-xs text-slate-500 mt-1">Ref: {s.reference_number}</div>}
+                            {s.notes && <p className="text-xs text-slate-400 mt-1 line-clamp-2">{s.notes}</p>}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {(s.status === 'pending' || s.status === 'overdue') && (
+                              <button onClick={() => handleUpdateSubmission(s.id, { status: 'in_progress' } as any)}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600/20 text-blue-300 border border-blue-500/30 hover:bg-blue-600/30 text-xs font-medium transition-colors">
+                                <Eye className="h-3.5 w-3.5" /> Start
+                              </button>
+                            )}
+                            {s.status === 'in_progress' && (
+                              <button onClick={() => handleUpdateSubmission(s.id, { status: 'submitted' } as any)}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 text-xs font-medium transition-colors">
+                                <Send className="h-3.5 w-3.5" /> Submit
+                              </button>
+                            )}
+                            {s.status === 'submitted' && (
+                              <button onClick={() => handleUpdateSubmission(s.id, { status: 'accepted' } as any)}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 text-xs font-medium transition-colors">
+                                <Check className="h-3.5 w-3.5" /> Accept
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Deadlines list */}
+          {filingSubTab === 'deadlines' && (
+            <div className="space-y-4">
+              {filingDeadlines.length === 0 ? (
+                <div className="text-center py-16 text-slate-500">No filing deadlines configured.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-700/50 text-left text-xs text-slate-500 uppercase">
+                        <th className="pb-3 pr-4">Filing</th>
+                        <th className="pb-3 pr-4">Form</th>
+                        <th className="pb-3 pr-4">Authority</th>
+                        <th className="pb-3 pr-4">Frequency</th>
+                        <th className="pb-3 pr-4">Due Day</th>
+                        <th className="pb-3 pr-4">Status</th>
+                        <th className="pb-3 pr-4">Penalty</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filingDeadlines.map(dl => (
+                        <tr key={dl.id} className="border-b border-slate-800/40 hover:bg-slate-800/20">
+                          <td className="py-3 pr-4">
+                            <div className="font-medium text-white">{dl.title}</div>
+                            <div className="text-xs text-slate-500">{dl.regulation}</div>
+                          </td>
+                          <td className="py-3 pr-4 text-slate-300">{dl.form_name || '—'}</td>
+                          <td className="py-3 pr-4 text-slate-400">{dl.authority || '—'}</td>
+                          <td className="py-3 pr-4 text-slate-400 capitalize">{dl.frequency}</td>
+                          <td className="py-3 pr-4 text-slate-300">{dl.due_day_of_month || '—'}</td>
+                          <td className="py-3 pr-4">
+                            <span className={cx('text-xs px-2 py-0.5 rounded-full border', dl.is_active ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'bg-slate-600/20 text-slate-400 border-slate-600/30')}>
+                              {dl.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="py-3 pr-4 text-xs text-slate-500 max-w-[200px] truncate" title={dl.penalty_info}>{dl.penalty_info || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Alerts list */}
+          {filingSubTab === 'alerts' && (
+            <div className="space-y-4">
+              {filingAlerts.length > 0 && (
+                <div className="flex justify-end">
+                  <button onClick={handleMarkAllAlertsRead}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/60 text-slate-300 hover:text-white border border-slate-700/50 text-xs font-medium transition-colors">
+                    <BellOff className="h-3.5 w-3.5" /> Dismiss All
+                  </button>
+                </div>
+              )}
+              {filingAlerts.length === 0 ? (
+                <div className="text-center py-16 text-slate-500">No unread alerts</div>
+              ) : (
+                <div className="space-y-3">
+                  {filingAlerts.map(a => (
+                    <div key={a.id} className={cx('bg-slate-800/30 border rounded-xl p-4 transition-colors',
+                      a.severity === 'critical' ? 'border-rose-500/40 bg-rose-500/5' : a.severity === 'warning' ? 'border-amber-500/40 bg-amber-500/5' : 'border-slate-700/50')}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={cx('text-xs px-2 py-0.5 rounded-full border uppercase',
+                              a.severity === 'critical' ? 'bg-rose-500/15 text-rose-300 border-rose-500/30' : a.severity === 'warning' ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-blue-500/15 text-blue-300 border-blue-500/30')}>
+                              {a.alert_type.replace('_', ' ')}
+                            </span>
+                          </div>
+                          <h3 className="text-sm font-semibold text-white">{a.title}</h3>
+                          {a.message && <p className="text-xs text-slate-400 mt-1">{a.message}</p>}
+                          <div className="text-xs text-slate-500 mt-2">{new Date(a.created_at).toLocaleString()}</div>
+                        </div>
+                        <button onClick={() => handleMarkAlertRead(a.id)}
+                          className="p-1.5 rounded-lg bg-slate-700/50 text-slate-400 hover:text-white transition-colors" title="Dismiss">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

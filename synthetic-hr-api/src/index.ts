@@ -38,6 +38,7 @@ import approvalsRoutes from './routes/approvals';
 import rulesRoutes from './routes/rules';
 import recruitmentRoutes from './routes/recruitment';
 import ctcRoutes from './routes/ctc';
+import filingsRoutes from './routes/filings';
 import hubsRoutes from './routes/hubs';
 import trustRoutes from './routes/trust';
 import portalRoutes from './routes/portal';
@@ -56,6 +57,7 @@ import { startIntegrationTokenRefreshScheduler } from './lib/integrations/auto-r
 import { startRetryWorker } from './lib/retry-worker';
 import { startRedTeamScheduler } from './lib/redteam-scheduler';
 import { startDpdpRetentionWorker } from './lib/dpdp-retention-worker';
+import { startFilingScheduler } from './lib/filing-scheduler';
 import { runSchemaCompatibilityCheck } from './lib/schema-compat';
 
 dotenv.config();
@@ -468,6 +470,7 @@ app.use('/api/metrics', metricsRoutes);
 app.use('/api/policies', policiesRoutes);
 app.use('/api/compliance', complianceRoutes);
 app.use('/api/compliance/dpdp', dpdpRoutes);
+app.use('/api/compliance/filings', filingsRoutes);
 app.use('/admin', adminRoutes);
 
 // 404 handler
@@ -519,6 +522,7 @@ async function startServer() {
 startRetryWorker();
 startRedTeamScheduler();
 startDpdpRetentionWorker();
+startFilingScheduler();
 
   const server = app.listen(PORT, () => {
     logger.info('Synthetic HR API server started', {
