@@ -2,7 +2,13 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend:
@@ -24,9 +30,23 @@ jobs:
           cache: npm
           cache-dependency-path: synthetic-hr-api/package-lock.json
       - run: npm ci
-      - run: npm run build
-      - run: npm run check:contracts
-      - run: npm test
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Contract check
+        run: npm run check:contracts
+      - name: Unit & integration tests
+        run: npm test -- --coverage
+      - name: Security regression
+        run: npx jest --no-coverage --testPathPattern security-regression
+      - name: Upload coverage
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: synthetic-hr-api/coverage/
+          retention-days: 7
 
   frontend:
     runs-on: ubuntu-latest
@@ -56,5 +76,47 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run build
-      - run: pnpm run test:coverage
+      - name: Type check
+        run: pnpm exec tsc --noEmit
+      - name: Build
+        run: pnpm run build
+      - name: Tests
+        run: pnpm run test:coverage
+      - name: Upload coverage
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: synthetic-hr/coverage/
+          retention-days: 7
+
+  migration-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check migration numbering
+        run: |
+          cd synthetic-hr-database
+          # Verify no duplicate migration numbers (except known 022 pair)
+          nums=$(ls migration_*.sql | sed 's/migration_\([0-9]*\).*/\1/' | sort)
+          dupes=$(echo "$nums" | uniq -d)
+          if [ -n "$dupes" ]; then
+            echo "⚠️  Duplicate migration numbers: $dupes"
+            # Known exception: migration_022 has two files
+            known="022"
+            unknown=$(echo "$dupes" | grep -v "$known" || true)
+            if [ -n "$unknown" ]; then
+              echo "❌ Unexpected duplicate migration numbers: $unknown"
+              exit 1
+            fi
+            echo "✅ Only known duplicates (022) — OK"
+          fi
+      - name: Check RLS pattern consistency
+        run: |
+          cd synthetic-hr-database
+          # Ensure no migration references the non-existent organization_members table
+          if grep -rn "organization_members" migration_*.sql; then
+            echo "❌ Found references to non-existent organization_members table"
+            exit 1
+          fi
+          echo "✅ All RLS policies use correct table references"
