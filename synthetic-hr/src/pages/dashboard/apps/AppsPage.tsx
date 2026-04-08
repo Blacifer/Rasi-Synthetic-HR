@@ -317,6 +317,8 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
                         onNavigate('/dashboard/apps/zoho/workspace');
                       } else if (app.appId === 'notion' && onNavigate) {
                         onNavigate('/dashboard/apps/notion/workspace');
+                      } else if (app.appId === 'whatsapp' && onNavigate) {
+                        onNavigate('/dashboard/apps/whatsapp/workspace');
                       } else {
                         setDrawerApp(app);
                       }

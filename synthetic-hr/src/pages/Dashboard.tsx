@@ -55,6 +55,7 @@ const QuickBooksWorkspace = lazy(() => import('./dashboard/apps/workspaces/quick
 const GoogleWorkspace = lazy(() => import('./dashboard/apps/workspaces/google-workspace/GoogleWorkspace'));
 const ZohoWorkspace = lazy(() => import('./dashboard/apps/workspaces/zoho/ZohoWorkspace'));
 const NotionWorkspace = lazy(() => import('./dashboard/apps/workspaces/notion/NotionWorkspace'));
+const WhatsAppWorkspace = lazy(() => import('./dashboard/apps/workspaces/whatsapp/WhatsAppWorkspace'));
 
 interface DashboardProps {
   isDemoMode?: boolean;
@@ -1526,6 +1527,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="apps/google-workspace/workspace" element={<SectionErrorBoundary fallbackMessage="Google Workspace failed to load"><GoogleWorkspace /></SectionErrorBoundary>} />
                   <Route path="apps/zoho/workspace" element={<SectionErrorBoundary fallbackMessage="Zoho People workspace failed to load"><ZohoWorkspace /></SectionErrorBoundary>} />
                   <Route path="apps/notion/workspace" element={<SectionErrorBoundary fallbackMessage="Notion workspace failed to load"><NotionWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/whatsapp/workspace" element={<SectionErrorBoundary fallbackMessage="WhatsApp workspace failed to load"><WhatsAppWorkspace /></SectionErrorBoundary>} />
                   {/* Unified Hubs Page — replaces individual hub pages */}
                   <Route path="hubs" element={<HubsPage />} />
                   <Route path="marketing-hub" element={<Navigate to="/dashboard/hubs?domain=marketing" replace />} />

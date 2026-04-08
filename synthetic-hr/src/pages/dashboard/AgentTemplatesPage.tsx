@@ -711,10 +711,18 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
                           toast.success(`${selectedTemplate.name} added to Fleet — connect a channel from the workspace to go live`);
                           setSelectedTemplate(null);
                         }}
-                        className={`w-full py-3 rounded-xl font-bold text-white transition-all shadow-lg ${getColorClasses(selectedTemplate.color).bg} hover:brightness-110 active:scale-[0.98]`}
+                        className={`flex-1 py-3 rounded-xl font-bold text-white transition-all shadow-lg ${getColorClasses(selectedTemplate.color).bg} hover:brightness-110 active:scale-[0.98]`}
                       >
                         Add to Fleet →
                       </button>
+                      <a
+                        href={`/interview/${selectedTemplate.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-5 py-3 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-xl transition-colors text-center text-sm flex items-center gap-1.5"
+                      >
+                        🧪 Interview
+                      </a>
                       <button
                         onClick={() => setSelectedTemplate(null)}
                         className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-xl transition-colors"
