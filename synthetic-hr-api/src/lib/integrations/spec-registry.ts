@@ -1185,9 +1185,9 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
   },
   {
     id: 'whatsapp',
-    name: 'WhatsApp Business (Gupshup)',
+    name: 'WhatsApp Business (Cloud API)',
     category: 'COMMUNICATION',
-    description: 'WhatsApp messaging rail for alerts and workflows (via Gupshup).',
+    description: 'WhatsApp messaging via Meta Cloud API for alerts, workflows, and conversations.',
     authType: 'api_key',
     tags: ['INDIA PRIORITY', 'MESSAGING'],
     status: 'READY',
@@ -1195,20 +1195,23 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     priority: 4,
     apiKeyConfig: {
       requiredFields: [
-        { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Enter Gupshup API Key', required: true, description: 'From Gupshup dashboard' },
-        { name: 'app_name', label: 'App Name', type: 'text', placeholder: 'your-app', required: true, description: 'Gupshup app name' },
-        { name: 'phone_number', label: 'Phone Number', type: 'text', placeholder: '+91...', required: true, description: 'WhatsApp sender number (E.164)' },
+        { name: 'access_token', label: 'Access Token', type: 'password', placeholder: 'Meta access token', required: true, description: 'From Meta Business dashboard' },
+        { name: 'phone_number_id', label: 'Phone Number ID', type: 'text', placeholder: '1234567890', required: true, description: 'Phone Number ID from WhatsApp Business' },
+        { name: 'waba_id', label: 'WABA ID', type: 'text', placeholder: '0987654321', required: true, description: 'WhatsApp Business Account ID' },
       ],
-      testEndpoint: 'https://api.gupshup.io/sm/api/v1/app',
-      baseUrl: 'https://api.gupshup.io/sm/api/v1',
+      testEndpoint: 'https://graph.facebook.com/v21.0',
+      baseUrl: 'https://graph.facebook.com/v21.0',
     },
     endpoints: {
-      app: { method: 'GET', path: '/app' },
+      phone: { method: 'GET', path: '/{phone_number_id}' },
+      messages: { method: 'POST', path: '/{phone_number_id}/messages' },
+      templates: { method: 'GET', path: '/{waba_id}/message_templates' },
     },
     capabilities: {
-      reads: [],
+      reads: ['comms.whatsapp.contacts', 'comms.whatsapp.templates'],
       writes: [
         { id: 'comms.whatsapp.send', label: 'Send WhatsApp message', risk: 'medium' },
+        { id: 'comms.whatsapp.template', label: 'Send template message', risk: 'medium' },
       ],
     },
   },

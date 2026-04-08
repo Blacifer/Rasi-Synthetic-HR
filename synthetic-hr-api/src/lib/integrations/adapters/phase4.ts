@@ -443,18 +443,23 @@ export const RazorpayXAdapter: IntegrationAdapter = {
   },
 };
 
-export const WhatsAppGupshupAdapter: IntegrationAdapter = {
+export const WhatsAppCloudAdapter: IntegrationAdapter = {
   async testConnection(credentials: Record<string, string>): Promise<ConnectionTestResult> {
     try {
-      const apiKey = decryptSecret(credentials.api_key || '');
-      const res = await fetchWithTimeout('https://api.gupshup.io/sm/api/v1/app', {
+      const accessToken = decryptSecret(credentials.access_token || '');
+      const phoneNumberId = decryptSecret(credentials.phone_number_id || '');
+      if (!accessToken || !phoneNumberId) {
+        return { success: false, message: 'Missing access_token or phone_number_id' };
+      }
+      const res = await fetchWithTimeout(`https://graph.facebook.com/v21.0/${phoneNumberId}`, {
         method: 'GET',
         headers: {
-          apikey: apiKey,
+          Authorization: `Bearer ${accessToken}`,
         },
       });
       if (!res.ok) return { success: false, message: `API Error: ${res.status}` };
-      return { success: true, message: 'Connected to Gupshup successfully' };
+      const data = await res.json().catch(() => null) as any;
+      return { success: true, message: `Connected to WhatsApp Business – ${data?.verified_name || phoneNumberId}` };
     } catch (err: any) {
       return { success: false, message: `Connection failed: ${err?.message || String(err)}` };
     }
@@ -500,6 +505,6 @@ export const Phase4Adapters: Record<string, IntegrationAdapter> = {
   okta: OktaAdapter,
   keka: KekaAdapter,
   razorpayx: RazorpayXAdapter,
-  whatsapp: WhatsAppGupshupAdapter,
+  whatsapp: WhatsAppCloudAdapter,
   epfo: EpfoAdapter,
 };

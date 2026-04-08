@@ -104,10 +104,10 @@ export default function WhatsAppWorkspace() {
 
   const [activeTab, setActiveTab] = useState<Tab>('conversations');
   const [selectedConvo, setSelectedConvo] = useState<WhatsAppConversation | null>(null);
-  const [conversations, setConversations] = useState<WhatsAppConversation[]>(DEMO_CONVERSATIONS);
+  const [conversations, setConversations] = useState<WhatsAppConversation[]>([]);
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
-  const [templates, setTemplates] = useState<WhatsAppTemplate[]>(DEMO_TEMPLATES);
-  const [contacts, setContacts] = useState<WhatsAppContact[]>(DEMO_CONTACTS);
+  const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
+  const [contacts, setContacts] = useState<WhatsAppContact[]>([]);
   const [connected, setConnected] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [compose, setCompose] = useState('');
@@ -120,32 +120,83 @@ export default function WhatsAppWorkspace() {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_conversations', {});
       if (res.success && res.data?.data) {
         const list = Array.isArray(res.data.data) ? res.data.data : res.data.data?.conversations ?? [];
-        if (list.length > 0) {
-          setConversations(list);
-          setConnected(true);
-        } else {
-          setConnected(true);
-          setConversations(DEMO_CONVERSATIONS); // Show demo data
-        }
+        setConversations(list);
+        setConnected(true);
       } else {
         setConnected(false);
-        setConversations(DEMO_CONVERSATIONS);
       }
     } catch {
       setConnected(false);
-      setConversations(DEMO_CONVERSATIONS);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void loadConversations(); }, [loadConversations]);
+  /* -- Load contacts ----------------------------------------------- */
+  const loadContacts = useCallback(async () => {
+    try {
+      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_contacts', {});
+      if (res.success && res.data?.data) {
+        const list = Array.isArray(res.data.data) ? res.data.data : res.data.data?.contacts ?? [];
+        setContacts(list.map((c: any) => ({
+          id: c.id,
+          phone: c.phone,
+          name: c.name || c.phone,
+          labels: c.labels || [],
+          lastSeen: c.last_message_at ? new Date(c.last_message_at).toLocaleString() : '—',
+          optedIn: c.opted_in ?? true,
+        })));
+      }
+    } catch { /* silently fail — will show empty state */ }
+  }, []);
+
+  /* -- Load templates ---------------------------------------------- */
+  const loadTemplates = useCallback(async () => {
+    try {
+      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_templates', {});
+      if (res.success && res.data?.data) {
+        const list = Array.isArray(res.data.data) ? res.data.data : res.data.data?.templates ?? [];
+        setTemplates(list.map((t: any) => ({
+          id: t.wa_template_id || t.id,
+          name: t.name,
+          category: t.category || 'UTILITY',
+          language: t.language || 'en',
+          status: (t.status || 'pending').toLowerCase(),
+          body: t.body || '',
+        })));
+      }
+    } catch { /* silently fail */ }
+  }, []);
+
+  useEffect(() => {
+    void loadConversations();
+    void loadContacts();
+    void loadTemplates();
+  }, [loadConversations, loadContacts, loadTemplates]);
 
   /* -- Select conversation ----------------------------------------- */
-  const handleSelectConvo = useCallback((convo: WhatsAppConversation) => {
+  const handleSelectConvo = useCallback(async (convo: WhatsAppConversation) => {
     setSelectedConvo(convo);
     setActiveTab('conversations');
-    setMessages(DEMO_MESSAGES); // Use demo messages for now
+    setMessages([]);
+
+    try {
+      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'get_messages', { phone: convo.phone });
+      if (res.success && res.data?.data) {
+        const list = Array.isArray(res.data.data) ? res.data.data : res.data.data?.messages ?? [];
+        setMessages(list.map((m: any) => ({
+          id: m.id || m.wa_message_id,
+          direction: m.direction || 'inbound',
+          content: m.content || '',
+          ts: m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+          status: m.status || 'sent',
+          sender: m.direction === 'outbound' ? 'You' : convo.name,
+          isAgent: m.direction === 'outbound',
+        })));
+      }
+    } catch {
+      // Unable to load messages
+    }
   }, []);
 
   /* -- Send message ------------------------------------------------ */
@@ -170,9 +221,13 @@ export default function WhatsAppWorkspace() {
       if (res.success) {
         toast.success('Message sent');
         setMessages((prev) => prev.map((m) => m.id === newMsg.id ? { ...m, status: 'delivered' } : m));
+      } else {
+        toast.error(res.data?.error || 'Failed to send message');
+        setMessages((prev) => prev.map((m) => m.id === newMsg.id ? { ...m, status: 'failed' } : m));
       }
     } catch {
-      // Demo mode — just show as sent
+      toast.error('Failed to send message');
+      setMessages((prev) => prev.map((m) => m.id === newMsg.id ? { ...m, status: 'failed' } : m));
     }
   }, [compose, selectedConvo]);
 

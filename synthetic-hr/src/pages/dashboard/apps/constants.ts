@@ -192,7 +192,7 @@ export const LOGO_DOMAINS: Record<string, string> = {
   'cutshort':           'cutshort.io',
   // Communication (new)
   'loom':               'loom.com',
-  'gupshup':            'gupshup.io',
+  'whatsapp':            'whatsapp.com',
   // IT & Security (new)
   'postman':            'postman.com',
   'browserstack':       'browserstack.com',

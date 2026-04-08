@@ -108,7 +108,7 @@ const ALERT_ROUTE_PROVIDERS = [
   'pagerduty',
   'microsoft teams',
   'teams',
-  'gupshup',
+  'whatsapp',
   'msg91',
   'suprsend',
   'custom webhook',

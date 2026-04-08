@@ -15,9 +15,11 @@ import {
   Zap,
 } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
+import { api } from '../../../../lib/api-client';
 import type { AIAgent } from '../../../../types';
 import type { UnifiedApp, CapabilityPolicy } from '../types';
 import { AppLogo } from '../components/AppLogo';
+import { getAppServiceId } from '../helpers';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -53,6 +55,7 @@ export function ConnectWizard({ app, agents, onConnect, onClose, onOpenWorkspace
   const [creds, setCreds] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [testResult, setTestResult] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
+  const [testError, setTestError] = useState<string | null>(null);
   const [linkedAgents, setLinkedAgents] = useState<Set<string>>(new Set());
   const [policies, setPolicies] = useState<CapabilityPolicy[]>(
     () => (app.capabilityPolicies || []).map((p) => ({ ...p })),
@@ -76,8 +79,8 @@ export function ConnectWizard({ app, agents, onConnect, onClose, onOpenWorkspace
     try {
       await onConnect(app, creds);
       goNext();
-    } catch {
-      /* stay on auth step */
+    } catch (err: any) {
+      setTestError(err?.message || 'Authentication failed');
     } finally {
       setBusy(false);
     }
@@ -86,12 +89,23 @@ export function ConnectWizard({ app, agents, onConnect, onClose, onOpenWorkspace
   /* -- Test connection ---------------------------------------------- */
   const runTest = async () => {
     setTestResult('running');
+    setTestError(null);
     try {
-      // Simulate test — the real test is already triggered by onConnect
-      await new Promise((r) => setTimeout(r, 1200));
-      setTestResult('success');
-    } catch {
+      const serviceId = getAppServiceId(app);
+      // Try marketplace test first, then integrations test
+      const res = app.source === 'marketplace'
+        ? await api.marketplace.testConnection(app.appId, creds)
+        : await api.integrations.test(serviceId);
+
+      if (res.success) {
+        setTestResult('success');
+      } else {
+        setTestResult('error');
+        setTestError((res as any).error || 'Connection test failed');
+      }
+    } catch (err: any) {
       setTestResult('error');
+      setTestError(err?.message || 'Connection test failed');
     }
   };
 
@@ -152,7 +166,7 @@ export function ConnectWizard({ app, agents, onConnect, onClose, onOpenWorkspace
               setLinkedAgents={setLinkedAgents}
             />
           )}
-          {step === 'test' && <TestStep result={testResult} onRetry={runTest} />}
+          {step === 'test' && <TestStep result={testResult} onRetry={runTest} errorMessage={testError} />}
           {step === 'done' && <DoneStep app={app} />}
         </div>
 
@@ -507,9 +521,11 @@ function LinkAgentsStep({
 function TestStep({
   result,
   onRetry,
+  errorMessage,
 }: {
   result: 'idle' | 'running' | 'success' | 'error';
   onRetry: () => void;
+  errorMessage?: string | null;
 }) {
   return (
     <div className="flex flex-col items-center justify-center py-8 space-y-4">
@@ -548,7 +564,7 @@ function TestStep({
             <AlertCircle className="w-5 h-5 text-rose-400" />
           </div>
           <p className="text-sm text-white font-medium">Connection failed</p>
-          <p className="text-xs text-slate-500">Check your credentials and try again</p>
+          <p className="text-xs text-slate-500">{errorMessage || 'Check your credentials and try again'}</p>
           <button
             onClick={onRetry}
             className="text-xs text-cyan-400 hover:text-cyan-300 font-medium transition-colors"

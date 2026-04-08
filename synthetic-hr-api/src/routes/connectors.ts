@@ -75,7 +75,7 @@ const REQUIRED_CONNECTOR_FIELDS: Record<string, string[]> = {
   'zoom-ai': ['accountId', 'clientId', 'clientSecret'],
   'sap-joule': ['baseUrl', 'apiKey'],
   'darwin-assistant': ['apiKey'],
-  gupshup: ['apiKey', 'appId'],
+  whatsapp: ['accessToken', 'phoneNumberId', 'wabaId'],
   msg91: ['authKey', 'senderId'],
   'route-mobile': ['apiKey', 'apiSecret'],
   karix: ['apiKey', 'apiSecret'],
@@ -2195,44 +2195,36 @@ async function validateProviderConnection(
         },
       };
     }
-    case 'gupshup': {
-      const response = await fetchWithTimeout(`https://api.gupshup.io/wa/app/${credentials.appId}/group/nonexistent-group/invite_link`, {
-        method: 'POST',
+    case 'whatsapp': {
+      const phoneNumberId = credentials.phoneNumberId || credentials.phone_number_id;
+      const accessToken = credentials.accessToken || credentials.access_token;
+      if (!phoneNumberId || !accessToken) {
+        return { valid: false, error: 'Missing phoneNumberId or accessToken' };
+      }
+      const response = await fetchWithTimeout(`https://graph.facebook.com/v21.0/${encodeURIComponent(phoneNumberId)}`, {
+        method: 'GET',
         headers: {
-          apikey: credentials.apiKey,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
           Accept: 'application/json',
         },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-        }),
       });
 
       const body = await response.json().catch(() => null) as any;
-      if (response.status === 400 || response.status === 404) {
-        return {
-          valid: true,
-          accountLabel: credentials.appId,
-          details: {
-            app_id: credentials.appId,
-            probe: 'group.invite_link',
-          },
-        };
-      }
-
       if (!response.ok) {
         return {
           valid: false,
-          error: body?.message || body?.error?.message || 'Gupshup authentication failed',
+          error: body?.error?.message || 'WhatsApp Cloud API authentication failed',
         };
       }
 
       return {
         valid: true,
-        accountLabel: credentials.appId,
+        accountLabel: body?.verified_name || body?.display_phone_number || phoneNumberId,
         details: {
-          app_id: credentials.appId,
-          probe: 'group.invite_link',
+          phone_number_id: phoneNumberId,
+          verified_name: body?.verified_name,
+          quality_rating: body?.quality_rating,
+          probe: 'phone_number.get',
         },
       };
     }

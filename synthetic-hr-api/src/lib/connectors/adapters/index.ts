@@ -12,6 +12,7 @@ import './quickbooks';
 import './google-workspace';
 import './zoho-people';
 import './notion';
+import './whatsapp';
 
 export { getRegisteredAdapter, listRegisteredAdapters } from '../adapter';
 export type { ConnectorAdapter, HealthResult } from '../adapter';

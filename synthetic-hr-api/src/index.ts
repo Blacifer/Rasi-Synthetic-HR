@@ -30,6 +30,7 @@ import playbooksRoutes, { handleShareToken, handlePublicPlaybookRun } from './ro
 import eventsRoutes from './routes/events';
 import slackWebhookRoutes from './routes/slack';
 import slackActionsRoutes from './routes/slack-actions';
+import whatsappWebhookRoutes from './routes/whatsapp-webhook';
 import marketplaceRoutes from './routes/marketplace';
 import actionPoliciesRoutes from './routes/action-policies';
 import approvalsRoutes from './routes/approvals';
@@ -274,6 +275,8 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use('/events/slack', express.raw({ type: 'application/json', limit: '1mb' }), slackWebhookRoutes);
 // Slack interactive components (button clicks). Raw body required for HMAC verification.
 app.use('/events/slack-actions', express.raw({ type: 'application/x-www-form-urlencoded', limit: '1mb' }), slackActionsRoutes);
+// WhatsApp Cloud API webhook — raw body required for X-Hub-Signature-256 verification.
+app.use('/webhooks/whatsapp', express.raw({ type: 'application/json', limit: '1mb' }), whatsappWebhookRoutes);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
