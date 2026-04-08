@@ -14,6 +14,7 @@ import { recordPromptCacheObservation, lookupSemanticCache, storeSemanticCacheRe
 import { ACTION_REGISTRY } from '../lib/connectors/action-registry';
 import { executeConnectorAction } from '../lib/connectors/action-executor';
 import { decryptSecret, encryptSecret } from '../lib/integrations/encryption';
+import { getAdapter } from '../lib/integrations/adapters';
 import { computeEntropy } from '../services/policy-engine';
 import { runPreflightGate } from '../lib/preflight-gate';
 import { buildGovernedActionSnapshot } from '../lib/governed-actions';
@@ -796,10 +797,9 @@ const AGENT_TOOL_CACHE_TTL_MS = 60_000;
 
 /**
  * OAuth token refresh: if an OAuth connector's access_token is within 5 minutes
- * of expiry (or already expired), fetch a new one via the provider's refresh endpoint
- * and persist the updated credentials back to `integration_credentials`.
+ * of expiry (or already expired), delegate to the provider adapter's refreshToken
+ * method and persist the updated credentials back to `integration_credentials`.
  *
- * Supported providers: salesforce, hubspot.
  * Returns the (possibly updated) credential map — original creds on any failure.
  */
 async function refreshOAuthIfNeeded(
@@ -811,53 +811,21 @@ async function refreshOAuthIfNeeded(
   const expiresAt = new Date(creds.expires_at).getTime();
   if (expiresAt > Date.now() + 5 * 60_000) return creds; // still valid for 5+ minutes
 
+  const adapter = getAdapter(connectorId);
+  if (!adapter?.refreshToken) return creds; // adapter doesn't support refresh
+
   try {
-    let formBody: URLSearchParams | null = null;
+    const token = await adapter.refreshToken(creds);
+    if (!token?.access_token) return creds;
 
-    if (connectorId === 'salesforce') {
-      formBody = new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: process.env.SALESFORCE_CLIENT_ID || '',
-        client_secret: process.env.SALESFORCE_CLIENT_SECRET || '',
-        refresh_token: creds.refresh_token,
-      });
-    } else if (connectorId === 'hubspot') {
-      formBody = new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: process.env.HUBSPOT_CLIENT_ID || '',
-        client_secret: process.env.HUBSPOT_CLIENT_SECRET || '',
-        refresh_token: creds.refresh_token,
-      });
-    }
-
-    if (!formBody) return creds; // provider not yet supported for auto-refresh
-
-    const providerUrl = connectorId === 'salesforce'
-      ? 'https://login.salesforce.com/services/oauth2/token'
-      : 'https://api.hubapi.com/oauth/v1/token';
-
-    const resp = await fetch(providerUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: formBody,
-    });
-
-    if (!resp.ok) {
-      logger.warn('OAuth refresh request failed', { connectorId, status: resp.status });
-      return creds;
-    }
-
-    const json: any = await resp.json();
-    if (!json.access_token) return creds;
-
-    const newExpiry = json.expires_in
-      ? new Date(Date.now() + json.expires_in * 1000).toISOString()
+    const newExpiry = token.expires_in
+      ? new Date(Date.now() + Number(token.expires_in) * 1000).toISOString()
       : new Date(Date.now() + 3600_000).toISOString();
 
     const updates: Record<string, string> = {
-      access_token: json.access_token,
+      access_token: String(token.access_token),
       expires_at: newExpiry,
-      ...(json.refresh_token ? { refresh_token: json.refresh_token } : {}),
+      ...(token.refresh_token ? { refresh_token: String(token.refresh_token) } : {}),
     };
 
     // Persist each updated credential back to DB (PATCH by integration_id + key)
