@@ -89,37 +89,37 @@ ALTER TABLE ctc_simulations ENABLE ROW LEVEL SECURITY;
 -- salary_structures RLS
 CREATE POLICY salary_structures_select ON salary_structures FOR SELECT
     USING (organization_id IN (
-        SELECT organization_id FROM organization_members WHERE user_id = auth.uid()
+        SELECT organization_id FROM users WHERE id = auth.uid()
     ));
 CREATE POLICY salary_structures_insert ON salary_structures FOR INSERT
     WITH CHECK (organization_id IN (
-        SELECT organization_id FROM organization_members WHERE user_id = auth.uid()
+        SELECT organization_id FROM users WHERE id = auth.uid()
     ));
 CREATE POLICY salary_structures_update ON salary_structures FOR UPDATE
     USING (organization_id IN (
-        SELECT organization_id FROM organization_members WHERE user_id = auth.uid()
+        SELECT organization_id FROM users WHERE id = auth.uid()
     ));
 
 -- salary_components RLS
 CREATE POLICY salary_components_select ON salary_components FOR SELECT
     USING (organization_id IN (
-        SELECT organization_id FROM organization_members WHERE user_id = auth.uid()
+        SELECT organization_id FROM users WHERE id = auth.uid()
     ));
 CREATE POLICY salary_components_insert ON salary_components FOR INSERT
     WITH CHECK (organization_id IN (
-        SELECT organization_id FROM organization_members WHERE user_id = auth.uid()
+        SELECT organization_id FROM users WHERE id = auth.uid()
     ));
 CREATE POLICY salary_components_update ON salary_components FOR UPDATE
     USING (organization_id IN (
-        SELECT organization_id FROM organization_members WHERE user_id = auth.uid()
+        SELECT organization_id FROM users WHERE id = auth.uid()
     ));
 
 -- ctc_simulations RLS
 CREATE POLICY ctc_simulations_select ON ctc_simulations FOR SELECT
     USING (organization_id IN (
-        SELECT organization_id FROM organization_members WHERE user_id = auth.uid()
+        SELECT organization_id FROM users WHERE id = auth.uid()
     ));
 CREATE POLICY ctc_simulations_insert ON ctc_simulations FOR INSERT
     WITH CHECK (organization_id IN (
-        SELECT organization_id FROM organization_members WHERE user_id = auth.uid()
+        SELECT organization_id FROM users WHERE id = auth.uid()
     ));

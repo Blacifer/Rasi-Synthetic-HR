@@ -67,24 +67,24 @@ ALTER TABLE consent_records ENABLE ROW LEVEL SECURITY;
 CREATE POLICY consent_records_select ON consent_records
   FOR SELECT USING (
     organization_id IN (
-      SELECT organization_id FROM organization_members
-      WHERE user_id = auth.uid()
+      SELECT organization_id FROM users
+      WHERE id = auth.uid()
     )
   );
 
 CREATE POLICY consent_records_insert ON consent_records
   FOR INSERT WITH CHECK (
     organization_id IN (
-      SELECT organization_id FROM organization_members
-      WHERE user_id = auth.uid()
+      SELECT organization_id FROM users
+      WHERE id = auth.uid()
     )
   );
 
 CREATE POLICY consent_records_update ON consent_records
   FOR UPDATE USING (
     organization_id IN (
-      SELECT organization_id FROM organization_members
-      WHERE user_id = auth.uid()
+      SELECT organization_id FROM users
+      WHERE id = auth.uid()
     )
   );
 
@@ -123,16 +123,16 @@ ALTER TABLE data_retention_policies ENABLE ROW LEVEL SECURITY;
 CREATE POLICY retention_policies_select ON data_retention_policies
   FOR SELECT USING (
     organization_id IN (
-      SELECT organization_id FROM organization_members
-      WHERE user_id = auth.uid()
+      SELECT organization_id FROM users
+      WHERE id = auth.uid()
     )
   );
 
 CREATE POLICY retention_policies_all ON data_retention_policies
   FOR ALL USING (
     organization_id IN (
-      SELECT organization_id FROM organization_members
-      WHERE user_id = auth.uid()
+      SELECT organization_id FROM users
+      WHERE id = auth.uid()
     )
   );
 
@@ -191,24 +191,24 @@ ALTER TABLE data_principal_requests ENABLE ROW LEVEL SECURITY;
 CREATE POLICY dpr_select ON data_principal_requests
   FOR SELECT USING (
     organization_id IN (
-      SELECT organization_id FROM organization_members
-      WHERE user_id = auth.uid()
+      SELECT organization_id FROM users
+      WHERE id = auth.uid()
     )
   );
 
 CREATE POLICY dpr_insert ON data_principal_requests
   FOR INSERT WITH CHECK (
     organization_id IN (
-      SELECT organization_id FROM organization_members
-      WHERE user_id = auth.uid()
+      SELECT organization_id FROM users
+      WHERE id = auth.uid()
     )
   );
 
 CREATE POLICY dpr_update ON data_principal_requests
   FOR UPDATE USING (
     organization_id IN (
-      SELECT organization_id FROM organization_members
-      WHERE user_id = auth.uid()
+      SELECT organization_id FROM users
+      WHERE id = auth.uid()
     )
   );
 
