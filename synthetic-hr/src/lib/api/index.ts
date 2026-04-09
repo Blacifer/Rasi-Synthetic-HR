@@ -17,6 +17,7 @@ export {
   workItemsApi,
   playbooksApi,
   actionPoliciesApi,
+  synthesizedRulesApi,
 } from './platform';
 export { marketplaceApi } from './marketplace';
 export { approvalsApi } from './approvals';
@@ -59,6 +60,8 @@ export type {
   ActionPolicyConstraints,
   RoutingRule,
   InterceptorRule,
+  SynthesizedRuleRow,
+  SynthesizedRuleStatus,
 } from './platform';
 export type { MarketplaceApp, AppBundle } from './marketplace';
 
@@ -82,6 +85,7 @@ import {
   workItemsApi,
   playbooksApi,
   actionPoliciesApi,
+  synthesizedRulesApi,
 } from './platform';
 import { marketplaceApi } from './marketplace';
 import { approvalsApi } from './approvals';
@@ -135,6 +139,7 @@ export const api = {
   workItems: workItemsApi,
   playbooks: playbooksApi,
   actionPolicies: actionPoliciesApi,
+  synthesizedRules: synthesizedRulesApi,
   marketplace: marketplaceApi,
   approvals: approvalsApi,
   alertChannels: alertChannelsApi,

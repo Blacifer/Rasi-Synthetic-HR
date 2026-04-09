@@ -32,6 +32,7 @@ interface WorkspaceOverviewSectionProps {
   incidentsError: string | null;
   openIncidentCount: number;
   criticalIncidentCount: number;
+  pendingSynthesizedRuleCount: number;
   suggestedApps: SuggestedApp[];
   onPublishAgent?: (agent: AIAgent, packId?: IntegrationPackId | null) => void;
   onOpenOperationsPage?: (page: string, options?: { agentId?: string }) => void;
@@ -46,6 +47,7 @@ export function WorkspaceOverviewSection({
   incidentsError,
   openIncidentCount,
   criticalIncidentCount,
+  pendingSynthesizedRuleCount,
   suggestedApps,
   onPublishAgent,
   onOpenOperationsPage,
@@ -58,7 +60,6 @@ export function WorkspaceOverviewSection({
   const latestIncident = incidents[0] || null;
 
   const [corrections, setCorrections] = useState<any[]>([]);
-  const [pendingSynthesized, setPendingSynthesized] = useState(0);
 
   useEffect(() => {
     const agentId = activeWorkspaceAgent.id;
@@ -70,13 +71,6 @@ export function WorkspaceOverviewSection({
       .order('created_at', { ascending: false })
       .limit(5)
       .then(({ data }) => setCorrections(data || []));
-
-    supabase
-      .from('synthesized_rules')
-      .select('id', { count: 'exact' })
-      .eq('agent_id', agentId)
-      .is('status', null)
-      .then(({ count, error }) => { if (!error) setPendingSynthesized(count || 0); });
   }, [activeWorkspaceAgent.id]);
 
   const nextAction = (() => {
@@ -341,20 +335,39 @@ export function WorkspaceOverviewSection({
       </div>
 
       {/* Correction history + self-healing status */}
-      {(corrections.length > 0 || pendingSynthesized > 0) && (
+      {(corrections.length > 0 || pendingSynthesizedRuleCount > 0) && (
         <div className="rounded-2xl border border-amber-400/10 bg-white/[0.02] p-5">
           <div className="flex items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2">
               <BrainCircuit className="w-4 h-4 text-amber-400" />
               <h3 className="text-sm font-semibold text-white">Agent Learning</h3>
-              {pendingSynthesized > 0 && (
+              {pendingSynthesizedRuleCount > 0 && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-semibold">
-                  {pendingSynthesized} rule{pendingSynthesized !== 1 ? 's' : ''} proposed
+                  Org: {pendingSynthesizedRuleCount} rule{pendingSynthesizedRuleCount !== 1 ? 's' : ''} proposed
                 </span>
               )}
             </div>
             <UserCheck className="w-4 h-4 text-slate-400" />
           </div>
+
+          {pendingSynthesizedRuleCount > 0 && (
+            <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-amber-300/80">Org-wide self-healing</p>
+                  <p className="mt-1 text-sm text-slate-200">
+                    {pendingSynthesizedRuleCount} synthesized rule proposal{pendingSynthesizedRuleCount === 1 ? '' : 's'} waiting in Action Policies.
+                  </p>
+                </div>
+                <button
+                  onClick={() => onOpenOperationsPage?.('action-policies')}
+                  className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-slate-950/30 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/20 hover:text-white"
+                >
+                  Review proposals
+                </button>
+              </div>
+            </div>
+          )}
 
           {corrections.length === 0 ? (
             <p className="text-xs text-slate-500">No human corrections recorded yet for this agent.</p>

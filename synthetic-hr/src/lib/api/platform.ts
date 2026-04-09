@@ -670,6 +670,30 @@ export type ActionPolicyRow = {
   updated_at: string;
 };
 
+export type SynthesizedRuleStatus = 'proposed' | 'accepted' | 'dismissed';
+
+export type SynthesizedRulePolicy = {
+  service?: string;
+  action?: string;
+  enabled?: boolean;
+  require_approval?: boolean;
+  required_role?: 'viewer' | 'manager' | 'admin' | 'super_admin';
+  notes?: string | null;
+  [key: string]: unknown;
+};
+
+export type SynthesizedRuleRow = {
+  id: string;
+  organization_id: string;
+  service: string;
+  action: string;
+  trigger_count: number;
+  proposed_policy: SynthesizedRulePolicy | null;
+  status: SynthesizedRuleStatus;
+  created_at: string;
+  updated_at: string;
+};
+
 export const actionPoliciesApi = {
   async list(params?: { service?: string; action?: string; limit?: number }): Promise<ApiResponse<ActionPolicyRow[]>> {
     const query = new URLSearchParams();
@@ -706,6 +730,23 @@ export const actionPoliciesApi = {
     return authenticatedFetch('/openapi/ingest', {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  },
+};
+
+export const synthesizedRulesApi = {
+  async list(params?: { status?: SynthesizedRuleStatus; limit?: number }): Promise<ApiResponse<SynthesizedRuleRow[]>> {
+    const query = new URLSearchParams();
+    if (params?.status) query.set('status', params.status);
+    if (typeof params?.limit === 'number') query.set('limit', String(params.limit));
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return authenticatedFetch(`/rules/synthesized${suffix}`, { method: 'GET' });
+  },
+
+  async updateStatus(id: string, status: Exclude<SynthesizedRuleStatus, 'proposed'>): Promise<ApiResponse<{ id: string; status: Exclude<SynthesizedRuleStatus, 'proposed'> }>> {
+    return authenticatedFetch(`/rules/synthesized/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
     });
   },
 };

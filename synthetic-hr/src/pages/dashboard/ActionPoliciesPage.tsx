@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Shield, Plus, RefreshCw, Trash2, X, BookOpen, ChevronRight, Zap, GitBranch, Filter, ToggleLeft, ToggleRight, Code2, Play, History, CheckCircle2, BrainCircuit, CheckCheck, XCircle } from 'lucide-react';
-import { api, type ActionPolicyRow, type RoutingRule, type InterceptorRule, type ActionPolicyConstraints } from '../../lib/api-client';
+import { api, type ActionPolicyRow, type RoutingRule, type InterceptorRule, type ActionPolicyConstraints, type SynthesizedRuleRow } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 import { FALLBACK_MODELS, DEFAULT_MODEL_ID, type ModelDefinition } from '../../lib/models';
 import { getFrontendConfig } from '../../lib/config';
@@ -81,6 +81,16 @@ const DEFAULT_ACTIONS: Array<{ service: string; action: string; hint: string }> 
   { service: 'internal', action: 'it.access_request.decide', hint: 'Approve/reject access request' },
   { service: 'webhook', action: 'webhook.call', hint: 'External webhook call (runtime)' },
 ];
+
+function getSynthesizedRuleNote(rule: SynthesizedRuleRow): string | null {
+  const note = rule.proposed_policy?.notes;
+  return typeof note === 'string' && note.trim().length > 0 ? note.trim() : null;
+}
+
+function getSynthesizedRuleRole(rule: SynthesizedRuleRow): string {
+  const role = rule.proposed_policy?.required_role;
+  return typeof role === 'string' && role.trim().length > 0 ? role.replace(/_/g, ' ') : 'admin';
+}
 
 function allowlistToText(list: unknown): string {
   if (!Array.isArray(list)) return '';
@@ -491,7 +501,7 @@ export default function ActionPoliciesPage() {
   const [simResult, setSimResult] = useState<{ decision: string; violations: any[] } | null>(null);
   const [versionHistory, setVersionHistory] = useState<any[]>([]);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
-  const [synthesizedRules, setSynthesizedRules] = useState<any[]>([]);
+  const [synthesizedRules, setSynthesizedRules] = useState<SynthesizedRuleRow[]>([]);
   const [showSynthesized, setShowSynthesized] = useState(false);
   const [synthesizedLoading, setSynthesizedLoading] = useState(false);
   // OpenAPI ingestion
@@ -546,39 +556,37 @@ export default function ActionPoliciesPage() {
   const loadSynthesizedRules = async () => {
     setSynthesizedLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('synthesized_rules')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (!error) setSynthesizedRules(data || []);
-    } catch {
-      // Table may not exist yet — ignore
+      const res = await api.synthesizedRules.list({ status: 'proposed', limit: 50 });
+      if (!res.success) throw new Error(res.error || 'Failed to load synthesized rules');
+      setSynthesizedRules(res.data || []);
+    } catch (err: any) {
+      setSynthesizedRules([]);
+      toast.error(err?.message || 'Failed to load synthesized rules');
     } finally {
       setSynthesizedLoading(false);
     }
   };
 
-  const acceptSynthesizedRule = async (rule: any) => {
-    // Apply the proposed rule as a real action policy
-    await api.actionPolicies.upsert({
-      service: rule.service,
-      action: rule.action,
-      enabled: true,
-      require_approval: true,
-      required_role: 'manager',
-      notes: `Auto-proposed by self-healing engine after ${rule.denial_count} denials. ${rule.synthesis_summary || ''}`,
-    });
-    // Mark as applied in synthesized_rules
-    await supabase.from('synthesized_rules').update({ status: 'accepted' }).eq('id', rule.id);
-    setSynthesizedRules((prev) => prev.filter((r) => r.id !== rule.id));
-    toast.success('Rule accepted and added to Action Policies.');
-    load();
+  const acceptSynthesizedRule = async (rule: SynthesizedRuleRow) => {
+    try {
+      const res = await api.synthesizedRules.updateStatus(rule.id, 'accepted');
+      if (!res.success) throw new Error(res.error || 'Failed to accept synthesized rule');
+      setSynthesizedRules((prev) => prev.filter((candidate) => candidate.id !== rule.id));
+      toast.success('Rule accepted and added to Action Policies.');
+      await load();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to accept synthesized rule');
+    }
   };
 
   const dismissSynthesizedRule = async (id: string) => {
-    await supabase.from('synthesized_rules').update({ status: 'dismissed' }).eq('id', id);
-    setSynthesizedRules((prev) => prev.filter((r) => r.id !== id));
+    try {
+      const res = await api.synthesizedRules.updateStatus(id, 'dismissed');
+      if (!res.success) throw new Error(res.error || 'Failed to dismiss synthesized rule');
+      setSynthesizedRules((prev) => prev.filter((rule) => rule.id !== id));
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to dismiss synthesized rule');
+    }
   };
 
   const handleOpenApiAnalyze = async () => {
@@ -1331,14 +1339,14 @@ export default function ActionPoliciesPage() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-white">{rule.service}:{rule.action}</span>
                           <span className="text-[11px] px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300">
-                            {rule.denial_count} denials
+                            {rule.trigger_count} denials
                           </span>
                         </div>
-                        {rule.synthesis_summary && (
-                          <p className="mt-1 text-xs text-slate-400 leading-relaxed">{rule.synthesis_summary}</p>
+                        {getSynthesizedRuleNote(rule) && (
+                          <p className="mt-1 text-xs text-slate-400 leading-relaxed">{getSynthesizedRuleNote(rule)}</p>
                         )}
                         <p className="mt-1 text-[11px] text-slate-500">
-                          Proposed {new Date(rule.created_at).toLocaleDateString()} · Agent: {rule.agent_id?.slice(0, 8)}…
+                          Proposed {new Date(rule.created_at).toLocaleDateString()} · Suggested reviewer role: {getSynthesizedRuleRole(rule)}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">

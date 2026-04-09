@@ -209,7 +209,7 @@ export default function FleetPage({
   const [applyingRec, setApplyingRec] = useState<string | null>(null);
   const [killSwitchAgent, setKillSwitchAgent] = useState<string | null>(null);
   const [highlightedAgentId, setHighlightedAgentId] = useState<string | null>(null);
-  const [pendingRuleAgentIds, setPendingRuleAgentIds] = useState<Set<string>>(new Set());
+  const [pendingSynthesizedRuleCount, setPendingSynthesizedRuleCount] = useState(0);
   const [confirming, setConfirming] = useState(false);
   const [wsSettingsBudget, setWsSettingsBudget] = useState(0);
   const [wsSettingsAutoThrottle, setWsSettingsAutoThrottle] = useState(false);
@@ -319,18 +319,30 @@ export default function FleetPage({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, agents.length]);
 
-  // Load which agents have pending auto-proposed rules (self-healing badge)
+  // Load org-wide pending synthesized rules for the fleet banner.
   useEffect(() => {
-    if (agents.length === 0) return;
-    supabase
-      .from('synthesized_rules')
-      .select('agent_id')
-      .is('status', null)
-      .then(({ data, error }) => {
-        if (!error && data) {
-          setPendingRuleAgentIds(new Set(data.map((r: any) => r.agent_id).filter(Boolean)));
+    let canceled = false;
+
+    if (agents.length === 0) {
+      setPendingSynthesizedRuleCount(0);
+      return () => {
+        canceled = true;
+      };
+    }
+
+    void api.synthesizedRules.list({ status: 'proposed', limit: 50 })
+      .then((res) => {
+        if (!canceled) {
+          setPendingSynthesizedRuleCount(res.success ? (res.data?.length ?? 0) : 0);
         }
+      })
+      .catch(() => {
+        if (!canceled) setPendingSynthesizedRuleCount(0);
       });
+
+    return () => {
+      canceled = true;
+    };
   }, [agents.length]);
 
   const dismissDrift = (agentId: string) => {
@@ -1250,6 +1262,31 @@ export default function FleetPage({
         </div>
       )}
 
+      {pendingSynthesizedRuleCount > 0 && agents.length > 0 && (
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-widest text-amber-300/80">Self-healing</p>
+              <p className="mt-1 text-sm text-white">
+                {pendingSynthesizedRuleCount} org-wide rule proposal{pendingSynthesizedRuleCount === 1 ? '' : 's'} waiting in Action Policies.
+              </p>
+              <p className="mt-1 text-xs text-amber-100/70">These proposals come from repeated human denials and now need an operator decision.</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300">
+                {pendingSynthesizedRuleCount} pending
+              </span>
+              <button
+                onClick={() => onOpenOperationsPage?.('action-policies')}
+                className="inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-slate-950/30 px-3.5 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/20 hover:text-white"
+              >
+                Review proposals
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {agents.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           <div className="rounded-2xl border border-white/[0.10] bg-white/[0.05] glass glass-glow p-5">
@@ -1482,11 +1519,6 @@ export default function FleetPage({
                             </span>
                           );
                         })()}
-                        {pendingRuleAgentIds.has(agent.id) && (
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold border border-amber-500/30 bg-amber-500/10 text-amber-300" title="Self-healing: a policy rule has been auto-proposed — review in Action Policies">
-                            1 rule proposed
-                          </span>
-                        )}
                         {agent.publishStatus === 'live' ? (
                           <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-400/10 text-emerald-300 border border-emerald-400/20">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />Live
@@ -1860,6 +1892,7 @@ export default function FleetPage({
                   incidentsError={workspaceState.incidentsError}
                   openIncidentCount={openIncidentCount}
                   criticalIncidentCount={criticalIncidentCount}
+                  pendingSynthesizedRuleCount={pendingSynthesizedRuleCount}
                   suggestedApps={suggestedApps}
                   onPublishAgent={onPublishAgent}
                   onOpenOperationsPage={onOpenOperationsPage}

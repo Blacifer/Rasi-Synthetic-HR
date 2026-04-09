@@ -6,7 +6,7 @@
 
 import { Router, type Request, type Response } from 'express';
 import { requirePermission } from '../middleware/rbac';
-import { supabaseRestAsUser, eq } from '../lib/supabase-rest';
+import { supabaseRestAsService, supabaseRestAsUser, eq } from '../lib/supabase-rest';
 import { getOrgId, getUserJwt, errorResponse } from '../lib/route-helpers';
 import { logger } from '../lib/logger';
 
@@ -19,11 +19,15 @@ router.get('/synthesized', requirePermission('policies.manage'), async (req: Req
     if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
 
     const status = typeof req.query.status === 'string' ? req.query.status : 'proposed';
+    const requestedLimit = Number(req.query.limit);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
+      : 50;
     const q = new URLSearchParams();
     q.set('organization_id', eq(orgId));
     q.set('status', eq(status));
     q.set('order', 'created_at.desc');
-    q.set('limit', '50');
+    q.set('limit', String(limit));
 
     const rows = (await supabaseRestAsUser(getUserJwt(req), 'synthesized_rules', q)) as any[];
     return res.json({ success: true, data: rows || [] });
@@ -58,7 +62,7 @@ router.patch('/synthesized/:id', requirePermission('policies.manage'), async (re
     const patchQ = new URLSearchParams();
     patchQ.set('id', eq(id));
     patchQ.set('organization_id', eq(orgId));
-    await supabaseRestAsUser(getUserJwt(req), 'synthesized_rules', patchQ, {
+    await supabaseRestAsService('synthesized_rules', patchQ, {
       method: 'PATCH',
       body: { status, updated_at: new Date().toISOString() },
     });
@@ -67,7 +71,7 @@ router.patch('/synthesized/:id', requirePermission('policies.manage'), async (re
     if (status === 'accepted' && rule.proposed_policy) {
       const policy = rule.proposed_policy as Record<string, any>;
       try {
-        await supabaseRestAsUser(getUserJwt(req), 'action_policies', '', {
+        await supabaseRestAsService('action_policies', '', {
           method: 'POST',
           headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
           body: {
