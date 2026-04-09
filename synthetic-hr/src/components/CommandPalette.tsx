@@ -55,7 +55,22 @@ export function CommandPalette({ onNavigate, agents = [] }: CommandPaletteProps)
   const [searching, setSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // Cross-connector search — debounced
+  // Cache installed connector IDs so we only search connectors the user actually has
+  const installedRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.marketplace.getInstalled();
+        installedRef.current = new Set(
+          (res.success && Array.isArray(res.data) ? res.data : []).map((app: any) => app.connectorId || app.id),
+        );
+      } catch {
+        installedRef.current = new Set();
+      }
+    })();
+  }, []);
+
+  // Cross-connector search — debounced, only for installed connectors
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!search.trim() || search.trim().length < 2) {
@@ -65,12 +80,15 @@ export function CommandPalette({ onNavigate, agents = [] }: CommandPaletteProps)
     }
     setSearching(true);
     debounceRef.current = setTimeout(async () => {
-      const connectors = [
+      const allConnectors = [
         { id: 'jira', action: 'search_issues', label: 'Jira Issues' },
         { id: 'github', action: 'list_issues', label: 'GitHub Issues' },
         { id: 'notion', action: 'search', label: 'Notion Pages' },
         { id: 'hubspot', action: 'search_contacts', label: 'HubSpot Contacts' },
       ];
+      const installed = installedRef.current;
+      const connectors = installed ? allConnectors.filter(c => installed.has(c.id)) : [];
+      if (connectors.length === 0) { setSearching(false); return; }
       const settled = await Promise.allSettled(
         connectors.map(c => api.unifiedConnectors.executeAction(c.id, c.action, { query: search.trim(), q: search.trim(), limit: 3 })),
       );

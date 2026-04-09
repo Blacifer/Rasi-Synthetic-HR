@@ -76,7 +76,7 @@ export function WorkspaceOverviewSection({
       .select('id', { count: 'exact' })
       .eq('agent_id', agentId)
       .is('status', null)
-      .then(({ count }) => setPendingSynthesized(count || 0));
+      .then(({ count, error }) => { if (!error) setPendingSynthesized(count || 0); });
   }, [activeWorkspaceAgent.id]);
 
   const nextAction = (() => {

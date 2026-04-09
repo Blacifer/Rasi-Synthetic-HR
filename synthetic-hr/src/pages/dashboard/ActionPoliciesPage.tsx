@@ -552,6 +552,8 @@ export default function ActionPoliciesPage() {
         .order('created_at', { ascending: false })
         .limit(50);
       if (!error) setSynthesizedRules(data || []);
+    } catch {
+      // Table may not exist yet — ignore
     } finally {
       setSynthesizedLoading(false);
     }

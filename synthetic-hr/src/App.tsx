@@ -4,6 +4,7 @@ import { AppContext, type AuthUser } from './context/AppContext';
 import { authHelpers, supabase } from './lib/supabase-client';
 import { getFrontendConfig } from './lib/config';
 import { STORAGE_KEYS } from './lib/utils';
+import { MfaEnrollmentGate } from './components/MfaEnrollmentGate';
 
 // Lazy load all page components
 const LandingPage = lazy(() => import('./pages/LandingPage'));
@@ -308,7 +309,7 @@ function App() {
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/dashboard/*" element={
             user
-              ? <Dashboard isDemoMode={isDemoMode} onSignUp={isDemoMode ? () => navigate('/signup') : undefined} />
+              ? <MfaEnrollmentGate><Dashboard isDemoMode={isDemoMode} onSignUp={isDemoMode ? () => navigate('/signup') : undefined} /></MfaEnrollmentGate>
               : <Navigate to="/login" replace />
           } />
           <Route path="*" element={<NotFoundPage onHome={() => navigate('/')} />} />

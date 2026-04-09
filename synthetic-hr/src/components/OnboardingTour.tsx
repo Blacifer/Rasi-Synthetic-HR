@@ -29,22 +29,6 @@ const TOUR_STEPS: Step[] = [
     skipBeacon: true,
   },
   {
-    target: '[data-tour="agent-studio"]',
-    placement: 'right',
-    title: 'Playbooks',
-    content:
-      'Build automated AI workflows. Use the text-based builder or the new drag-and-drop Visual Builder to chain LLM steps, conditions, and tool calls.',
-    skipBeacon: true,
-  },
-  {
-    target: '[data-tour="approvals"]',
-    placement: 'right',
-    title: 'Human-in-the-Loop Approvals',
-    content:
-      'Any high-risk agent action can be routed here for human review. Approve, deny, snooze, or escalate — with ML risk scoring and SLA tracking.',
-    skipBeacon: true,
-  },
-  {
     target: '[data-tour="incidents"]',
     placement: 'right',
     title: 'Incident Detection',
@@ -53,11 +37,11 @@ const TOUR_STEPS: Step[] = [
     skipBeacon: true,
   },
   {
-    target: '[data-tour="costs"]',
+    target: '[data-tour="hubs"]',
     placement: 'right',
-    title: 'Cost Tracking',
+    title: 'Hubs & Workflows',
     content:
-      'Track token usage and spend per agent, model, and time period. Set budgets and get alerted when agents exceed thresholds.',
+      'Access specialized hubs for HR, Sales, Finance, IT, and Support. Build playbooks with the visual drag-and-drop builder, and manage approval workflows with risk scoring.',
     skipBeacon: true,
   },
   {
@@ -65,7 +49,7 @@ const TOUR_STEPS: Step[] = [
     placement: 'right',
     title: "You're all set!",
     content:
-      'Configure your organization, invite team members, set up webhooks, and manage API keys in Settings. You can re-launch this tour any time from the Help menu.',
+      'Configure your organization, invite team members, set up webhooks, and manage API keys in Settings. Expand the Platform and Developer Tools sections in the sidebar to explore costs, audit logs, approvals, and more. Re-launch this tour any time from the Help menu.',
     skipBeacon: true,
   },
 ];

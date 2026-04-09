@@ -326,8 +326,8 @@ export default function FleetPage({
       .from('synthesized_rules')
       .select('agent_id')
       .is('status', null)
-      .then(({ data }) => {
-        if (data) {
+      .then(({ data, error }) => {
+        if (!error && data) {
           setPendingRuleAgentIds(new Set(data.map((r: any) => r.agent_id).filter(Boolean)));
         }
       });
