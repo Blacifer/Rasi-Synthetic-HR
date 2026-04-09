@@ -6,9 +6,9 @@
 
 import { Router, type Request, type Response } from 'express';
 import { requirePermission } from '../middleware/rbac';
-import { supabaseRestAsService, supabaseRestAsUser, eq } from '../lib/supabase-rest';
+import { supabaseRestAsUser, eq } from '../lib/supabase-rest';
 import { getOrgId, getUserJwt, errorResponse } from '../lib/route-helpers';
-import { logger } from '../lib/logger';
+import { applySynthesizedRuleDecision } from '../lib/synthesized-rules';
 
 const router = Router();
 
@@ -58,38 +58,7 @@ router.patch('/synthesized/:id', requirePermission('policies.manage'), async (re
     const rule = rows?.[0];
     if (!rule) return res.status(404).json({ success: false, error: 'Synthesized rule not found' });
 
-    // Update status
-    const patchQ = new URLSearchParams();
-    patchQ.set('id', eq(id));
-    patchQ.set('organization_id', eq(orgId));
-    await supabaseRestAsService('synthesized_rules', patchQ, {
-      method: 'PATCH',
-      body: { status, updated_at: new Date().toISOString() },
-    });
-
-    // If accepted, auto-create the action policy (upsert)
-    if (status === 'accepted' && rule.proposed_policy) {
-      const policy = rule.proposed_policy as Record<string, any>;
-      try {
-        await supabaseRestAsService('action_policies', '', {
-          method: 'POST',
-          headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-          body: {
-            organization_id: orgId,
-            service: rule.service,
-            action: rule.action,
-            enabled: true,
-            require_approval: policy.require_approval ?? true,
-            required_role: policy.required_role ?? 'admin',
-            notes: policy.notes ?? `Auto-created from synthesized rule after ${rule.trigger_count} denials.`,
-            updated_at: new Date().toISOString(),
-          },
-        });
-        logger.info('[rules] Action policy auto-created from synthesized rule', { orgId, service: rule.service, action: rule.action });
-      } catch (err: any) {
-        logger.warn('[rules] Failed to auto-create action policy from synthesized rule', { id, error: err?.message });
-      }
-    }
+    await applySynthesizedRuleDecision(orgId, rule, status);
 
     return res.json({ success: true, data: { id, status } });
   } catch (err: any) {
