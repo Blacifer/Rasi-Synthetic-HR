@@ -1232,6 +1232,7 @@ export default function FleetPage({
         }}
         actions={[
           ...(filteredAgents.length > 0 ? [{ label: 'Export CSV', onClick: exportCSV, variant: 'secondary' as const, icon: <Download className="w-4 h-4" /> }] : []),
+          { label: 'Templates', onClick: () => onOpenOperationsPage?.('templates'), variant: 'secondary' as const, icon: <Zap className="w-4 h-4" /> },
           { label: 'Add Agent', onClick: () => !atAgentLimit && setShowAddModal(true), icon: <Plus className="w-4 h-4" /> },
         ]}
         stats={[

@@ -448,10 +448,11 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
       it_support: 'it', devops: 'it', data_analyst: 'it', data_analysis: 'it', engineering: 'it', qa: 'it', documentation: 'it', facilities: 'it',
     };
     try {
+      const primaryPack = TEMPLATE_TYPE_TO_PACK[template.type];
       const created = await api.agents.create({
         name: template.name, description: template.description, agent_type: template.type,
         platform: template.platform, model_name: template.model, budget_limit: template.budget,
-        primary_pack: TEMPLATE_TYPE_TO_PACK[template.type] || null,
+        ...(primaryPack ? { primary_pack: primaryPack } : {}),
         integration_ids: (template as any).integration_ids || [],
         system_prompt: (template as any).system_prompt || '', config: {},
       });
@@ -471,8 +472,13 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
           addNotification('success', 'Agent Added To Fleet', `${template.name} is now available for governance and monitoring`);
           navigateTo('agents', { userInitiated: false });
         }
-      } else { throw new Error('Agent creation rejected by server'); }
-    } catch (err) { console.error('Template deploy error:', err); setError('Failed to add agent from template.'); }
+      } else {
+        throw new Error(created.error || created.errors?.join(', ') || 'Agent creation rejected by server');
+      }
+    } catch (err) {
+      console.error('Template deploy error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to add agent from template.');
+    }
   }, [isDemoMode, queryClient, navigateTo, addNotification, setError]);
 
   const handleLibraryAgentDeploy = useCallback(async (agentData: any) => {
@@ -480,7 +486,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
       const created = await api.agents.create({
         name: agentData.name, description: agentData.description, agent_type: agentData.agent_type,
         platform: agentData.platform, model_name: agentData.model_name,
-        primary_pack: (agentData as any).primary_pack || null,
+        ...((agentData as any).primary_pack ? { primary_pack: (agentData as any).primary_pack } : {}),
         integration_ids: (agentData as any).integration_ids || [],
         config: { ...agentData.config, system_prompt: agentData.system_prompt },
       });
@@ -499,7 +505,9 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         addNotification('success', 'Domain Agent Deployed', `${agentData.name} has been added to your fleet.`);
         setDomainAgentPreselect(null);
         navigateTo('agents', { userInitiated: false });
-      } else { throw new Error('Agent creation rejected by server'); }
+      } else {
+        throw new Error(created.error || created.errors?.join(', ') || 'Agent creation rejected by server');
+      }
     } catch (err) { console.error('Domain agent deploy error:', err); throw err; }
   }, [isDemoMode, queryClient, navigateTo, addNotification]);
 

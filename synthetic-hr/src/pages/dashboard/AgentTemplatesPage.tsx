@@ -704,7 +704,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
                           onDeploy({
                             ...selectedTemplate,
                             model: selectedModel?.id ?? selectedTemplate.model,
-                            platform: 'api',
+                            platform: selectedModel?.provider ?? selectedTemplate.platform,
                             system_prompt: systemPrompt,
                             integration_ids: [],
                           });

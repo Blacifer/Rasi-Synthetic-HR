@@ -39,6 +39,14 @@ export const authHelpers = {
         if (error.name === 'AuthSessionMissingError') {
           return { user: null, error: null };
         }
+
+        // Supabase can return 403 when a persisted JWT points to a deleted auth user.
+        // Clear stale local auth state and treat as signed out so the app can recover.
+        if (error.message?.includes('sub claim') || (error as any)?.status === 403) {
+          await supabase.auth.signOut().catch(() => null);
+          return { user: null, error: null };
+        }
+
         console.error('Get user error:', error);
         return { user: null, error };
       }
