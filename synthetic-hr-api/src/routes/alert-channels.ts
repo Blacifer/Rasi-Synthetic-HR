@@ -3,6 +3,7 @@ import { requirePermission } from '../middleware/rbac';
 import { supabaseRestAsUser, eq } from '../lib/supabase-rest';
 import { logger } from '../lib/logger';
 import { auditLog } from '../lib/audit-logger';
+import { buildFrontendUrl } from '../lib/frontend-url';
 import { errorResponse, getOrgId, getUserJwt } from '../lib/route-helpers';
 import {
   encryptChannelConfig,
@@ -161,12 +162,12 @@ router.post('/alert-channels/:id/test', requirePermission('settings.update'), as
     // Dispatch a synthetic test incident (only to this one channel, bypassing severity filter)
     const testIncident = {
       incidentId: `test-${Date.now()}`,
-      title: 'Test notification from Rasi',
+      title: 'Test notification from Zapheit',
       severity: 'high' as SeverityLevel,
       incidentType: 'test',
       agentId: 'test-agent',
-      description: 'This is a test notification sent from the Rasi alert channels settings page.',
-      dashboardUrl: `${process.env.FRONTEND_URL || 'https://app.rasi.ai'}/dashboard/incidents`,
+      description: 'This is a test notification sent from the Zapheit alert channels settings page.',
+      dashboardUrl: buildFrontendUrl('/dashboard/incidents'),
     };
 
     const ch = rows[0];

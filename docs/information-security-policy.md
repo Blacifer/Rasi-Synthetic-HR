@@ -161,4 +161,4 @@ Ongoing vendor risk is reviewed annually.
 This policy is reviewed and updated at least annually, or following any significant security incident or material change to our infrastructure.
 
 **Policy Owner:** Rasi Cyber Solutions Leadership
-**Contact:** info@rasisolutions.com
+**Contact:** support@zapheit.com

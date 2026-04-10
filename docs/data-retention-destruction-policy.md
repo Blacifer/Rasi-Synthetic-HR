@@ -68,7 +68,7 @@ Data that has reached the end of its retention period is:
 
 ## 5. Data Subject Deletion Requests
 
-Customers and end users may request deletion of their personal data at any time by contacting info@rasisolutions.com.
+Customers and end users may request deletion of their personal data at any time by contacting privacy@zapheit.com.
 
 Upon receiving a verified deletion request:
 - We will confirm receipt within **5 business days**
@@ -102,5 +102,5 @@ Data shared by third-party integration providers (e.g. Gusto employee and payrol
 This policy is reviewed annually and updated following any significant change to our data processing activities, infrastructure, or applicable regulations.
 
 **Policy Owner:** Rasi Cyber Solutions Leadership
-**Contact:** info@rasisolutions.com
-**Website:** www.rasisolutions.com
+**Contact:** privacy@zapheit.com
+**Website:** www.zapheit.com

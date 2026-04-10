@@ -14,7 +14,7 @@ This runbook is the locked execution path for closing Phase 2 and starting Phase
    - `remediation`
 3. Set API envs:
    - `SCHEMA_COMPAT_STRICT_OPTIONAL=true`
-   - `CORS_ALLOWED_ORIGINS=https://rasi-synthetic-hr.vercel.app`
+   - `CORS_ALLOWED_ORIGINS=https://www.zapheit.com`
 4. Restart API and confirm startup does not fail schema compatibility checks.
 
 ## 2) Mandatory Build + Contract Gates

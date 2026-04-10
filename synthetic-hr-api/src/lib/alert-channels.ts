@@ -10,6 +10,7 @@
  * Called fire-and-forget from incidents.ts after an incident row is inserted.
  */
 
+import { buildFrontendUrl } from './frontend-url';
 import { logger } from './logger';
 import { decryptSecret, encryptSecret } from './integrations/encryption';
 import { sendTransactionalEmail } from './email';
@@ -253,7 +254,7 @@ async function sendEmailAlert(config: Record<string, string>, incident: Incident
   const recipients = rawRecipients.split(',').map((r) => r.trim()).filter(Boolean);
   if (recipients.length === 0) { logger.warn('alert-channels/email: no recipients configured'); return; }
 
-  const url = incident.dashboardUrl || `${process.env.FRONTEND_URL || 'https://app.rasi.ai'}/dashboard/incidents`;
+  const url = incident.dashboardUrl || buildFrontendUrl('/dashboard/incidents');
   const severityColor: Record<SeverityLevel, string> = {
     critical: '#ef4444',
     high: '#f97316',

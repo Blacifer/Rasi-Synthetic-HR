@@ -130,9 +130,9 @@ export default function SharePage() {
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
-            <span className="text-white text-xs font-bold">R</span>
+            <span className="text-white text-xs font-bold">Z</span>
           </div>
-          <span className="font-semibold text-slate-800 text-sm">Rasi</span>
+          <span className="font-semibold text-slate-800 text-sm">Zapheit</span>
           <span className="text-slate-300 text-xs">·</span>
           <span className="text-slate-500 text-xs">Shared result</span>
         </div>
@@ -177,7 +177,7 @@ export default function SharePage() {
 
             <div className="mt-6 flex items-center justify-between">
               <p className="text-xs text-slate-400">
-                Shared via Rasi · Read-only view
+                Shared via Zapheit · Read-only view
               </p>
               <button
                 onClick={() => {

@@ -147,7 +147,7 @@ export function ApprovalsTab({ serviceId, app, linkedAgentIds = [], onChanged }:
     return (
       <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
         <p className="text-sm font-medium text-white">No pending approvals</p>
-        <p className="mt-1 text-xs text-slate-400">High-impact actions appear here before Rasi sends the real request to the connected app.</p>
+        <p className="mt-1 text-xs text-slate-400">High-impact actions appear here before Zapheit sends the real request to the connected app.</p>
         {import.meta.env.DEV && (
           <button
             onClick={() => void simulateWriteAction()}
@@ -165,7 +165,7 @@ export function ApprovalsTab({ serviceId, app, linkedAgentIds = [], onChanged }:
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-slate-400">Approve or reject high-impact agent actions before Rasi executes them in the connected app.</p>
+        <p className="text-xs text-slate-400">Approve or reject high-impact agent actions before Zapheit executes them in the connected app.</p>
         {import.meta.env.DEV && (
           <button
             onClick={() => void simulateWriteAction()}

@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { sendTransactionalEmail } from './email';
+import { buildFrontendUrl } from './frontend-url';
 import { logger } from './logger';
 import { eq, supabaseRest } from './supabase-rest';
 import { fireAndForgetWebhookEvent } from './webhook-relay';
@@ -345,7 +346,7 @@ export async function checkCostAnomalies(orgId: string): Promise<void> {
             incidentType: 'cost_spike',
             agentId,
             description: `Today's cost $${todayCost.toFixed(4)} is ${(todayCost / avg7).toFixed(1)}× above the 7-day average of $${avg7.toFixed(4)}.`,
-            dashboardUrl: `${process.env.FRONTEND_URL || 'https://app.rasi.ai'}/dashboard/agents`,
+            dashboardUrl: buildFrontendUrl('/dashboard/agents'),
           });
         } catch (notifyErr: any) {
           logger.warn('Cost spike notification failed', { error: notifyErr?.message, agentId });

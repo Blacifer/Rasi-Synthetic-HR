@@ -8,6 +8,7 @@
  * user-facing request.
  */
 
+import { buildFrontendUrl } from './frontend-url';
 import { logger } from './logger';
 import { supabaseRest } from './supabase-rest';
 
@@ -59,7 +60,7 @@ export async function checkApprovalSLAs(orgId: string): Promise<void> {
         incidentType: 'approval_sla_breach',
         agentId: approval.action_payload?.agent_id,
         description: `An approval request has been pending for more than ${slaHours}h without action. Requested by ${approval.requested_by || 'unknown'}.`,
-        dashboardUrl: `${process.env.FRONTEND_URL || 'https://app.rasi.ai'}/dashboard/approvals`,
+        dashboardUrl: buildFrontendUrl('/dashboard/approvals'),
       }).catch((err: any) => {
         logger.warn('approval-sla: notifyAlertChannels failed', { err: err?.message });
       });

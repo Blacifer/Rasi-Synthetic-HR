@@ -263,7 +263,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
           const colors = getColorClasses(template.color);
           const Icon = template.icon;
           const baseModel = resolveModel(template.model);
-          const baseModelLabel = baseModel ? `${baseModel.name} · Rasi AI` : template.model;
+          const baseModelLabel = baseModel ? `${baseModel.name} · Zapheit AI` : template.model;
 
           return (
             <div
@@ -512,7 +512,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
                                   </div>
                                   <div className="flex items-center gap-2 text-xs">
                                     <span className="text-cyan-400">
-                                      Rasi AI
+                                      Zapheit AI
                                     </span>
                                     {model.pricing && (
                                       <span className="text-slate-500 border-l border-slate-700 pl-2">
@@ -679,12 +679,12 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
 
 	                          {selectedModel && (
 	                            <p className="text-[11px] text-slate-500 text-center mt-3">
-	                              Pricing for <span className="text-slate-300">{selectedModel.name}</span> via <span className="text-cyan-400">Rasi AI</span>
+                                Pricing for <span className="text-slate-300">{selectedModel.name}</span> via <span className="text-cyan-400">Zapheit AI</span>
 	                            </p>
 	                          )}
 	                          {selectedModel && monthlyCost.status === 'priced' && (
 	                            <p className="text-[11px] text-slate-600 text-center mt-2">
-	                              Assumes 50/50 prompt/completion split · Pricing from RasiAI Gateway
+                                Assumes 50/50 prompt/completion split · Pricing from Zapheit Gateway
 	                            </p>
 	                          )}
 	                        </div>

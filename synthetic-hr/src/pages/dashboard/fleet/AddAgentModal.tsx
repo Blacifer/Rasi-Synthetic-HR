@@ -145,7 +145,7 @@ export function AddAgentModal({ onClose, onAdd }: { onClose: () => void; onAdd: 
       return;
     }
     setErrors({});
-    onAdd({ ...form, config: { ...form.config, display_provider: 'Rasi AI' } });
+    onAdd({ ...form, config: { ...form.config, display_provider: 'Zapheit AI' } });
   };
 
   const handleChange = (field: string, value: string | number | boolean) => {

@@ -151,7 +151,7 @@ export function HrWorkspaceTab({ app, agentNames }: HrWorkspaceTabProps) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">HR workspace</p>
-            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} operations inside Rasi</h3>
+            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} operations inside Zapheit</h3>
             <p className="mt-1 text-sm text-slate-400">
               Review employee operations, act on leave requests, and keep linked agents working from one governed workspace.
             </p>
@@ -217,7 +217,7 @@ export function HrWorkspaceTab({ app, agentNames }: HrWorkspaceTabProps) {
         <div className="rounded-2xl border border-white/8 bg-white/[0.02]">
           <div className="border-b border-white/8 px-4 py-3">
             <h4 className="text-sm font-semibold text-white">Leave inbox</h4>
-            <p className="mt-1 text-xs text-slate-500">Approve or reject time-sensitive HR actions without leaving Rasi.</p>
+            <p className="mt-1 text-xs text-slate-500">Approve or reject time-sensitive HR actions without leaving Zapheit.</p>
           </div>
           <div className="divide-y divide-white/6">
             {leave.length === 0 ? (

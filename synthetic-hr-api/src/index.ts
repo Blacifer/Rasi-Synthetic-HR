@@ -31,6 +31,7 @@ import eventsRoutes from './routes/events';
 import slackWebhookRoutes from './routes/slack';
 import slackActionsRoutes from './routes/slack-actions';
 import whatsappWebhookRoutes from './routes/whatsapp-webhook';
+import cashfreeWebhookRoutes from './routes/cashfree-webhook';
 import dpdpRoutes from './routes/dpdp';
 import marketplaceRoutes from './routes/marketplace';
 import actionPoliciesRoutes from './routes/action-policies';
@@ -43,6 +44,7 @@ import hubsRoutes from './routes/hubs';
 import trustRoutes from './routes/trust';
 import portalRoutes from './routes/portal';
 import tracesRoutes from './routes/traces';
+import paymentsRoutes from './routes/payments';
 import { initializeObservability, shutdownObservability, tracingMiddleware } from './lib/observability';
 import { validateEnvironment } from './lib/env-validation';
 import { authenticateToken, authErrorHandler, checkOrgAccess } from './middleware/auth';
@@ -154,7 +156,7 @@ function normalizeOrigin(value: string): string | null {
   }
 }
 
-const DEFAULT_PRODUCTION_ORIGINS = ['https://rasi-synthetic-hr.vercel.app'] as const;
+const DEFAULT_PRODUCTION_ORIGINS = ['https://www.zapheit.com'] as const;
 
 // Helper: Get safe CORS origins
 function getAllowedOrigins(): string[] {
@@ -282,6 +284,8 @@ app.use('/events/slack', express.raw({ type: 'application/json', limit: '1mb' })
 app.use('/events/slack-actions', express.raw({ type: 'application/x-www-form-urlencoded', limit: '1mb' }), slackActionsRoutes);
 // WhatsApp Cloud API webhook — raw body required for X-Hub-Signature-256 verification.
 app.use('/webhooks/whatsapp', express.raw({ type: 'application/json', limit: '1mb' }), whatsappWebhookRoutes);
+// Cashfree payment webhooks — raw body required for HMAC signature verification.
+app.use('/webhooks/cashfree', express.raw({ type: 'application/json', limit: '1mb' }), cashfreeWebhookRoutes);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
@@ -465,6 +469,7 @@ if (connectorsEnabled) {
 }
 app.use('/api/integrations', integrationsRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
+app.use('/api', paymentsRoutes);
 app.use('/api', webhooksRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/policies', policiesRoutes);

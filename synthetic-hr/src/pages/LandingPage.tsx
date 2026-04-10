@@ -333,7 +333,7 @@ function ProductPreview({ onDemo, onSignUp }: { onDemo?: () => void; onSignUp: (
         <span className="w-3 h-3 rounded-full bg-yellow-400/70" />
         <span className="w-3 h-3 rounded-full bg-emerald-400/70" />
         <div className="flex-1 mx-4 h-6 rounded-md bg-white/[0.06] border border-white/10 flex items-center px-3">
-          <span className="text-xs text-slate-500">app.rasi.ai · Demo Mode</span>
+          <span className="text-xs text-slate-500">www.zapheit.com · Demo Mode</span>
         </div>
         <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-400/30">
           <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
@@ -616,7 +616,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 <Brain className="w-7 h-7 text-cyan-300" />
               </div>
               <div>
-                <span className="text-xl font-bold gradient-text">RASI</span>
+                <span className="text-xl font-bold gradient-text">Zapheit</span>
                 <span className="text-xs text-slate-500 block -mt-1">AI Agent Governance</span>
               </div>
             </div>
@@ -709,7 +709,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
           </h1>
 
           <p className="text-sm sm:text-base md:text-lg lg:text-xl text-slate-300 mb-12 max-w-3xl mx-auto leading-relaxed">
-            Rasi gives your team one place to <span className="text-slate-100 font-semibold">see live activity, catch risky behavior, and stay in control</span> without slowing down delivery —
+            Zapheit gives your team one place to <span className="text-slate-100 font-semibold">see live activity, catch risky behavior, and stay in control</span> without slowing down delivery —
             <br className="hidden md:block" />
             whether the agents run in your app, your support stack, or your internal workflows.
           </p>
@@ -847,7 +847,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 step: 1,
                 icon: FileText,
                 title: 'Connect',
-                desc: 'Point any AI agent at the Rasi gateway so traffic, cost, and risk all have one home.'
+                desc: 'Point any AI agent at the Zapheit gateway so traffic, cost, and risk all have one home.'
               },
               {
                 step: 2,
@@ -972,7 +972,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
         </div>
       </section>
 
-      {/* Why RASI Section */}
+      {/* Why Zapheit Section */}
       <section className="py-24 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12 md:mb-16">
@@ -983,8 +983,8 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
 
           <div className="grid md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
             {[
-              { icon: Lock, title: 'Agent-Agnostic', desc: 'Governs ANY agent — OpenAI, Anthropic, LangChain, Haptik, Yellow.ai, or custom-built. Rasi doesn\'t replace your agents, it governs them.' },
-              { icon: Gauge, title: 'LLM Gateway Proxy', desc: 'OpenAI-compatible endpoint. One line of code to route any agent through Rasi. Incident detection + cost tracking starts immediately.' },
+              { icon: Lock, title: 'Agent-Agnostic', desc: 'Governs ANY agent — OpenAI, Anthropic, LangChain, Haptik, Yellow.ai, or custom-built. Zapheit doesn\'t replace your agents, it governs them.' },
+              { icon: Gauge, title: 'LLM Gateway Proxy', desc: 'OpenAI-compatible endpoint. One line of code to route any agent through Zapheit. Incident detection + cost tracking starts immediately.' },
               { icon: Shield, title: 'India-Specific PII', desc: 'Detects Aadhaar numbers, PAN cards, UPI IDs, and Indian bank accounts in real-time — not just generic SSN/credit card patterns.' },
               { icon: Target, title: 'DPDPA Compliance', desc: 'Mapping to India\'s Digital Personal Data Protection Act 2023. Built-in breach notification, data principal rights, and audit evidence.' },
               { icon: TrendingUp, title: 'INR Pricing', desc: 'From ₹0 (free tier) to ₹15K–₹60K/month. No per-seat pricing. No USD conversion. Designed for Indian mid-market teams.' },
@@ -1013,7 +1013,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
               <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Pricing Calculator</span>
               <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mt-4">Estimate governance cost like an operating model</h2>
               <p className="text-slate-400 mt-4 text-lg">
-                Inspired by model pricing directories, but built around RASI: active agents, governance intensity, and the operational load your AI workforce creates.
+                Inspired by model pricing directories, but built around Zapheit: active agents, governance intensity, and the operational load your AI workforce creates.
               </p>
             </div>
             <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-5 py-4 backdrop-blur-xl">
@@ -1140,7 +1140,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 <div className="mt-6 flex flex-col sm:flex-row items-center gap-3 pt-5 border-t border-white/10">
                   <button
                     onClick={() => {
-                      const msg = `Hi, I used the Rasi workload estimator. My setup: ${activeAgents} agents, ${monthlyConversations.toLocaleString('en-IN')} monthly conversations, estimated ₹${calculator.monthlyInvestment.toLocaleString('en-IN')}/month. I'd like to discuss the right plan.`;
+                      const msg = `Hi, I used the Zapheit workload estimator. My setup: ${activeAgents} agents, ${monthlyConversations.toLocaleString('en-IN')} monthly conversations, estimated ₹${calculator.monthlyInvestment.toLocaleString('en-IN')}/month. I'd like to discuss the right plan.`;
                       window.open(`https://wa.me/919433116259?text=${encodeURIComponent(msg)}`, '_blank');
                     }}
                     className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-sm transition-all shadow-lg shadow-cyan-500/20"
@@ -1246,7 +1246,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
             Your AI agents are already running. Is anyone watching?
           </h2>
           <p className="text-lg sm:text-xl text-slate-300 mb-10 max-w-2xl mx-auto">
-            Route your first agent through Rasi in 5 minutes. Free tier, no credit card required. Works with any AI agent — OpenAI, Anthropic, LangChain, or custom-built.
+            Route your first agent through Zapheit in 5 minutes. Free tier, no credit card required. Works with any AI agent — OpenAI, Anthropic, LangChain, or custom-built.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
@@ -1277,7 +1277,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
                 <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
                   <Brain className="w-6 h-6 text-white" />
                 </div>
-                <span className="text-lg font-bold text-white">RASI</span>
+                <span className="text-lg font-bold text-white">Zapheit</span>
               </div>
               <p className="text-sm text-slate-400">The governance layer for your AI workforce.</p>
             </div>
@@ -1322,7 +1322,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
             </div>
           </div>
           <div className="border-t border-slate-700 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-slate-500">© {year} Rasi Solutions. All rights reserved.</p>
+            <p className="text-sm text-slate-500">© {year} Zapheit. All rights reserved.</p>
             <div className="flex items-center gap-6 text-sm">
               <a href="#how-it-works" className="text-slate-400 hover:text-cyan-400 transition-colors">Overview</a>
               <a href="#pillars" className="text-slate-400 hover:text-cyan-400 transition-colors">Features</a>

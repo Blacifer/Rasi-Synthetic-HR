@@ -4,6 +4,7 @@ import multer from 'multer';
 import { AnthropicService, OpenAIService, type ConnectorTool, type ToolCall } from '../services/ai-service';
 import { incidentDetection } from '../services/incident-detection';
 import { validateApiKey } from '../middleware/api-key-validation';
+import { buildFrontendUrl } from '../lib/frontend-url';
 import { logger } from '../lib/logger';
 import { supabaseRest, eq, gte } from '../lib/supabase-rest';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
@@ -234,7 +235,7 @@ const maybeCreateIncidentFromCompletion = async (params: {
         incidentType: highest.type || 'unknown',
         agentId: params.agentId || undefined,
         description: highest.details,
-        dashboardUrl: `${process.env.FRONTEND_URL || 'https://app.rasi.ai'}/dashboard/incidents`,
+        dashboardUrl: buildFrontendUrl('/dashboard/incidents'),
       });
 
       firePlaybookTriggers(params.orgId, 'incident.created', {
@@ -1261,16 +1262,16 @@ const enforceOrgMonthlyQuota = async (req: Request, res: Response): Promise<bool
           subject: `[Rasi] Gateway quota warning — ${percentUsed}% used this month`,
           html: `
             <p>Hi,</p>
-            <p>Your Rasi gateway has used <strong>${percentUsed}%</strong> of your monthly quota
+            <p>Your Zapheit gateway has used <strong>${percentUsed}%</strong> of your monthly quota
             (${newCount.toLocaleString()} of ${quota.toLocaleString()} requests).</p>
             <p>You have <strong>${remaining.toLocaleString()} requests remaining</strong> for ${month}.
             Requests will be blocked when you reach 100%.</p>
             <p>Plan: <strong>${plan}</strong></p>
             <p>To increase your quota, reply to this email or visit your dashboard settings.</p>
             <br/>
-            <p style="color:#64748b;font-size:12px">Rasi · rasisolutions.in</p>
+            <p style="color:#64748b;font-size:12px">Zapheit · zapheit.com</p>
           `,
-          text: `Rasi quota warning: ${percentUsed}% used (${newCount.toLocaleString()}/${quota.toLocaleString()} requests). ${remaining.toLocaleString()} remaining for ${month}. Requests block at 100%.`,
+          text: `Zapheit quota warning: ${percentUsed}% used (${newCount.toLocaleString()}/${quota.toLocaleString()} requests). ${remaining.toLocaleString()} remaining for ${month}. Requests block at 100%.`,
         }).catch((err) => logger.warn('Quota warning email failed', { orgId, error: String(err?.message || err) }));
       }
     }

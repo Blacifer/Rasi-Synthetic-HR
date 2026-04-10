@@ -3,8 +3,8 @@ import { Brain, ArrowLeft } from 'lucide-react';
 
 const EFFECTIVE_DATE = '1 April 2025';
 const COMPANY = 'Rasi Solutions';
-const PRODUCT = 'Rasi';
-const CONTACT_EMAIL = 'legal@rasisolutions.in';
+const PRODUCT = 'Zapheit';
+const CONTACT_EMAIL = 'legal@zapheit.com';
 
 export default function TermsPage() {
   const navigate = useNavigate();
@@ -19,7 +19,7 @@ export default function TermsPage() {
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
               <Brain className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-white">RASI</span>
+            <span className="font-bold text-white">Zapheit</span>
           </button>
           <button
             onClick={() => navigate(-1)}

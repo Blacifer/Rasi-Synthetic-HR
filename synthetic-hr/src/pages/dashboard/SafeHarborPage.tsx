@@ -468,7 +468,7 @@ export default function SafeHarborPage({ onNavigate, userRole }: { onNavigate?: 
   const handleContactLegal = () => {
     const subject = 'Safe Harbor and contract review';
     const body = `Hello legal team,%0D%0A%0D%0AOrganization: ${encodeURIComponent(orgLabel)}%0D%0AStatus: ${encodeURIComponent(statusTone)}%0D%0AContract status: ${encodeURIComponent(CONTRACT_STATUS_LABELS[safeHarborState?.contract.status || 'standard'])}`;
-    window.location.href = `mailto:legal@rasisolutions.com?subject=${encodeURIComponent(subject)}&body=${body}`;
+    window.location.href = `mailto:legal@zapheit.com?subject=${encodeURIComponent(subject)}&body=${body}`;
   };
 
   return (
@@ -720,7 +720,7 @@ export default function SafeHarborPage({ onNavigate, userRole }: { onNavigate?: 
         {/* DPDPA */}
         {activeComplianceTab === 'dpdpa' && (
           <div className="space-y-3">
-            <p className="text-sm text-slate-400 mb-4">Digital Personal Data Protection Act (India, 2023) — maps Rasi features to Data Fiduciary obligations.</p>
+            <p className="text-sm text-slate-400 mb-4">Digital Personal Data Protection Act (India, 2023) — maps Zapheit features to Data Fiduciary obligations.</p>
             {([
               { requirement: 'Data Principal rights & consent', feature: 'Audit logs + action policies', status: 'covered' },
               { requirement: 'PII detection & Data Fiduciary obligations', feature: 'Real-time Aadhaar, PAN, UPI ID, email, phone detection', status: 'covered' },
@@ -747,7 +747,7 @@ export default function SafeHarborPage({ onNavigate, userRole }: { onNavigate?: 
         {/* NIST AI RMF */}
         {activeComplianceTab === 'nist' && (
           <div className="space-y-3">
-            <p className="text-sm text-slate-400 mb-4">NIST AI Risk Management Framework — maps Rasi capabilities to the four core functions.</p>
+            <p className="text-sm text-slate-400 mb-4">NIST AI Risk Management Framework — maps Zapheit capabilities to the four core functions.</p>
             {([
               { function: 'GOVERN', requirement: 'Policies, roles & accountability', feature: 'Action policies, RBAC (admin/manager/viewer), audit logs', status: 'covered' },
               { function: 'GOVERN', requirement: 'Organizational AI risk strategy', feature: 'Safe Harbor config, SLA tiers, contract records', status: 'partial' },
@@ -777,7 +777,7 @@ export default function SafeHarborPage({ onNavigate, userRole }: { onNavigate?: 
         {/* India AI Governance Framework */}
         {activeComplianceTab === 'india_ai' && (
           <div className="space-y-3">
-            <p className="text-sm text-slate-400 mb-4">India AI Governance Framework 2025–26 (MeitY) — maps Rasi capabilities to core principles.</p>
+            <p className="text-sm text-slate-400 mb-4">India AI Governance Framework 2025–26 (MeitY) — maps Zapheit capabilities to core principles.</p>
             {([
               { principle: 'Human-centricity', requirement: 'Human oversight of AI decisions', feature: 'HITL approval workflows, kill switch', status: 'covered' },
               { principle: 'Accountability', requirement: 'Audit trails & evidence', feature: 'Black Box forensics, immutable audit logs, Safe Harbor evidence export', status: 'covered' },
@@ -814,10 +814,10 @@ export default function SafeHarborPage({ onNavigate, userRole }: { onNavigate?: 
       <SectionCard title="Legal Limits" description="Keep the legal boundary short on the page and evidence-backed everywhere else." icon={ShieldAlert}>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="rounded-2xl border border-slate-800 bg-slate-950/55 p-5">
-            <p className="font-semibold text-white">RASI boundary</p>
+            <p className="font-semibold text-white">Zapheit boundary</p>
             <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-300">
               <li>Governance controls, monitoring, audit evidence, and emergency controls</li>
-              <li>Policy enforcement inside the RASI layer where configured</li>
+              <li>Policy enforcement inside the Zapheit layer where configured</li>
               <li>Operational telemetry and observability for the account</li>
             </ul>
           </div>
@@ -825,7 +825,7 @@ export default function SafeHarborPage({ onNavigate, userRole }: { onNavigate?: 
             <p className="font-semibold text-white">Customer and third-party boundary</p>
             <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-300">
               <li>Prompts, training data, integrations, and output review remain customer-owned</li>
-              <li>Third-party model and API behavior remains outside the RASI liability envelope</li>
+              <li>Third-party model and API behavior remains outside the Zapheit liability envelope</li>
               <li>Commercial remedies stay contract-bound</li>
             </ul>
           </div>

@@ -152,7 +152,7 @@ export default function DeveloperPage({ onNavigate }: DeveloperPageProps) {
           <h1 className="text-2xl font-bold text-white">Developer Portal</h1>
         </div>
         <p className="text-slate-400 text-sm">
-          Connect your systems to Rasi — push agent events in, receive governance notifications out.
+          Connect your systems to Zapheit — push agent events in, receive governance notifications out.
         </p>
       </div>
 
@@ -163,7 +163,7 @@ export default function DeveloperPage({ onNavigate }: DeveloperPageProps) {
           <div>
             <h2 className="text-base font-semibold text-white">Inbound Event Endpoint</h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              POST agent events from your external systems here. Rasi classifies them and surfaces work items in the dashboard.
+              POST agent events from your external systems here. Zapheit classifies them and surfaces work items in the dashboard.
             </p>
           </div>
         </div>
@@ -203,7 +203,7 @@ export default function DeveloperPage({ onNavigate }: DeveloperPageProps) {
             <p><span className="text-blue-300">event_type</span>  <span className="text-slate-500">string — required</span>  <span className="text-slate-400 ml-2">e.g. "refund.requested", "lead.created"</span></p>
             <p><span className="text-blue-300">source</span>      <span className="text-slate-500">string — required</span>  <span className="text-slate-400 ml-2">e.g. "stripe", "hubspot", "custom"</span></p>
             <p><span className="text-blue-300">payload</span>     <span className="text-slate-500">object — optional</span>  <span className="text-slate-400 ml-2">arbitrary event data</span></p>
-            <p><span className="text-blue-300">agent_id</span>    <span className="text-slate-500">string — optional</span>  <span className="text-slate-400 ml-2">link to a Rasi agent</span></p>
+            <p><span className="text-blue-300">agent_id</span>    <span className="text-slate-500">string — optional</span>  <span className="text-slate-400 ml-2">link to a Zapheit agent</span></p>
             <p><span className="text-blue-300">idempotency_key</span> <span className="text-slate-500">string — optional</span> <span className="text-slate-400 ml-2">deduplicate retries</span></p>
           </div>
         </div>
@@ -230,14 +230,14 @@ export default function DeveloperPage({ onNavigate }: DeveloperPageProps) {
           <QuickLinkCard
             icon={Webhook}
             title="Outbound Webhooks"
-            description="Subscribe to Rasi events like cost alerts and incidents delivered to your URL."
+            description="Subscribe to Zapheit events like cost alerts and incidents delivered to your URL."
             action="Configure"
             onClick={() => onNavigate?.('webhooks')}
           />
           <QuickLinkCard
             icon={BookOpen}
             title="API Reference"
-            description="Full OpenAPI documentation for every Rasi endpoint."
+            description="Full OpenAPI documentation for every Zapheit endpoint."
             action="Open docs"
             onClick={() => window.open(apiDocsUrl, '_blank', 'noopener')}
           />
@@ -251,7 +251,7 @@ export default function DeveloperPage({ onNavigate }: DeveloperPageProps) {
           <h2 className="text-base font-semibold text-white">Supported Event Types</h2>
         </div>
         <p className="text-xs text-slate-400">
-          Rasi automatically classifies events into work items based on the <code className="text-slate-200">event_type</code> prefix.
+          Zapheit automatically classifies events into work items based on the <code className="text-slate-200">event_type</code> prefix.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
           {[

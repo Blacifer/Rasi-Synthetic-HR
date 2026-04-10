@@ -424,7 +424,7 @@ const hasData = agents.length > 0;
     return (
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold text-white">Welcome to Rasi</h1>
+          <h1 className="text-3xl font-bold text-white">Welcome to Zapheit</h1>
           <p className="mt-2 text-slate-400">Three steps to get your first AI agent running safely.</p>
         </div>
 

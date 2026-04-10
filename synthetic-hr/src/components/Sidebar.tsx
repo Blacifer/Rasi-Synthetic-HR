@@ -206,8 +206,8 @@ export function Sidebar({
                 <Brain className="w-5 h-5 text-cyan-300" />
               </div>
               <div>
-                <span className="text-base font-bold gradient-text leading-none">RASI</span>
-                <span className="text-[10px] text-slate-500 block leading-none mt-0.5">Synthetic HR</span>
+                <span className="text-base font-bold gradient-text leading-none">Zapheit</span>
+                <span className="text-[10px] text-slate-500 block leading-none mt-0.5">AI Agent Governance</span>
               </div>
             </div>
           ) : (

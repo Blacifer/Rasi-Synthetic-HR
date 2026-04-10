@@ -610,7 +610,7 @@ export default function CoverageStatusPage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-300/80">Admin control</p>
             <h1 className="mt-3 text-4xl font-black tracking-[-0.04em] text-white">Coverage and readiness</h1>
             <p className="mt-4 text-base leading-8 text-slate-300">
-              One place to confirm that this organization is fully bootstrapped, operator-owned, and sending live RASI-observed traffic through the tracked path.
+              One place to confirm that this organization is fully bootstrapped, operator-owned, and sending live Zapheit-observed traffic through the tracked path.
             </p>
             <div className={`mt-5 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium ${status.badge}`}>
               <StatusIcon className="h-4 w-4" />
@@ -620,15 +620,15 @@ export default function CoverageStatusPage() {
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
               <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">What coverage means</p>
-                <p className="mt-2 text-sm text-slate-300">Coverage tracks how much AI traffic reaches RASI through the gateway or connected SDKs.</p>
+                <p className="mt-2 text-sm text-slate-300">Coverage tracks how much AI traffic reaches Zapheit through the gateway or connected SDKs.</p>
               </div>
               <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">What reduces coverage</p>
-                <p className="mt-2 text-sm text-slate-300">Requests that bypass RASI (direct provider calls) are invisible, so coverage drops.</p>
+                <p className="mt-2 text-sm text-slate-300">Requests that bypass Zapheit (direct provider calls) are invisible, so coverage drops.</p>
               </div>
               <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">How to improve</p>
-                <p className="mt-2 text-sm text-slate-300">Route traffic through the RASI gateway, then verify on the Connect Agent checklist.</p>
+                <p className="mt-2 text-sm text-slate-300">Route traffic through the Zapheit gateway, then verify on the Connect Agent checklist.</p>
               </div>
             </div>
           </div>
@@ -728,7 +728,7 @@ export default function CoverageStatusPage() {
 
           {data.notes.length === 0 ? (
             <div className="mt-6 rounded-3xl border border-emerald-500/25 bg-emerald-500/10 p-5 text-emerald-100">
-              All core readiness checks are in place. This org has operators, active keys, and recorded RASI-observed traffic.
+              All core readiness checks are in place. This org has operators, active keys, and recorded Zapheit-observed traffic.
             </div>
           ) : (
             <div className="mt-6 space-y-3">
@@ -746,7 +746,7 @@ export default function CoverageStatusPage() {
               ${data.telemetry.spend30dUsd.toFixed(2)}
             </p>
             <p className="mt-2 text-sm text-slate-400">
-              Based only on RASI-observed traffic. Provider console totals can exceed this when requests bypass the gateway.
+              Based only on Zapheit-observed traffic. Provider console totals can exceed this when requests bypass the gateway.
             </p>
           </div>
         </div>
@@ -757,15 +757,15 @@ export default function CoverageStatusPage() {
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Provider reconciliation</p>
           <h2 className="mt-2 text-2xl font-black tracking-[-0.04em] text-white">Observed vs provider-reported spend</h2>
           <p className="mt-3 text-sm leading-7 text-slate-400">
-            Use this to compare RASI-observed runtime spend against the invoice-side total from OpenAI, Anthropic, Google, or other providers. Until automated sync exists, these provider figures are manual entries.
+            Use this to compare Zapheit-observed runtime spend against the invoice-side total from OpenAI, Anthropic, Google, or other providers. Until automated sync exists, these provider figures are manual entries.
           </p>
 
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             <MetricCard
               icon={Activity}
-              label="RASI-observed"
+              label="Zapheit-observed"
               value={`$${data.telemetry.spend30dUsd.toFixed(2)}`}
-              note="Tracked through gateway and RASI-observed cost records"
+              note="Tracked through gateway and Zapheit-observed cost records"
             />
             <MetricCard
               icon={ShieldCheck}
@@ -780,9 +780,9 @@ export default function CoverageStatusPage() {
               note={reconciliationGap === null
                 ? 'Gap appears after a provider-reported total is entered'
                 : reconciliationGap > 0
-                  ? 'Provider spend exceeds RASI-observed spend'
+                  ? 'Provider spend exceeds Zapheit-observed spend'
                   : reconciliationGap < 0
-                    ? 'RASI-observed spend exceeds provider-reported entry'
+                    ? 'Zapheit-observed spend exceeds provider-reported entry'
                     : 'Observed and provider totals match'}
             />
           </div>
@@ -891,7 +891,7 @@ export default function CoverageStatusPage() {
         <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Reconciliation alerting</p>
         <h2 className="mt-2 text-2xl font-black tracking-[-0.04em] text-white">Spend drift and sync health alerts</h2>
         <p className="mt-3 text-sm leading-7 text-slate-400">
-          Alerts appear here when provider-reported totals drift materially from RASI-observed spend, or when enabled provider syncs fail or go stale.
+          Alerts appear here when provider-reported totals drift materially from Zapheit-observed spend, or when enabled provider syncs fail or go stale.
         </p>
 
         <div className="mt-6 rounded-3xl border border-white/10 bg-slate-900/60 p-5">

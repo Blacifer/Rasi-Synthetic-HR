@@ -133,7 +133,7 @@ export function RecruitmentWorkspaceTab({ app, agentNames }: RecruitmentWorkspac
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-violet-300">Recruitment workspace</p>
-            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} hiring operations inside Rasi</h3>
+            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} hiring operations inside Zapheit</h3>
             <p className="mt-1 text-sm text-slate-400">
               Review candidate flow, shortlist with agents, and keep hiring actions inside one controlled workspace.
             </p>
@@ -237,7 +237,7 @@ export function RecruitmentWorkspaceTab({ app, agentNames }: RecruitmentWorkspac
           <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
             <div>
               <h4 className="text-sm font-semibold text-white">{selectedJob?.title || 'Candidate queue'}</h4>
-              <p className="mt-1 text-xs text-slate-500">Score, shortlist, and move candidates forward without leaving Rasi.</p>
+              <p className="mt-1 text-xs text-slate-500">Score, shortlist, and move candidates forward without leaving Zapheit.</p>
             </div>
             {selectedJob ? (
               <button

@@ -68,7 +68,7 @@ export function WorkspaceSection({
             <input
               value={providerDisplayName}
               onChange={(e) => setProviderDisplayName(e.target.value)}
-              placeholder="Rasi AI"
+              placeholder="Zapheit AI"
               className="w-full px-4 py-3 bg-slate-900 border border-slate-700 text-white rounded-xl outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
             />
             <p className="mt-1.5 text-xs text-slate-500">Shown on agent cards instead of the underlying model vendor (e.g. "OpenAI").</p>

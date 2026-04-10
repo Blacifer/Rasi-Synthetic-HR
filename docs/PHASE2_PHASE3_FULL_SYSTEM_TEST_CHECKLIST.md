@@ -8,7 +8,7 @@ Use this after frontend and API production deploys are complete.
 2. API deploy includes latest `main`.
 3. Environment confirms:
    - `SCHEMA_COMPAT_STRICT_OPTIONAL=true`
-   - `CORS_ALLOWED_ORIGINS=https://rasi-synthetic-hr.vercel.app`
+   - `CORS_ALLOWED_ORIGINS=https://www.zapheit.com`
 4. Migration 041 is applied in production.
 
 ## A) Core Route Health

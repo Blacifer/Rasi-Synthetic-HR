@@ -1,15 +1,15 @@
 /**
- * RASI Agent Chat Widget
+ * Zapheit Agent Chat Widget
  * Drop-in embeddable chat bubble for any website.
  *
  * Usage:
  *   <script
- *     src="https://rasi-synthetic-hr.vercel.app/widget.js"
+ *     src="https://www.zapheit.com/widget.js"
  *     data-agent-id="YOUR_AGENT_ID"
  *     data-public-key="wk_YOUR_WEBSITE_KEY"
  *     data-title="Ask me anything"
  *     data-theme="dark"
- *     data-api-url="https://rasi-synthetic-hr-production.up.railway.app"
+ *     data-api-url="https://api.zapheit.com"
  *   ></script>
  */
 (function () {
@@ -25,10 +25,10 @@
   var apiKey   = script.getAttribute('data-public-key') || script.getAttribute('data-api-key') || '';
   var title    = script.getAttribute('data-title') || 'Chat with us';
   var theme    = script.getAttribute('data-theme') || 'dark';
-  var apiBase  = (script.getAttribute('data-api-url') || 'https://rasi-synthetic-hr-production.up.railway.app').replace(/\/$/, '');
+  var apiBase  = (script.getAttribute('data-api-url') || 'https://api.zapheit.com').replace(/\/$/, '');
 
   if (!agentId || !apiKey) {
-    console.warn('[RASI Widget] data-agent-id and data-public-key are required.');
+    console.warn('[Zapheit Widget] data-agent-id and data-public-key are required.');
     return;
   }
 

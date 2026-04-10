@@ -21,7 +21,7 @@ export function useSettingsState({ isDemoMode = false }: { isDemoMode?: boolean 
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
   const [orgName, setOrgName] = useState(user?.organizationName || '');
-  const [providerDisplayName, setProviderDisplayName] = useState('Rasi AI');
+  const [providerDisplayName, setProviderDisplayName] = useState('Zapheit AI');
   const [dataRetention, setDataRetention] = useState(90);
   const [savingOrg, setSavingOrg] = useState(false);
   const [exportingData, setExportingData] = useState(false);
@@ -270,7 +270,7 @@ export function useSettingsState({ isDemoMode = false }: { isDemoMode?: boolean 
         await fetch(`${apiUrl}/organizations/settings`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ branding: { provider_name: providerDisplayName.trim() || 'Rasi AI' } }),
+          body: JSON.stringify({ branding: { provider_name: providerDisplayName.trim() || 'Zapheit AI' } }),
         });
       }
     } catch { /* non-fatal */ }

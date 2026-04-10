@@ -897,7 +897,7 @@ export default function PricingPage({ onNavigate }: { onNavigate?: (page: string
         </div>
         <div className="rounded-2xl border border-slate-700/60 bg-slate-800/40 p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Not Included Here</p>
-          <p className="mt-3 text-2xl font-bold text-white">SyntheticHR subscription</p>
+          <p className="mt-3 text-2xl font-bold text-white">Zapheit subscription</p>
           <p className="mt-2 text-sm leading-7 text-slate-400">
             Governance, black box, incidents, operations tooling, and platform access should be priced separately from provider inference cost so customers can see both lines clearly.
           </p>
@@ -906,7 +906,7 @@ export default function PricingPage({ onNavigate }: { onNavigate?: (page: string
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">India-First Pricing</p>
           <p className="mt-3 text-2xl font-bold text-white">₹-based planning</p>
           <p className="mt-2 text-sm leading-7 text-emerald-100/80">
-            All forecasted values are shown in INR. Use the GST toggle in the calculator for planning, but keep provider invoices and RASI subscription pricing as separate customer-facing totals.
+            All forecasted values are shown in INR. Use the GST toggle in the calculator for planning, but keep provider invoices and Zapheit subscription pricing as separate customer-facing totals.
           </p>
         </div>
       </div>

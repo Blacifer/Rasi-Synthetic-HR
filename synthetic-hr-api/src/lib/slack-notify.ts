@@ -10,6 +10,7 @@
  *   3. `#general` as last resort
  */
 
+import { buildFrontendUrl } from './frontend-url';
 import { logger } from './logger';
 import { decryptSecret } from './integrations/encryption';
 
@@ -108,7 +109,7 @@ export async function notifySlackIncident(orgId: string, params: {
 
     const emoji = SEVERITY_EMOJI[params.severity] || ':warning:';
     const confidenceText = params.confidence != null ? ` _(${Math.round(params.confidence * 100)}% confidence)_` : '';
-    const url = params.dashboardUrl || `${process.env.FRONTEND_URL || 'https://app.rasi.ai'}/dashboard/incidents`;
+    const url = params.dashboardUrl || buildFrontendUrl('/dashboard/incidents');
 
     await postMessage(slack.token, {
       channel: slack.channel,
@@ -171,7 +172,7 @@ export async function notifySlackApproval(orgId: string, params: {
     const slack = await getSlackToken(orgId);
     if (!slack) return;
 
-    const url = params.dashboardUrl || `${process.env.FRONTEND_URL || 'https://app.rasi.ai'}/dashboard/approvals`;
+    const url = params.dashboardUrl || buildFrontendUrl('/dashboard/approvals');
 
     await postMessage(slack.token, {
       channel: slack.channel,

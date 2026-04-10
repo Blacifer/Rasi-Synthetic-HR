@@ -266,7 +266,7 @@ function AgentCard({
                         >
                           <span>
                             <span className="font-medium">{m.name}</span>
-                            <span className="text-cyan-400 ml-1.5">Rasi AI</span>
+                            <span className="text-cyan-400 ml-1.5">Zapheit AI</span>
                             {m.id === agent.modelName && (
                               <span className="ml-2 text-[10px] font-semibold text-emerald-400">Recommended</span>
                             )}
@@ -440,7 +440,7 @@ export default function DomainAgentLibraryPage({
       <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 flex items-center gap-5">
         <Shield className="w-8 h-8 text-slate-500 shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white">All domain agents are governed by Rasi</p>
+          <p className="text-sm font-semibold text-white">All domain agents are governed by Zapheit</p>
           <p className="text-xs text-slate-400 mt-0.5">
             Every activated agent is automatically monitored for incidents, cost overruns, and policy violations.
           </p>

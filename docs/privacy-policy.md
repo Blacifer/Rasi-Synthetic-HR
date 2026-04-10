@@ -2,8 +2,8 @@
 
 **Rasi Cyber Solutions**
 PH II, Gr Fl, Bl B, 0, Round Tank Lane, Howrah 711101, India
-contact: info@rasisolutions.com
-website: www.rasisolutions.com
+contact: privacy@zapheit.com
+website: www.zapheit.com
 
 **Effective Date:** March 15, 2026
 **Last Updated:** March 15, 2026
@@ -23,7 +23,7 @@ By using our Service, you agree to the collection and use of information as desc
 **Data Controller:**
 Rasi Cyber Solutions
 PH II, Gr Fl, Bl B, 0, Round Tank Lane, Howrah 711101, India
-Email: info@rasisolutions.com
+Email: privacy@zapheit.com
 
 For users in the European Economic Area (EEA), Rasi Cyber Solutions acts as the Data Controller for personal data processed through the Service.
 
@@ -132,7 +132,7 @@ We implement the following security measures:
 - Right to withdraw consent at any time
 - Right to lodge a complaint with a supervisory authority
 
-To exercise any of these rights, contact us at info@rasisolutions.com. We will respond within 30 days.
+To exercise any of these rights, contact us at privacy@zapheit.com. We will respond within 30 days.
 
 ---
 
@@ -170,5 +170,5 @@ For privacy-related questions, requests, or complaints:
 
 **Rasi Cyber Solutions**
 PH II, Gr Fl, Bl B, 0, Round Tank Lane, Howrah 711101, India
-Email: info@rasisolutions.com
-Website: www.rasisolutions.com
+Email: privacy@zapheit.com
+Website: www.zapheit.com

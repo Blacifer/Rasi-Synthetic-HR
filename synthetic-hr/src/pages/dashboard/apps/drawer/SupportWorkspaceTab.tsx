@@ -119,7 +119,7 @@ export function SupportWorkspaceTab({ app, agentNames }: SupportWorkspaceTabProp
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Support workspace</p>
-            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} customer operations inside Rasi</h3>
+            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} customer operations inside Zapheit</h3>
             <p className="mt-1 text-sm text-slate-400">Run ticket triage, monitor urgency, and keep draft replies and SLA risk visible to operators and agents.</p>
           </div>
           <button

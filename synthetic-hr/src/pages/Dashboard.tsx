@@ -1066,7 +1066,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         </button>
         <div className="flex items-center gap-2">
           <Brain className="w-5 h-5 text-white" />
-          <span className="font-bold text-white text-sm">RASI</span>
+          <span className="font-bold text-white text-sm">Zapheit</span>
         </div>
       </div>
 
@@ -1096,8 +1096,8 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                     <Brain className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <span className="text-base font-bold text-white leading-none">RASI</span>
-                    <span className="text-[10px] text-blue-300 block leading-none mt-0.5">Synthetic HR</span>
+                    <span className="text-base font-bold text-white leading-none">Zapheit</span>
+                    <span className="text-[10px] text-blue-300 block leading-none mt-0.5">AI Agent Governance</span>
                   </div>
                 </div>
                 <button onClick={() => setMobileNavOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.05] transition-colors">

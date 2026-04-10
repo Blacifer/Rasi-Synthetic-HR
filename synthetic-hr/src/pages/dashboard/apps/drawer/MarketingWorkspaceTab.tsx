@@ -125,7 +125,7 @@ export function MarketingWorkspaceTab({ app, agentNames }: MarketingWorkspaceTab
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-pink-300">Marketing workspace</p>
-            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} campaign operations inside Rasi</h3>
+            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} campaign operations inside Zapheit</h3>
             <p className="mt-1 text-sm text-slate-400">Watch active campaigns, audience health, and performance trends while agents help draft and monitor outreach safely.</p>
           </div>
           <div className="flex gap-2">
@@ -294,7 +294,7 @@ export function MarketingWorkspaceTab({ app, agentNames }: MarketingWorkspaceTab
               <Users className="h-4 w-4 text-cyan-300" />
               <h4 className="text-sm font-semibold text-white">Audience snapshot</h4>
             </div>
-            <p className="mt-3 text-sm text-slate-400">Contacts and segmentation stay visible here so marketing agents can work from Rasi without losing context.</p>
+            <p className="mt-3 text-sm text-slate-400">Contacts and segmentation stay visible here so marketing agents can work from Zapheit without losing context.</p>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div className="rounded-xl border border-white/8 bg-[#121826] p-3">
                 <div className="flex items-center gap-2 text-slate-300"><Users className="h-4 w-4 text-blue-300" />Contacts</div>

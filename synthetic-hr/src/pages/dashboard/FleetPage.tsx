@@ -2188,7 +2188,7 @@ export default function FleetPage({
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-sm text-slate-400 mb-5">Based on this agent's description, Rasi suggests these governance policies. Apply in one click.</p>
+            <p className="text-sm text-slate-400 mb-5">Based on this agent's description, Zapheit suggests these governance policies. Apply in one click.</p>
             <div className="space-y-3">
               {policyRecs.map((rec: PolicyRec, i: number) => (
                 <div key={i} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">

@@ -440,7 +440,7 @@ export default function ApiKeysPage({
                 <EmptyPanel
                   icon={<KeyRound className="h-8 w-8 text-slate-500" />}
                   title="No active API keys"
-                  body="Create a key when a backend worker, server route, automation, or integration needs secure access to RASI."
+                  body="Create a key when a backend worker, server route, automation, or integration needs secure access to Zapheit."
                   actionLabel="Create API key"
                   onAction={() => setShowIssueModal(true)}
                 />
@@ -537,14 +537,14 @@ export default function ApiKeysPage({
             <div className="rounded-[34px] border border-amber-500/20 bg-amber-500/10 px-6 py-5">
               <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold text-white">Usage here is RASI-observed key traffic</h3>
+                  <h3 className="text-lg font-semibold text-white">Usage here is Zapheit-observed key traffic</h3>
                   <p className="mt-1 max-w-4xl text-sm leading-7 text-amber-100/80">
-                    This page shows request activity seen on RASI-issued keys. It does not import provider billing dashboards automatically, so OpenAI or Anthropic console totals may be higher if traffic bypasses RASI.
+                    This page shows request activity seen on Zapheit-issued keys. It does not import provider billing dashboards automatically, so OpenAI or Anthropic console totals may be higher if traffic bypasses Zapheit.
                   </p>
                   <p className="mt-2 text-xs text-amber-100/70">Need org-wide usage? Open the Usage page for aggregated traffic across the workspace.</p>
                 </div>
                 <div className="rounded-2xl border border-amber-400/20 bg-slate-950/40 px-4 py-3 text-sm text-amber-100">
-                  Source of truth: requests observed through RASI
+                  Source of truth: requests observed through Zapheit
                 </div>
               </div>
             </div>
@@ -554,7 +554,7 @@ export default function ApiKeysPage({
                 <div className="flex items-center justify-between border-b border-slate-800 px-6 py-5">
                   <div>
                     <h3 className="text-xl font-semibold text-white">Observed request usage</h3>
-                    <p className="mt-1 text-sm text-slate-400">Last 30 days of API-key-authenticated traffic seen by RASI.</p>
+                    <p className="mt-1 text-sm text-slate-400">Last 30 days of API-key-authenticated traffic seen by Zapheit.</p>
                   </div>
                   <span className="rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1.5 text-sm text-slate-300">30d window</span>
                 </div>
@@ -583,7 +583,7 @@ export default function ApiKeysPage({
             <section className="overflow-hidden rounded-[34px] border border-slate-800 bg-slate-900/70">
               <div className="border-b border-slate-800 px-6 py-5">
                 <h3 className="text-xl font-semibold text-white">Per-key activity</h3>
-                <p className="mt-1 text-sm text-slate-400">Usage only appears here after the corresponding key has handled live traffic through RASI.</p>
+                <p className="mt-1 text-sm text-slate-400">Usage only appears here after the corresponding key has handled live traffic through Zapheit.</p>
               </div>
               {activeKeys.length === 0 ? (
                 <EmptyPanel
@@ -928,7 +928,7 @@ function IssueTokenModal({
           <div className="flex items-start justify-between border-b border-slate-800 px-6 py-4">
             <div>
               <h2 className="text-2xl font-semibold text-white">Create secret key</h2>
-              <p className="mt-1.5 text-sm text-slate-400">This creates a real RASI API key for backend services, scripts, or integrations.</p>
+              <p className="mt-1.5 text-sm text-slate-400">This creates a real Zapheit API key for backend services, scripts, or integrations.</p>
             </div>
             <button type="button" onClick={onClose} className="rounded-xl border border-slate-700 bg-slate-900/60 p-2 text-slate-300 transition hover:bg-slate-800 hover:text-white">
               <X className="h-4 w-4" />

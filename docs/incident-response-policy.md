@@ -38,7 +38,7 @@ Incidents may be detected via:
 - Customer or third-party report
 - Internal team discovery
 
-All suspected incidents must be reported immediately to info@rasisolutions.com.
+All suspected incidents must be reported immediately to support@zapheit.com.
 
 ### Phase 2 — Triage (Target: within 4 hours of detection)
 Upon detection:
@@ -112,7 +112,7 @@ Customer breach notifications will include:
 ## 6. Contact
 
 To report a security incident or vulnerability:
-**Email:** info@rasisolutions.com
+**Email:** support@zapheit.com
 **Subject line:** SECURITY INCIDENT — [brief description]
 
 We aim to acknowledge all security reports within 24 hours.

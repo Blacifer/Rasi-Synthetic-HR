@@ -9,6 +9,7 @@ import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
 import { firePlaybookTriggers } from '../lib/trigger-evaluator';
 import { notifySlackIncident } from '../lib/slack-notify';
 import { notifyAlertChannels } from '../lib/alert-channels';
+import { buildFrontendUrl } from '../lib/frontend-url';
 import { incidentDetection } from '../services/incident-detection';
 import { errorResponse, getOrgId, getUserJwt, safeLimit } from '../lib/route-helpers';
 
@@ -185,7 +186,7 @@ router.post('/incidents', requirePermission('incidents.create'), async (req: Req
       incidentType: incident_type,
       agentId: agent_id,
       description,
-      dashboardUrl: `${process.env.FRONTEND_URL || 'https://app.rasi.ai'}/dashboard/incidents`,
+      dashboardUrl: buildFrontendUrl('/dashboard/incidents'),
     });
 
     // Evaluate playbook triggers for incident.created event.
@@ -428,7 +429,7 @@ router.post('/detect', requirePermission('incidents.create'), async (req: Reques
           incidentType: highest.type || '',
           agentId: agent_id || undefined,
           description: highest.details,
-          dashboardUrl: `${process.env.FRONTEND_URL || 'https://app.rasi.ai'}/dashboard/incidents`,
+          dashboardUrl: buildFrontendUrl('/dashboard/incidents'),
         });
       }
 

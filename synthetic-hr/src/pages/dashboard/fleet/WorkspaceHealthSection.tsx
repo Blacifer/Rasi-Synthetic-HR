@@ -234,7 +234,7 @@ export function WorkspaceHealthSection({ agent }: { agent: AIAgent }) {
           {data.totalRequests === 0 && (
             <p className="text-xs text-slate-500 text-center py-4">
               No gateway traffic recorded for this agent in the last 30 days.
-              Latency and error metrics will appear once requests flow through the Rasi gateway.
+              Latency and error metrics will appear once requests flow through the Zapheit gateway.
             </p>
           )}
 

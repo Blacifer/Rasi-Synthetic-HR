@@ -5,7 +5,7 @@ import { Check, ArrowLeft, Zap, Shield, Building2, MessageCircle, AlertTriangle,
 const CONTACT_WA = '919433116259';
 
 function openWhatsApp(planName: string, note?: string) {
-  const text = note ?? `Hi, I'm interested in ${planName} by Rasi. Can we connect?`;
+  const text = note ?? `Hi, I'm interested in ${planName} by Zapheit. Can we connect?`;
   window.open(`https://wa.me/${CONTACT_WA}?text=${encodeURIComponent(text)}`, '_blank');
 }
 
@@ -27,7 +27,7 @@ const PLANS = [
       'Up to 5 agents assessed',
     ],
     cta: 'Book an Audit',
-    waText: "Hi, I'd like to book an AI Governance Audit with Rasi. Can we connect?",
+    waText: "Hi, I'd like to book an AI Governance Audit with Zapheit. Can we connect?",
     ctaStyle: 'bg-slate-700 hover:bg-slate-600 text-white',
   },
   {
@@ -52,7 +52,7 @@ const PLANS = [
       'Slack alerts & webhook integrations',
     ],
     cta: 'Talk to us',
-    waText: "Hi, I'm interested in The Retainer plan by Rasi for continuous AI governance. Can we connect?",
+    waText: "Hi, I'm interested in The Retainer plan by Zapheit for continuous AI governance. Can we connect?",
     ctaStyle: 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/20',
   },
   {
@@ -77,7 +77,7 @@ const PLANS = [
       'Priority support & onboarding',
     ],
     cta: 'Contact Sales',
-    waText: "Hi, I'd like to discuss Enterprise pricing with Rasi. We're a regulated org and need a governance partnership.",
+    waText: "Hi, I'd like to discuss Enterprise pricing with Zapheit. We're a regulated org and need a governance partnership.",
     ctaStyle: 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-lg shadow-emerald-500/20',
   },
 ];
@@ -116,7 +116,7 @@ export default function PricingPage() {
           className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Rasi
+          Back to Zapheit
         </button>
         <div className="flex items-center gap-3">
           <button
@@ -126,7 +126,7 @@ export default function PricingPage() {
             Log in
           </button>
           <button
-            onClick={() => openWhatsApp('Rasi', "Hi, I'd like to learn more about Rasi AI governance. Can we connect?")}
+            onClick={() => openWhatsApp('Zapheit', "Hi, I'd like to learn more about Zapheit AI governance. Can we connect?")}
             className="text-sm px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold hover:from-cyan-400 hover:to-blue-500 transition-all flex items-center gap-1.5"
           >
             <MessageCircle className="w-3.5 h-3.5" />
@@ -285,7 +285,7 @@ export default function PricingPage() {
                 color: 'text-purple-400',
                 bg: 'bg-purple-500/10 border-purple-500/20',
                 title: 'Compliance gap',
-                body: 'Auditors are starting to ask for AI risk registers. Most orgs have nothing to show. Rasi generates the evidence trail.',
+                body: 'Auditors are starting to ask for AI risk registers. Most orgs have nothing to show. Zapheit generates the evidence trail.',
               },
             ].map(({ icon: Icon, color, bg, title, body }) => (
               <div key={title} className={`rounded-2xl border p-5 space-y-3 ${bg}`}>
@@ -313,10 +313,10 @@ export default function PricingPage() {
           </div>
         </div>
 
-        {/* Why Rasi is different */}
+        {/* Why Zapheit is different */}
         <div className="space-y-6">
           <div className="text-center space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">Why Rasi</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">Why Zapheit</p>
             <h2 className="text-2xl font-bold">Built different. For Indian teams.</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -336,7 +336,7 @@ export default function PricingPage() {
               {
                 num: '03',
                 title: 'Connects in minutes',
-                body: 'One API key. Point your LLM calls at the Rasi gateway and governance starts immediately.',
+                body: 'One API key. Point your LLM calls at the Zapheit gateway and governance starts immediately.',
                 accent: 'border-violet-500/20',
               },
               {
@@ -362,18 +362,18 @@ export default function PricingPage() {
             {[
               {
                 q: 'What counts as a gateway request?',
-                a: 'Each call to the Rasi LLM gateway counts as one request — regardless of model, token count, or provider. Streaming responses count as one request.',
+                a: 'Each call to the Zapheit LLM gateway counts as one request — regardless of model, token count, or provider. Streaming responses count as one request.',
               },
               {
-                q: 'Can I use Rasi without routing traffic through the gateway?',
+                q: 'Can I use Zapheit without routing traffic through the gateway?',
                 a: 'Yes. The Audit plan and standalone governance features (fleet management, audit logs, policy editor) work without the gateway. The gateway is required for real-time incident detection and cost tracking.',
               },
               {
-                q: 'Which LLM providers does Rasi support?',
+                q: 'Which LLM providers does Zapheit support?',
                 a: 'OpenAI (GPT-4o family), Anthropic (Claude 3.5/3 Haiku), and 300+ models via OpenRouter including Gemini, Llama, and Mistral.',
               },
               {
-                q: 'Can I self-host or run Rasi in my VPC?',
+                q: 'Can I self-host or run Zapheit in my VPC?',
                 a: 'Yes — the Runtime Worker can be deployed inside your private network. The agent jobs are pulled from the queue securely without inbound firewall rules. Enterprise plan includes VPC deployment support.',
               },
               {
@@ -434,7 +434,7 @@ export default function PricingPage() {
           <p className="text-slate-400">Book a 30-minute governance review. We'll map your current AI footprint and recommend the right plan.</p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
             <button
-              onClick={() => openWhatsApp('Rasi', "Hi, I'd like to book a 30-minute AI governance review with Rasi. Can we find a time?")}
+              onClick={() => openWhatsApp('Zapheit', "Hi, I'd like to book a 30-minute AI governance review with Zapheit. Can we find a time?")}
               className="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold hover:from-cyan-400 hover:to-blue-500 transition-all shadow-lg shadow-cyan-500/20 flex items-center gap-2"
             >
               <MessageCircle className="w-4 h-4" />
@@ -452,7 +452,7 @@ export default function PricingPage() {
 
       {/* Floating WhatsApp button */}
       <button
-        onClick={() => openWhatsApp('Rasi', "Hi, I'd like to learn more about Rasi AI governance. Can we connect?")}
+        onClick={() => openWhatsApp('Zapheit', "Hi, I'd like to learn more about Zapheit AI governance. Can we connect?")}
         className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold shadow-xl shadow-emerald-900/50 transition-all hover:scale-105"
       >
         <MessageCircle className="w-4 h-4" />

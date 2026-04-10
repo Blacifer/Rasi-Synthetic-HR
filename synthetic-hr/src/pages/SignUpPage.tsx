@@ -125,7 +125,7 @@ export default function SignUpPage({ onSignIn, onBack }: SignUpPageProps) {
               <Brain className="w-8 h-8 text-cyan-300" />
             </div>
           </div>
-          <h1 className="gradient-text text-4xl font-bold mb-3">RASI</h1>
+          <h1 className="gradient-text text-4xl font-bold mb-3">Zapheit</h1>
           <p className="text-slate-400 text-base leading-relaxed">AI Agent Control Plane<br />Govern every agent, every conversation</p>
         </div>
       </div>
@@ -145,8 +145,8 @@ export default function SignUpPage({ onSignIn, onBack }: SignUpPageProps) {
                 <Brain className="w-7 h-7 text-cyan-300" />
               </div>
               <div>
-                <span className="text-xl font-bold gradient-text">RASI</span>
-                <span className="text-xs text-blue-300 block -mt-1">Synthetic HR</span>
+                <span className="text-xl font-bold gradient-text">Zapheit</span>
+                <span className="text-xs text-blue-300 block -mt-1">AI Agent Governance</span>
               </div>
             </div>
 

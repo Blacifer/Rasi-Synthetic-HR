@@ -176,7 +176,7 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
           <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
             <DollarSign className="w-8 h-8 text-emerald-400" /> Observed Runtime Spend
           </h1>
-          <p className="text-slate-400 mt-1.5">Organization-scoped provider spend observed through RASI. This page does not represent your provider invoice for traffic outside the RASI gateway or registered integrations.</p>
+          <p className="text-slate-400 mt-1.5">Organization-scoped provider spend observed through Zapheit. This page does not represent your provider invoice for traffic outside the Zapheit gateway or registered integrations.</p>
         </div>
         <div className="flex items-center gap-3">
           <select
@@ -208,14 +208,14 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr_0.8fr]">
         <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 backdrop-blur-sm p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">Observed By RASI</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">Observed by Zapheit</p>
           <p className="mt-3 text-2xl font-bold text-white">{formatInr(totalCost)}</p>
           <p className="mt-2 text-sm leading-6 text-cyan-100/80">
-            Live provider spend captured from your organization&apos;s RASI-observed traffic. If an agent calls OpenAI, Anthropic, or another provider directly outside RASI, that spend will not appear here.
+            Live provider spend captured from your organization&apos;s Zapheit-observed traffic. If an agent calls OpenAI, Anthropic, or another provider directly outside Zapheit, that spend will not appear here.
           </p>
         </div>
         <div className="rounded-2xl border border-slate-700/60 bg-slate-800/40 backdrop-blur-sm p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">SyntheticHR Platform Fee</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Zapheit Platform Fee</p>
           <p className="mt-3 text-2xl font-bold text-white">Quoted separately</p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
             Governance, incidents, black box, and operations fees are not mixed into provider runtime cost on this page.
@@ -223,9 +223,9 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
         </div>
         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 backdrop-blur-sm p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">Coverage Status</p>
-          <p className="mt-3 text-2xl font-bold text-white">{filteredCostData.length > 0 ? 'Tracked through RASI' : 'Waiting for traffic'}</p>
+          <p className="mt-3 text-2xl font-bold text-white">{filteredCostData.length > 0 ? 'Tracked through Zapheit' : 'Waiting for traffic'}</p>
           <p className="mt-2 text-sm leading-6 text-emerald-100/80">
-            Accuracy is strongest when requests pass through the RASI gateway or connected telemetry path. Provider console totals may be higher if traffic bypasses RASI.
+            Accuracy is strongest when requests pass through the Zapheit gateway or connected telemetry path. Provider console totals may be higher if traffic bypasses Zapheit.
           </p>
         </div>
       </div>
@@ -236,7 +236,7 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
           {
             label: 'Observed Provider Spend',
             value: `₹${totalCost.toFixed(2)}`,
-            sub: totalCost === 0 ? 'No RASI-observed spend recorded yet' : `Across ${filteredCostData.length} tracked entries`,
+            sub: totalCost === 0 ? 'No Zapheit-observed spend recorded yet' : `Across ${filteredCostData.length} tracked entries`,
             icon: <DollarSign className="w-5 h-5 text-emerald-400" />,
             bg: 'bg-emerald-500/10',
             glow: 'group-hover:bg-emerald-500/5',
@@ -252,7 +252,7 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
           {
             label: 'API Requests',
             value: totalRequests.toLocaleString(),
-            sub: totalRequests === 0 ? 'No RASI-tracked requests yet' : `Avg ${(totalTokens / Math.max(totalRequests, 1)).toFixed(0)} tokens/req`,
+            sub: totalRequests === 0 ? 'No Zapheit-tracked requests yet' : `Avg ${(totalTokens / Math.max(totalRequests, 1)).toFixed(0)} tokens/req`,
             icon: <Activity className="w-5 h-5 text-purple-400" />,
             bg: 'bg-purple-500/10',
             glow: 'group-hover:bg-purple-500/5',

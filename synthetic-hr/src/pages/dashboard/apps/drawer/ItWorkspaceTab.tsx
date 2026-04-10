@@ -111,7 +111,7 @@ export function ItWorkspaceTab({ app, agentNames }: ItWorkspaceTabProps) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-violet-300">IT workspace</p>
-            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} access operations inside Rasi</h3>
+            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} access operations inside Zapheit</h3>
             <p className="mt-1 text-sm text-slate-400">Keep access requests, policy evaluation, and risky approvals in one controlled workspace before agents or humans change permissions.</p>
           </div>
           <button

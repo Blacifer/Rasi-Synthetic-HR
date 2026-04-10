@@ -68,7 +68,7 @@ export function CollaborationWorkspaceTab({ app, serviceId, agentNames }: Collab
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-blue-300">Collaboration workspace</p>
-            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} collaboration operations inside Rasi</h3>
+            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} collaboration operations inside Zapheit</h3>
             <p className="mt-1 text-sm text-slate-400">
               Keep identity, calendar, and collaboration context visible to operators and linked agents from one governed workspace.
             </p>

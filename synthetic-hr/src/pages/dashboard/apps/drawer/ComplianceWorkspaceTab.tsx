@@ -117,7 +117,7 @@ export function ComplianceWorkspaceTab({ app, agentNames }: ComplianceWorkspaceT
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-sky-300">Compliance workspace</p>
-            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} compliance operations inside Rasi</h3>
+            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} compliance operations inside Zapheit</h3>
             <p className="mt-1 text-sm text-slate-400">Track deadlines, posture, and evidence in one governed workspace before filing or remediation actions move forward.</p>
           </div>
           <button

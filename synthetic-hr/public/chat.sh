@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# RASI Agent Terminal Chat
-# Usage: curl -fsSL https://rasi-synthetic-hr.vercel.app/chat.sh | bash -s -- sk_YOUR_KEY YOUR_AGENT_ID
+# Zapheit Agent Terminal Chat
+# Usage: curl -fsSL https://www.zapheit.com/chat.sh | bash -s -- sk_YOUR_KEY YOUR_AGENT_ID
 # Or:    bash chat.sh sk_YOUR_KEY YOUR_AGENT_ID
 
 set -e
 
 API_KEY="${1:-}"
 AGENT_ID="${2:-}"
-BASE_URL="${3:-https://rasi-synthetic-hr-production.up.railway.app}"
+BASE_URL="${3:-https://api.zapheit.com}"
 ENDPOINT="${BASE_URL}/v1/agents/${AGENT_ID}/chat"
 
 if [[ -z "$API_KEY" || -z "$AGENT_ID" ]]; then
   echo "Usage: bash chat.sh <api_key> <agent_id>"
-  echo "       curl -fsSL https://rasi-synthetic-hr.vercel.app/chat.sh | bash -s -- sk_xxx agent_id"
+  echo "       curl -fsSL https://www.zapheit.com/chat.sh | bash -s -- sk_xxx agent_id"
   exit 1
 fi
 
@@ -22,7 +22,7 @@ if ! command -v curl &>/dev/null; then
 fi
 
 echo ""
-echo "  RASI Agent Chat"
+echo "  Zapheit Agent Chat"
 echo "  Agent: ${AGENT_ID}"
 echo "  Type your message and press Enter. Press Ctrl+C to quit."
 echo ""

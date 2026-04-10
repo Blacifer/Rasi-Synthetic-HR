@@ -264,11 +264,11 @@ export default function PublicChatPage() {
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-xl border-b border-slate-200/70 px-4 py-3 flex items-center gap-3 shrink-0">
         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shrink-0">
-          <span className="text-white text-xs font-bold">R</span>
+          <span className="text-white text-xs font-bold">Z</span>
         </div>
         <div className="min-w-0">
           <h1 className="text-sm font-semibold text-slate-900 truncate">{agentInfo?.name}</h1>
-          <p className="text-[11px] text-slate-400">Powered by Rasi AI</p>
+          <p className="text-[11px] text-slate-400">Powered by Zapheit AI</p>
         </div>
         <div className="ml-auto flex items-center gap-1.5">
           <span className="inline-block w-2 h-2 rounded-full bg-emerald-400" />

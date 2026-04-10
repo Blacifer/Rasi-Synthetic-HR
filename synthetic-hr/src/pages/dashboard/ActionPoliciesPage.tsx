@@ -226,7 +226,7 @@ function GatewayInterceptorsSection({ rows, show, onToggle, tab, onTabChange, sa
       enabled,
       require_approval: false,
       interceptor_rules: rules,
-      notes: `Gateway ${tab} interceptor — managed by Rasi Gateway Interceptors UI`,
+      notes: `Gateway ${tab} interceptor — managed by Zapheit Gateway Interceptors UI`,
     });
     setSaving(false);
     if (res.success && res.data) {

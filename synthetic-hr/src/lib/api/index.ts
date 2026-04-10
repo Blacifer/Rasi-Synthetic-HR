@@ -24,6 +24,8 @@ export { approvalsApi } from './approvals';
 export type { ApprovalRequest } from './approvals';
 export { alertChannelsApi } from './alert-channels';
 export type { AlertChannel, ChannelType, SeverityLevel, CreateAlertChannelInput } from './alert-channels';
+export { paymentsApi } from './payments';
+export type { PaymentOffer, PaymentOrder, PaymentOrderStatus, CreatePaymentOrderInput } from './payments';
 export { recruitmentApi } from './recruitment';
 export { dpdpApi } from './dpdp';
 export { ctcApi } from './ctc';
@@ -90,6 +92,7 @@ import {
 import { marketplaceApi } from './marketplace';
 import { approvalsApi } from './approvals';
 import { alertChannelsApi } from './alert-channels';
+import { paymentsApi } from './payments';
 import { recruitmentApi } from './recruitment';
 import { dpdpApi } from './dpdp';
 import { ctcApi } from './ctc';
@@ -125,6 +128,7 @@ export const api = {
   dpdp: dpdpApi,
   ctc: ctcApi,
   filings: filingsApi,
+  payments: paymentsApi,
   batches: batchesApi,
   fineTunes: fineTunesApi,
   caching: cachingApi,

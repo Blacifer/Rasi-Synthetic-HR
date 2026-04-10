@@ -101,7 +101,7 @@ const SAMPLE_EVENT: Record<EventId, Record<string, unknown>> = {
       provider: 'openrouter',
       severity: 'warning',
       title: 'Provider-reported spend drift detected',
-      message: 'The current provider-reported total differs from RASI-observed spend by 14.20 USD across the last 30-day window.',
+      message: 'The current provider-reported total differs from Zapheit-observed spend by 14.20 USD across the last 30-day window.',
     },
   },
   'error.occurred': {

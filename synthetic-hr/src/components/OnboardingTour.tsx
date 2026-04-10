@@ -7,9 +7,9 @@ const TOUR_STEPS: Step[] = [
   {
     target: 'body',
     placement: 'center',
-    title: 'Welcome to Rasi',
+    title: 'Welcome to Zapheit',
     content:
-      'Rasi is your AI agent control plane — manage, monitor, and govern every AI agent in your organization. This quick tour will show you the key features.',
+      'Zapheit is your AI agent control plane — manage, monitor, and govern every AI agent in your organization. This quick tour will show you the key features.',
     skipBeacon: true,
   },
   {
@@ -33,7 +33,7 @@ const TOUR_STEPS: Step[] = [
     placement: 'right',
     title: 'Incident Detection',
     content:
-      'Rasi automatically detects anomalies, PII leaks, hallucinations, and unusual agent behavior. Investigate with full reasoning traces.',
+      'Zapheit automatically detects anomalies, PII leaks, hallucinations, and unusual agent behavior. Investigate with full reasoning traces.',
     skipBeacon: true,
   },
   {

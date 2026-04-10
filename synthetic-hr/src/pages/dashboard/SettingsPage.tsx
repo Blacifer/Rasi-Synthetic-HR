@@ -404,6 +404,8 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
       setShowUpgradeModal={setShowUpgradeModal}
       handleExportAllData={() => void handleExportAllData()}
       exportingData={exportingData}
+      billingContactName={displayName || user?.organizationName || 'Workspace Admin'}
+      billingContactEmail={user?.email || ''}
     />
   );
 
@@ -629,7 +631,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
                   cadence: 'one-time',
                   color: 'border-slate-700/60',
                   highlights: ['AI Workforce Health Scan', 'Risk score report', 'Up to 5 agents assessed'],
-                  waText: `Hi, I'm on Rasi (org: ${orgName}) and I'd like to upgrade to The Audit plan. Can we connect?`,
+                  waText: `Hi, I'm on Zapheit (org: ${orgName}) and I'd like to upgrade to The Audit plan. Can we connect?`,
                 },
                 {
                   key: 'retainer',
@@ -639,7 +641,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
                   color: 'border-cyan-500/40',
                   badge: 'Most popular',
                   highlights: ['200k gateway requests/month', 'Real-time PII detection', 'Action policies & kill switch'],
-                  waText: `Hi, I'm on Rasi (org: ${orgName}) and I'd like to upgrade to The Retainer plan. Can we connect?`,
+                  waText: `Hi, I'm on Zapheit (org: ${orgName}) and I'd like to upgrade to The Retainer plan. Can we connect?`,
                 },
                 {
                   key: 'enterprise',
@@ -648,7 +650,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
                   cadence: '',
                   color: 'border-emerald-500/30',
                   highlights: ['Unlimited gateway requests', 'VPC / on-prem runtime', 'Dedicated governance manager'],
-                  waText: `Hi, I'm on Rasi (org: ${orgName}) and I'd like to discuss Enterprise pricing. Can we connect?`,
+                  waText: `Hi, I'm on Zapheit (org: ${orgName}) and I'd like to discuss Enterprise pricing. Can we connect?`,
                 },
               ].map(plan => {
                 const isCurrent = usageData?.planKey === plan.key;

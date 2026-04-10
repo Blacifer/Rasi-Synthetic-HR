@@ -667,7 +667,7 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
                   ) : traces.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-slate-700 p-8 text-center text-slate-400">
                       No reasoning traces recorded for this conversation.
-                      <p className="text-xs mt-2 text-slate-500">Traces are captured for requests routed through the Rasi gateway.</p>
+                      <p className="text-xs mt-2 text-slate-500">Traces are captured for requests routed through the Zapheit gateway.</p>
                     </div>
                   ) : (
                     traces.map((trace, i) => (

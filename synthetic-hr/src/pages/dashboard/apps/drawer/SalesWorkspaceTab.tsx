@@ -119,7 +119,7 @@ export function SalesWorkspaceTab({ app, agentNames }: SalesWorkspaceTabProps) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Sales workspace</p>
-            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} pipeline operations inside Rasi</h3>
+            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} pipeline operations inside Zapheit</h3>
             <p className="mt-1 text-sm text-slate-400">Track lead quality, identify cold deals, and let agents work the pipeline without switching into external CRM tabs.</p>
           </div>
           <button

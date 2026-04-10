@@ -139,7 +139,7 @@ export function FinanceWorkspaceTab({ app, agentNames }: FinanceWorkspaceTabProp
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">Finance workspace</p>
-            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} finance operations inside Rasi</h3>
+            <h3 className="mt-2 text-lg font-semibold text-white">{app.name} finance operations inside Zapheit</h3>
             <p className="mt-1 text-sm text-slate-400">Monitor invoice match confidence, validate expenses, and keep approvals and exception handling inside one controlled workspace.</p>
           </div>
           <button

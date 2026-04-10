@@ -54,7 +54,7 @@ interface EnrollmentModalProps {
   onClose: () => void;
 }
 
-const CONTROL_PLANE_URL = 'https://rasi-synthetic-hr-production.up.railway.app';
+const CONTROL_PLANE_URL = 'https://api.zapheit.com';
 
 function EnrollmentModal({ token, expires, name, runtimeId, onClose }: EnrollmentModalProps) {
   const [copied, setCopied] = useState(false);
@@ -72,7 +72,7 @@ function EnrollmentModal({ token, expires, name, runtimeId, onClose }: Enrollmen
   -e SYNTHETICHR_ENROLLMENT_TOKEN="${token}" \\
   -e SYNTHETICHR_API_KEY="sk_..." \\
   --restart unless-stopped \\
-  --name rasi-runtime \\
+  --name zapheit-runtime \
   ghcr.io/blacifer/rasi-runtime:latest`;
 
   const copyQuickstart = async () => {
@@ -203,7 +203,7 @@ function RegisterModal({ onClose, onCreated }: RegisterModalProps) {
             <p className="text-xs text-slate-500 mt-2">
               {mode === 'vpc'
                 ? 'Worker runs inside your network — jobs never leave your VPC.'
-                : 'Worker runs on Rasi-managed infrastructure.'}
+                : 'Worker runs on Zapheit-managed infrastructure.'}
             </p>
           </div>
         </div>
@@ -417,7 +417,7 @@ export default function RuntimeWorkersPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Runtime Workers</h1>
           <p className="text-slate-400 text-sm mt-1">
-            Backend async job execution workers — run agent jobs securely inside your VPC or on Rasi-managed infrastructure.
+            Backend async job execution workers — run agent jobs securely inside your VPC or on Zapheit-managed infrastructure.
           </p>
           <p className="text-slate-500 text-xs mt-1">
             Workers process jobs from the queue (playbook runs, connector actions, batch tasks). Separate from Fleet — agents are defined in Fleet, workers are the machines that execute them.
@@ -485,7 +485,7 @@ export default function RuntimeWorkersPage() {
             </div>
             <h3 className="text-base font-semibold text-slate-300 mb-2">No workers registered</h3>
             <p className="text-sm text-slate-500 max-w-sm mx-auto mb-5">
-              Register a runtime worker to execute agent jobs securely inside your VPC or on Rasi-managed infrastructure.
+              Register a runtime worker to execute agent jobs securely inside your VPC or on Zapheit-managed infrastructure.
             </p>
             <button
               onClick={() => setShowRegister(true)}
