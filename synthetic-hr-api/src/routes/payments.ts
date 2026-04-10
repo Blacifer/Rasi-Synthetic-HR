@@ -13,7 +13,7 @@ import {
   mapCashfreeOrderStatus,
 } from '../lib/cashfree';
 import { logger } from '../lib/logger';
-import { eq, supabaseRestAsService, supabaseRestAsUser } from '../lib/supabase-rest';
+import { eq, supabaseRestAsUser } from '../lib/supabase-rest';
 import { requirePermission } from '../middleware/rbac';
 
 const router = express.Router();
@@ -129,6 +129,7 @@ async function getPaymentOrderByMerchantOrderId(merchantOrderId: string, orgId: 
 }
 
 async function logPaymentEvent(input: {
+  userJwt: string;
   organizationId: string;
   paymentOrderId?: string | null;
   eventType: string;
@@ -138,7 +139,7 @@ async function logPaymentEvent(input: {
   errorMessage?: string | null;
 }): Promise<void> {
   try {
-    await supabaseRestAsService('payment_events', '', {
+    await supabaseRestAsUser(input.userJwt, 'payment_events', '', {
       method: 'POST',
       headers: input.providerEventId
         ? { Prefer: 'resolution=merge-duplicates,return=representation' }
@@ -324,6 +325,7 @@ router.post('/payments/orders', requirePermission('settings.update'), async (req
     if (!row) throw new Error('Failed to persist payment order');
 
     await logPaymentEvent({
+      userJwt,
       organizationId: orgId,
       paymentOrderId: row.id,
       providerEventId: createdOrder.cfOrderId,
@@ -403,6 +405,7 @@ router.post('/payments/orders/:id/sync', requirePermission('settings.update'), a
     if (!row) throw new Error('Failed to update payment order');
 
     await logPaymentEvent({
+      userJwt,
       organizationId: orgId,
       paymentOrderId: row.id,
       providerEventId: providerOrder.cfOrderId,
@@ -469,6 +472,7 @@ router.post('/payments/orders/by-merchant/:merchantOrderId/sync', requirePermiss
     if (!row) throw new Error('Failed to update payment order');
 
     await logPaymentEvent({
+      userJwt,
       organizationId: orgId,
       paymentOrderId: row.id,
       providerEventId: providerOrder.cfOrderId,

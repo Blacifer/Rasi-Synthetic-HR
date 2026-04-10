@@ -37,6 +37,8 @@ const ALLOW_SERVICE_REST_FILES = new Set([
   path.join(ROUTES_DIR, 'whatsapp-webhook.ts'),
   // DPDP compliance: consent lifecycle writes, compliance_events logging, and retention policy enforcement require service-role for cross-table org writes (same justification as compliance.ts).
   path.join(ROUTES_DIR, 'dpdp.ts'),
+  // Cashfree webhook: inbound payment callbacks arrive without a user JWT; HMAC-verified and must reconcile server-side order state.
+  path.join(ROUTES_DIR, 'cashfree-webhook.ts'),
 ]);
 
 function walk(dir: string): string[] {
