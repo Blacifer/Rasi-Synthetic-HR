@@ -526,7 +526,7 @@ const hasData = agents.length > 0;
   const activeAgents = agents.filter((agent) => agent.status === 'active');
   const terminatedAgents = agents.filter((agent) => agent.status === 'terminated');
   const agentsWithoutBudget = agents.filter((agent) => Number(agent.budget_limit || 0) <= 0);
-  const openIncidents = incidents.filter((incident) => ['open', 'investigating'].includes((incident.status || '').toLowerCase()));
+  const openIncidents = incidents.filter((incident) => ['open', 'investigating'].includes((incident.status || '').toLowerCase()) && incident.source !== 'manual_test');
   const severeIncidents = openIncidents.filter((incident) => ['high', 'critical'].includes((incident.severity || '').toLowerCase()));
   const avgRiskScore = Math.round(agents.reduce((sum, agent) => sum + agent.risk_score, 0) / Math.max(agents.length, 1));
   const totalConversations = agents.reduce((sum, agent) => sum + agent.conversations, 0);
@@ -1153,7 +1153,7 @@ const hasData = agents.length > 0;
                     />
                     <HeatTooltip
                       cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                      contentStyle={{ background: '#0f172a', border: '1px solid rgba(100,116,139,0.3)', borderRadius: 8, fontSize: 12 }}
+                      contentStyle={{ background: '#0f172a', border: '1px solid rgba(100,116,139,0.3)', borderRadius: 8, fontSize: 12, color: '#e2e8f0' }}
                       formatter={(value: number, _: string, entry: any) => [
                         `${value} incident${value !== 1 ? 's' : ''}`,
                         `${entry?.payload?.hour}:00`,

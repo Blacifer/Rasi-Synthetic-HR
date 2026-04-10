@@ -106,7 +106,7 @@ const writeAgentPublishMetadata = (agent: any, updates: AgentPublishMetadata) =>
   const metadata = agent?.metadata && typeof agent.metadata === 'object' ? { ...agent.metadata } : {};
   const current = readAgentPublishMetadata(agent);
   metadata.publish = {
-    publish_status: updates.publish_status ?? current.publish_status ?? 'not_live',
+    publish_status: updates.publish_status ?? current.publish_status ?? null,
     primary_pack: updates.primary_pack !== undefined ? updates.primary_pack : (current.primary_pack ?? null),
     integration_ids: updates.integration_ids ?? current.integration_ids ?? [],
   };
@@ -197,7 +197,8 @@ const enrichAgentRecords = async (
 
     const hasActiveDeployment = deployedAgentIds.has(agent.id);
     const hasDirectDeploymentMethod = ['website', 'api', 'terminal'].includes(String(publish.deploy_method || ''));
-    const publishStatus = publish.publish_status
+    const explicitStatus = publish.publish_status && publish.publish_status !== 'not_live' ? publish.publish_status : null;
+    const publishStatus = explicitStatus
       || ((hasActiveDeployment || hasDirectDeploymentMethod) ? 'live'
         : connectedTargets.length === 0 ? 'not_live'
         : connectedTargets.some((t) => t.status === 'connected') ? 'live' : 'ready');
@@ -1495,7 +1496,7 @@ router.post('/agents/:id/portal', requirePermission('agents.update'), async (req
 
     const created = await supabaseRestAsUser(jwt, 'agent_portal_links', '', {
       method: 'POST',
-      body: { organization_id: orgId, agent_id: id, created_by: req.user?.id || null },
+      body: { organization_id: orgId, agent_id: id, created_by: null },
       headers: { 'Prefer': 'return=representation' },
     });
 
