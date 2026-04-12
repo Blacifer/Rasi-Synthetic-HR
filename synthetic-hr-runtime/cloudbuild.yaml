@@ -1,0 +1,44 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/rasi/synthetic-hr-runtime:$COMMIT_SHA'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/rasi/synthetic-hr-runtime:latest'
+      - '.'
+    dir: 'synthetic-hr-runtime'
+
+  # Push the image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/rasi/synthetic-hr-runtime'
+
+  # Deploy to Cloud Run (always-on, min 1 instance — runtime must poll continuously)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'synthetic-hr-runtime'
+      - '--image=asia-south1-docker.pkg.dev/$PROJECT_ID/rasi/synthetic-hr-runtime:$COMMIT_SHA'
+      - '--region=asia-south1'
+      - '--platform=managed'
+      - '--no-allow-unauthenticated'
+      - '--port=3002'
+      - '--memory=256Mi'
+      - '--cpu=1'
+      - '--min-instances=1'
+      - '--max-instances=3'
+      - '--timeout=3600'
+      - '--set-secrets=SYNTHETICHR_CONTROL_PLANE_URL=SYNTHETICHR_CONTROL_PLANE_URL:latest,SYNTHETICHR_API_KEY=SYNTHETICHR_API_KEY:latest,SYNTHETICHR_RUNTIME_ID=SYNTHETICHR_RUNTIME_ID:latest,SYNTHETICHR_MODEL=SYNTHETICHR_MODEL:latest'
+
+images:
+  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/rasi/synthetic-hr-runtime:$COMMIT_SHA'
+  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/rasi/synthetic-hr-runtime:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

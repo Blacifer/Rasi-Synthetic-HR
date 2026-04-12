@@ -1,0 +1,14 @@
+.gcloudignore
+.git
+.gitignore
+node_modules
+dist
+logs
+*.log
+.env
+.env.*
+!.env.example
+*.test.ts
+*.spec.ts
+coverage
+.DS_Store
