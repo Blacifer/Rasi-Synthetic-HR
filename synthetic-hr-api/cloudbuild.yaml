@@ -31,10 +31,14 @@ steps:
       - '--port=3001'
       - '--memory=512Mi'
       - '--cpu=1'
+      - '--cpu-boost'
       - '--min-instances=1'
       - '--max-instances=10'
       - '--timeout=60'
-      - '--set-secrets=NODE_ENV=NODE_ENV:latest,SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_ANON_KEY=SUPABASE_ANON_KEY:latest,SUPABASE_SERVICE_KEY=SUPABASE_SERVICE_KEY:latest,JWT_SECRET=JWT_SECRET:latest,FRONTEND_URL=FRONTEND_URL:latest,API_URL=API_URL:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,DATABASE_URL=DATABASE_URL:latest,INTEGRATIONS_ENCRYPTION_KEY=INTEGRATIONS_ENCRYPTION_KEY:latest'
+      - '--concurrency=80'
+      - '--service-account=zapheit-api@$PROJECT_ID.iam.gserviceaccount.com'
+      - >-
+        --set-secrets=NODE_ENV=NODE_ENV:latest,SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_ANON_KEY=SUPABASE_ANON_KEY:latest,SUPABASE_SERVICE_KEY=SUPABASE_SERVICE_KEY:latest,JWT_SECRET=JWT_SECRET:latest,FRONTEND_URL=FRONTEND_URL:latest,API_URL=API_URL:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,DATABASE_URL=DATABASE_URL:latest,INTEGRATIONS_ENCRYPTION_KEY=INTEGRATIONS_ENCRYPTION_KEY:latest,ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,ERASURE_SIGNING_SALT=ERASURE_SIGNING_SALT:latest,RESEND_API_KEY=RESEND_API_KEY:latest,EMAIL_FROM=EMAIL_FROM:latest
 
 images:
   - 'asia-south1-docker.pkg.dev/$PROJECT_ID/rasi/synthetic-hr-api:$COMMIT_SHA'

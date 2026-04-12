@@ -5,7 +5,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
 import dotenv from 'dotenv';
-import rateLimit from 'express-rate-limit';
+import { buildRateLimiter, warmUpHttpRateLimiter } from './lib/http-rate-limiter';
 
 import apiRoutes from './routes/api';
 import authRoutes from './routes/auth';
@@ -61,6 +61,7 @@ import { startRedTeamScheduler } from './lib/redteam-scheduler';
 import { startDpdpRetentionWorker } from './lib/dpdp-retention-worker';
 import { startFilingScheduler } from './lib/filing-scheduler';
 import { runSchemaCompatibilityCheck } from './lib/schema-compat';
+import { supabaseRestAsService, eq } from './lib/supabase-rest';
 
 dotenv.config();
 validateEnvironment();
@@ -106,11 +107,10 @@ function jwtSubFromReq(req: express.Request): string {
   return `ip:${req.ip || 'unknown'}`;
 }
 
-const apiLimiter = rateLimit({
+const apiLimiter = buildRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 1000,
-  standardHeaders: true,
-  legacyHeaders: false,
+  keyPrefix: 'rl:http:api:',
   keyGenerator: jwtSubFromReq,
   message: {
     success: false,
@@ -118,12 +118,11 @@ const apiLimiter = rateLimit({
   },
 });
 
-const writeLimiter = rateLimit({
+const writeLimiter = buildRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => ['GET', 'HEAD', 'OPTIONS'].includes(req.method),
+  keyPrefix: 'rl:http:write:',
+  skip: (req: express.Request) => ['GET', 'HEAD', 'OPTIONS'].includes(req.method),
   keyGenerator: jwtSubFromReq,
   message: {
     success: false,
@@ -131,12 +130,11 @@ const writeLimiter = rateLimit({
   },
 });
 
-const authWriteLimiter = rateLimit({
+const authWriteLimiter = buildRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => ['GET', 'HEAD', 'OPTIONS'].includes(req.method),
+  keyPrefix: 'rl:http:auth:',
+  skip: (req: express.Request) => ['GET', 'HEAD', 'OPTIONS'].includes(req.method),
   message: {
     success: false,
     error: 'Too many authentication attempts. Please try again later.',
@@ -337,9 +335,8 @@ app.get('/health', async (req, res) => {
   };
 
   const build = {
-    railwayGitSha: process.env.RAILWAY_GIT_COMMIT_SHA || null,
-    githubSha: process.env.GITHUB_SHA || null,
-    vercelGitSha: process.env.VERCEL_GIT_COMMIT_SHA || null,
+    sha: process.env.K_REVISION || process.env.GITHUB_SHA || process.env.VERCEL_GIT_COMMIT_SHA || null,
+    service: process.env.K_SERVICE || null,
   };
 
   const response = {
@@ -416,7 +413,7 @@ app.use((req, res, next) => {
   if (req.path === '/api/runtimes/heartbeat' && req.method === 'POST') {
     return next();
   }
-  if (req.path.startsWith('/api/runtimes/jobs/')) {
+  if (req.path.startsWith('/api/runtimes/jobs/') || req.path.startsWith('/api/v1/runtimes/jobs/')) {
     return next();
   }
 
@@ -478,6 +475,39 @@ app.use('/api/compliance/dpdp', dpdpRoutes);
 app.use('/api/compliance/filings', filingsRoutes);
 app.use('/admin', adminRoutes);
 
+// /api/v1/ aliases — stable versioned surface, backwards-compatible with /api/
+// Existing clients continue to use /api/* without change.
+app.use('/api/v1', apiRoutes);
+app.use('/api/v1', costsRoutes);
+app.use('/api/v1', performanceReviewsRoutes);
+app.use('/api/v1', apiKeysRoutes);
+app.use('/api/v1/runtimes', runtimesRoutes);
+app.use('/api/v1/jobs', jobsRoutes);
+app.use('/api/v1/work-items', workItemsRoutes);
+app.use('/api/v1/playbooks', playbooksRoutes);
+app.use('/api/v1/action-policies', actionPoliciesRoutes);
+app.use('/api/v1/approvals', approvalsRoutes);
+app.use('/api/v1/rules', rulesRoutes);
+app.use('/api/v1/recruitment', recruitmentRoutes);
+app.use('/api/v1/ctc', ctcRoutes);
+app.use('/api/v1/hubs', hubsRoutes);
+app.use('/api/v1/trust', trustRoutes);
+app.use('/api/v1', tracesRoutes);
+app.use('/api/v1', escalationsRoutes);
+app.use('/api/v1', invitesRoutes);
+if (connectorsEnabled) {
+  app.use('/api/v1/connectors', connectorsRoutes);
+}
+app.use('/api/v1/integrations', integrationsRoutes);
+app.use('/api/v1/marketplace', marketplaceRoutes);
+app.use('/api/v1', paymentsRoutes);
+app.use('/api/v1', webhooksRoutes);
+app.use('/api/v1/metrics', metricsRoutes);
+app.use('/api/v1/policies', policiesRoutes);
+app.use('/api/v1/compliance', complianceRoutes);
+app.use('/api/v1/compliance/dpdp', dpdpRoutes);
+app.use('/api/v1/compliance/filings', filingsRoutes);
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
@@ -505,6 +535,8 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 async function startServer() {
   await runSchemaCompatibilityCheck();
+  // Warm up Redis connection for distributed HTTP rate limiting (no-op if REDIS_URL is absent)
+  await warmUpHttpRateLimiter();
 
   try {
     // Warm up idempotency cache from database on startup
@@ -524,10 +556,36 @@ async function startServer() {
   startIntegrationTokenRefreshScheduler();
 
   // Drain the connector retry queue (circuit-breaker retries).
-startRetryWorker();
-startRedTeamScheduler();
-startDpdpRetentionWorker();
-startFilingScheduler();
+  startRetryWorker();
+  startRedTeamScheduler();
+  startDpdpRetentionWorker();
+  startFilingScheduler();
+
+  // Job reaper: every 2 minutes, return stale claimed jobs to the queue so
+  // another runtime can pick them up if the original runtime crashed.
+  const JOB_CLAIM_TIMEOUT_MS = 5 * 60 * 1000; // must match runtimes.ts constant
+  setInterval(async () => {
+    try {
+      const staleThreshold = new Date(Date.now() - JOB_CLAIM_TIMEOUT_MS).toISOString();
+      const q = new URLSearchParams();
+      q.set('status', eq('running'));
+      q.set('claimed_at', `lt.${staleThreshold}`);
+      q.set('claimed_by', 'not.is.null');
+      const stale = (await supabaseRestAsService('agent_jobs', q)) as any[];
+      for (const job of stale || []) {
+        const pq = new URLSearchParams();
+        pq.set('id', eq(job.id));
+        pq.set('status', eq('running'));
+        await supabaseRestAsService('agent_jobs', pq, {
+          method: 'PATCH',
+          body: { status: 'queued', claimed_by: null, claimed_at: null, started_at: null },
+        }).catch((err: any) => logger.warn('job-reaper: failed to reset job', { jobId: job.id, err: err?.message }));
+        logger.info('job-reaper: returned stale job to queue', { jobId: job.id, claimedBy: job.claimed_by });
+      }
+    } catch (err: any) {
+      logger.error('job-reaper sweep failed', { error: err?.message });
+    }
+  }, 2 * 60 * 1000);
 
   const server = app.listen(PORT, () => {
     logger.info('Synthetic HR API server started', {

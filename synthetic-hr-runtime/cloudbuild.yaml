@@ -31,9 +31,12 @@ steps:
       - '--port=3002'
       - '--memory=256Mi'
       - '--cpu=1'
+      - '--cpu-boost'
       - '--min-instances=1'
       - '--max-instances=3'
       - '--timeout=3600'
+      - '--concurrency=1'
+      - '--service-account=zapheit-runtime@$PROJECT_ID.iam.gserviceaccount.com'
       - '--set-secrets=SYNTHETICHR_CONTROL_PLANE_URL=SYNTHETICHR_CONTROL_PLANE_URL:latest,SYNTHETICHR_API_KEY=SYNTHETICHR_API_KEY:latest,SYNTHETICHR_RUNTIME_ID=SYNTHETICHR_RUNTIME_ID:latest,SYNTHETICHR_MODEL=SYNTHETICHR_MODEL:latest'
 
 images:
