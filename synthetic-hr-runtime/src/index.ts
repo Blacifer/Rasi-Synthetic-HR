@@ -59,7 +59,70 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function loadRuntimeSecret(): string {
+// ── GCP Secret Manager helpers (for Cloud Run stateless persistence) ─────────
+
+const GCP_SECRET_NAME = 'SYNTHETICHR_RUNTIME_SECRET';
+
+async function gcpMetadataFetch(path: string): Promise<string> {
+  const res = await fetch(`http://metadata.google.internal/computeMetadata/v1/${path}`, {
+    headers: { 'Metadata-Flavor': 'Google' },
+    signal: AbortSignal.timeout(3000),
+  });
+  if (!res.ok) throw new Error(`Metadata ${path} → ${res.status}`);
+  return res.text();
+}
+
+async function gcpGetTokenAndProject(): Promise<{ token: string; project: string }> {
+  const [tokenRaw, project] = await Promise.all([
+    gcpMetadataFetch('instance/service-accounts/default/token'),
+    gcpMetadataFetch('project/project-id'),
+  ]);
+  const token = (JSON.parse(tokenRaw) as { access_token: string }).access_token;
+  return { token, project };
+}
+
+async function loadRuntimeSecretFromGCP(): Promise<string> {
+  try {
+    const { token, project } = await gcpGetTokenAndProject();
+    const url = `https://secretmanager.googleapis.com/v1/projects/${project}/secrets/${GCP_SECRET_NAME}/versions/latest:access`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return '';
+    const data = await res.json() as { payload?: { data?: string } };
+    if (!data?.payload?.data) return '';
+    const value = Buffer.from(data.payload.data, 'base64').toString('utf8').trim();
+    return value;
+  } catch {
+    return '';
+  }
+}
+
+async function persistRuntimeSecretToGCP(secret: string): Promise<void> {
+  try {
+    const { token, project } = await gcpGetTokenAndProject();
+    const url = `https://secretmanager.googleapis.com/v1/projects/${project}/secrets/${GCP_SECRET_NAME}/versions`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payload: { data: Buffer.from(secret, 'utf8').toString('base64') } }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      console.log('[runtime] runtime secret persisted to Secret Manager');
+    } else {
+      const err = await res.text();
+      console.warn(`[runtime] Secret Manager write failed (${res.status}): ${err}`);
+    }
+  } catch (err: any) {
+    console.warn(`[runtime] could not persist to Secret Manager: ${err?.message || String(err)}`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function loadRuntimeSecret(): Promise<string> {
   if (RUNTIME_SECRET_ENV) return RUNTIME_SECRET_ENV;
   if (RUNTIME_SECRET_FILE) {
     try {
@@ -71,7 +134,8 @@ function loadRuntimeSecret(): string {
       // ignore
     }
   }
-  return '';
+  // Cloud Run: dynamically read from Secret Manager (survives container restarts)
+  return loadRuntimeSecretFromGCP();
 }
 
 function persistRuntimeSecret(secret: string) {
@@ -106,7 +170,7 @@ function signRuntimeJwt(): string {
 }
 
 async function enroll(): Promise<void> {
-  const existing = loadRuntimeSecret();
+  const existing = await loadRuntimeSecret();
   if (existing) {
     runtimeSecret = existing;
     console.log('[runtime] using existing runtime secret (skipping enrollment)');
@@ -139,6 +203,7 @@ async function enroll(): Promise<void> {
   runtimeSecret = payload.runtime_secret;
   organizationId = payload.organization_id;
   persistRuntimeSecret(runtimeSecret);
+  await persistRuntimeSecretToGCP(runtimeSecret);
   console.log(`[runtime] enrolled runtime_id=${payload.runtime_id} org_id=${payload.organization_id}`);
 }
 
