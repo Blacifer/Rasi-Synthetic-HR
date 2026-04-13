@@ -393,7 +393,7 @@ export default function RuntimeWorkersPage() {
     const res = await api.runtimes.rotateEnrollment(id);
     setRotating(null);
     if (!res.success || !res.data) { toast.error(res.error || 'Rotation failed'); return; }
-    const d = res.data as any;
+    const d = res as any;
     setEnrollment({ token: d.enrollment_token, expires: d.enrollment_expires_at, name: w?.name || id, runtimeId: id });
     toast.success('Enrollment token rotated.');
   };
