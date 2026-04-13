@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # deploy/gcp/secrets.sh
 # Populate all Secret Manager secrets for Zapheit production.
-# Edit the values below, then run once:
+# Edit the values below (copy from Railway Variables), then run:
 #   export PROJECT_ID=rasisynthetichr
 #   bash deploy/gcp/secrets.sh
 #
@@ -34,53 +34,93 @@ echo "  Project: ${PROJECT_ID}"
 echo ""
 
 # ── Core ──────────────────────────────────────────────────────────────────────
-secret NODE_ENV            "production"
+secret NODE_ENV                     "production"
+secret PORT                         "3001"
 
 # ── Supabase ──────────────────────────────────────────────────────────────────
-# Get these from: Supabase Dashboard → Project Settings → API
-secret SUPABASE_URL        "https://XXXX.supabase.co"
-secret SUPABASE_ANON_KEY   "eyJ..."
-secret SUPABASE_SERVICE_KEY "eyJ..."
+secret SUPABASE_URL                 "COPY_FROM_RAILWAY"
+secret SUPABASE_ANON_KEY            "COPY_FROM_RAILWAY"
+secret SUPABASE_SERVICE_KEY         "COPY_FROM_RAILWAY"
+secret JWT_SECRET                   "COPY_FROM_RAILWAY"
+secret DATABASE_URL                 "COPY_FROM_RAILWAY"
 
-# Get from: Supabase Dashboard → Project Settings → API → JWT Settings → JWT Secret
-secret JWT_SECRET          "your-supabase-jwt-secret"
+# ── URLs ──────────────────────────────────────────────────────────────────────
+secret FRONTEND_URL                 "COPY_FROM_RAILWAY"
+# Leave API_URL as placeholder — update AFTER first deploy with the Cloud Run URL
+secret API_URL                      "COPY_FROM_RAILWAY"
+secret CORS_ALLOWED_ORIGINS         "COPY_FROM_RAILWAY"
 
-# Get from: Supabase Dashboard → Project Settings → Database → Connection string (URI mode)
-secret DATABASE_URL        "postgresql://postgres:PASSWORD@db.XXXX.supabase.co:5432/postgres"
-
-# ── URLs (update API_URL after first deploy) ──────────────────────────────────
-secret FRONTEND_URL        "https://app.zapheit.com"
-secret API_URL             "https://synthetic-hr-api-XXXX-el.a.run.app"  # update after first deploy
-
-# ── Encryption ────────────────────────────────────────────────────────────────
-# Generate with: openssl rand -hex 32
-secret INTEGRATIONS_ENCRYPTION_KEY "$(openssl rand -hex 32)"
-
-# Generate with: openssl rand -hex 16
-secret ERASURE_SIGNING_SALT        "$(openssl rand -hex 16)"
+# ── Encryption (CRITICAL: copy exact values from Railway — do NOT change) ─────
+secret INTEGRATIONS_ENCRYPTION_KEY  "COPY_FROM_RAILWAY"
+secret ERASURE_SIGNING_SALT         "COPY_FROM_RAILWAY"
 
 # ── AI Providers ──────────────────────────────────────────────────────────────
-# Required: at least OpenAI
-secret OPENAI_API_KEY      "sk-..."
+secret OPENAI_API_KEY               "COPY_FROM_RAILWAY"
+secret ANTHROPIC_API_KEY            "COPY_FROM_RAILWAY"
+secret RASI_OPENAI_API_KEY          "COPY_FROM_RAILWAY"
+secret RASI_ANTHROPIC_API_KEY       "COPY_FROM_RAILWAY"
+secret RASI_OPENROUTER_API_KEY      "COPY_FROM_RAILWAY"
 
-# Optional but recommended
-secret ANTHROPIC_API_KEY   "sk-ant-..."
-# secret OPENROUTER_API_KEY  "sk-or-..."
+# ── Email ─────────────────────────────────────────────────────────────────────
+secret EMAIL_PROVIDER               "COPY_FROM_RAILWAY"
+secret EMAIL_FROM                   "COPY_FROM_RAILWAY"
+secret ALERT_EMAIL_TO               "COPY_FROM_RAILWAY"
+secret RESEND_API_KEY               "COPY_FROM_RAILWAY"
 
-# ── Email (Resend) ────────────────────────────────────────────────────────────
-# Sign up at resend.com — free tier covers transactional email
-secret RESEND_API_KEY      "re_..."
-secret EMAIL_FROM          "no-reply@zapheit.com"
+# ── Payments (Cashfree — add after KYC verified) ──────────────────────────────
+secret CASHFREE_CLIENT_ID           "COPY_FROM_CASHFREE_DASHBOARD"
+secret CASHFREE_CLIENT_SECRET       "COPY_FROM_CASHFREE_DASHBOARD"
+secret CASHFREE_API_VERSION         "2023-08-01"
+secret CASHFREE_ENVIRONMENT         "production"
+secret CASHFREE_WEBHOOK_SECRET      "COPY_FROM_CASHFREE_DASHBOARD"
 
-# ── Runtime worker ────────────────────────────────────────────────────────────
-# Fill these AFTER first deploy of the API and registering a runtime in the dashboard
-secret SYNTHETICHR_CONTROL_PLANE_URL "https://synthetic-hr-api-XXXX-el.a.run.app"
-secret SYNTHETICHR_API_KEY           "your-runtime-api-key"
-secret SYNTHETICHR_RUNTIME_ID        "your-runtime-uuid"
+# ── OAuth Integrations ────────────────────────────────────────────────────────
+secret GOOGLE_CLIENT_ID             "COPY_FROM_RAILWAY"
+secret GOOGLE_CLIENT_SECRET         "COPY_FROM_RAILWAY"
+secret SLACK_CLIENT_ID              "COPY_FROM_RAILWAY"
+secret SLACK_CLIENT_SECRET          "COPY_FROM_RAILWAY"
+secret SLACK_SIGNING_SECRET         "COPY_FROM_RAILWAY"
+secret MICROSOFT_CLIENT_ID          "COPY_FROM_RAILWAY"
+secret MICROSOFT_CLIENT_SECRET      "COPY_FROM_RAILWAY"
+secret ZOHO_CLIENT_ID               "COPY_FROM_RAILWAY"
+secret ZOHO_CLIENT_SECRET           "COPY_FROM_RAILWAY"
+secret LINKEDIN_CLIENT_ID           "COPY_FROM_RAILWAY"
+secret LINKEDIN_CLIENT_SECRET       "COPY_FROM_RAILWAY"
+secret SALESFORCE_CLIENT_ID         "COPY_FROM_RAILWAY"
+secret SALESFORCE_CLIENT_SECRET     "COPY_FROM_RAILWAY"
+secret INTERCOM_CLIENT_ID           "COPY_FROM_RAILWAY"
+secret INTERCOM_CLIENT_SECRET       "COPY_FROM_RAILWAY"
+secret QUICKBOOKS_CLIENT_ID         "COPY_FROM_RAILWAY"
+secret QUICKBOOKS_CLIENT_SECRET     "COPY_FROM_RAILWAY"
+secret DEEL_CLIENT_ID               "COPY_FROM_RAILWAY"
+secret DEEL_CLIENT_SECRET           "COPY_FROM_RAILWAY"
+secret GUSTO_CLIENT_ID              "COPY_FROM_RAILWAY"
+secret GUSTO_CLIENT_SECRET          "COPY_FROM_RAILWAY"
+secret FLOCK_CLIENT_ID              "COPY_FROM_RAILWAY"
+secret FLOCK_CLIENT_SECRET          "COPY_FROM_RAILWAY"
+secret HUBSPOT_CLIENT_ID            "COPY_FROM_RAILWAY"
+secret HUBSPOT_CLIENT_SECRET        "COPY_FROM_RAILWAY"
+
+# ── Feature Flags ─────────────────────────────────────────────────────────────
+secret CONNECTORS_ENABLED           "COPY_FROM_RAILWAY"
+secret CROSS_BORDER_PII_MASKING     "COPY_FROM_RAILWAY"
+secret SCHEMA_COMPAT_STRICT_OPTIONAL "COPY_FROM_RAILWAY"
+secret REDTEAM_INTERVAL_MINUTES     "COPY_FROM_RAILWAY"
+secret RECRUITMENT_SCORING_MODEL    "COPY_FROM_RAILWAY"
+
+# ── Observability ─────────────────────────────────────────────────────────────
+secret OTEL_ENABLED                 "COPY_FROM_RAILWAY"
+secret OTEL_EXPORTER_OTLP_ENDPOINT  "COPY_FROM_RAILWAY"
+secret OTEL_EXPORTER_OTLP_TIMEOUT   "COPY_FROM_RAILWAY"
+secret OTEL_EXPORTER_OTLP_INSECURE  "COPY_FROM_RAILWAY"
+secret OTEL_TRACES_EXPORTER         "COPY_FROM_RAILWAY"
+secret OTEL_METRICS_EXPORTER        "COPY_FROM_RAILWAY"
+
+# ── Runtime worker (fill AFTER first API deploy) ──────────────────────────────
+secret SYNTHETICHR_CONTROL_PLANE_URL "FILL_AFTER_FIRST_DEPLOY"
+secret SYNTHETICHR_API_KEY           "FILL_AFTER_FIRST_DEPLOY"
+secret SYNTHETICHR_RUNTIME_ID        "FILL_AFTER_FIRST_DEPLOY"
 secret SYNTHETICHR_MODEL             "gpt-4o"
 
 echo ""
 echo "=== Secrets setup complete ==="
-echo ""
-echo "IMPORTANT: Edit this file first and replace all placeholder values!"
-echo "If you see secrets with placeholder values above, run this script again after editing."
