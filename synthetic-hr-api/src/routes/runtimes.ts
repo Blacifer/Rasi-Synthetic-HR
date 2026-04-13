@@ -376,15 +376,23 @@ router.post('/heartbeat', requireRuntimeAuth(), async (req: Request, res: Respon
 });
 
 // Runtime pulls queued jobs (poll-based)
+// Job claim visibility timeout: jobs claimed but not heartbeated for this long are returned to queue by the reaper.
+const JOB_CLAIM_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
 router.get('/jobs/poll', requireRuntimeAuth(), async (req: Request, res: Response) => {
   try {
     const ctx = (req as any).runtime as RuntimeAuthContext;
     const limit = Math.max(1, Math.min(20, Number(req.query.limit || 5)));
 
+    // Atomic claim: only pick up jobs that are either unclaimed OR whose claim has
+    // expired (the claiming runtime crashed without completing or heartbeating).
+    const staleThreshold = new Date(Date.now() - JOB_CLAIM_TIMEOUT_MS).toISOString();
+
     const query = new URLSearchParams();
     query.set('organization_id', eq(ctx.organization_id));
     query.set('runtime_instance_id', eq(ctx.runtime_id));
     query.set('status', eq('queued'));
+    query.set('or', `(claimed_by.is.null,claimed_at.lt.${staleThreshold})`);
     query.set('order', 'created_at.asc');
     query.set('limit', String(limit));
     const rows = (await supabaseRestAsService('agent_jobs', query)) as any[];
@@ -393,6 +401,7 @@ router.get('/jobs/poll', requireRuntimeAuth(), async (req: Request, res: Respons
     const now = nowIso();
 
     for (const job of rows || []) {
+      // Conditional PATCH: only succeeds if status is still 'queued' — prevents double-dispatch
       const claimQuery = new URLSearchParams();
       claimQuery.set('id', eq(job.id));
       claimQuery.set('status', eq('queued'));
@@ -403,6 +412,8 @@ router.get('/jobs/poll', requireRuntimeAuth(), async (req: Request, res: Respons
         body: {
           status: 'running',
           started_at: now,
+          claimed_by: ctx.runtime_id,
+          claimed_at: now,
         },
       })) as any[];
 
@@ -412,6 +423,31 @@ router.get('/jobs/poll', requireRuntimeAuth(), async (req: Request, res: Respons
     }
 
     return res.json({ success: true, data: claimed, count: claimed.length });
+  } catch (err: any) {
+    return safeError(res, err);
+  }
+});
+
+// Runtime heartbeat for an in-progress job — refreshes claimed_at to prevent reaper reclaim.
+router.post('/jobs/:id/heartbeat', requireRuntimeAuth(), async (req: Request, res: Response) => {
+  try {
+    const ctx = (req as any).runtime as RuntimeAuthContext;
+    const { id } = req.params;
+
+    const patchQuery = new URLSearchParams();
+    patchQuery.set('id', eq(id));
+    patchQuery.set('runtime_instance_id', eq(ctx.runtime_id));
+    patchQuery.set('status', eq('running'));
+
+    const patched = (await supabaseRestAsService('agent_jobs', patchQuery, {
+      method: 'PATCH',
+      body: { claimed_at: nowIso() },
+    })) as any[];
+
+    if (!patched?.length) {
+      return res.status(404).json({ success: false, error: 'Job not found, not running, or not owned by this runtime' });
+    }
+    return res.json({ success: true });
   } catch (err: any) {
     return safeError(res, err);
   }

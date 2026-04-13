@@ -237,21 +237,88 @@ async function flagOverdueRequests(): Promise<number> {
  */
 async function tick(): Promise<void> {
   try {
-    const [expiredCount, purgedCount, overdueCount] = await Promise.all([
+    const [expiredCount, purgedCount, overdueCount, warnedCount] = await Promise.all([
       expireConsents(),
       enforceRetentionPolicies(),
       flagOverdueRequests(),
+      warnExpiringConsents(),
     ]);
 
-    if (expiredCount > 0 || purgedCount > 0 || overdueCount > 0) {
+    if (expiredCount > 0 || purgedCount > 0 || overdueCount > 0 || warnedCount > 0) {
       logger.info('[dpdp-ttl] Cycle completed', {
         consents_expired: expiredCount,
         retention_purges: purgedCount,
         requests_escalated: overdueCount,
+        expiry_warnings: warnedCount,
       });
     }
   } catch (err: any) {
     logger.error('[dpdp-ttl] Tick failed', { error: err?.message });
+  }
+}
+
+/**
+ * Step 4: Warn about consents expiring within 30 days.
+ * Logs a consent_expiry_warning compliance event for each one.
+ * Rate-limited to once per 24h via module-level timestamp to avoid re-firing every 15 min.
+ */
+let lastWarnAt = 0;
+
+async function warnExpiringConsents(): Promise<number> {
+  const now = Date.now();
+  // Only run once per 24 hours
+  if (now - lastWarnAt < 24 * 60 * 60 * 1000) return 0;
+  lastWarnAt = now;
+
+  try {
+    const nowIso = new Date(now).toISOString();
+    const in30d = new Date(now + 30 * 86400000).toISOString();
+
+    // Consents expiring between now and now+30d that are still active
+    const params = new URLSearchParams();
+    params.set('status', eq('active'));
+    params.set('select', 'id,organization_id,purpose,principal_type,expires_at');
+    params.append('expires_at', `gt.${nowIso}`);
+    params.append('expires_at', `lt.${in30d}`);
+    const expiring = (await supabaseRestAsService(
+      'consent_records',
+      params,
+    )) as any[] | null;
+
+    if (!expiring?.length) return 0;
+
+    for (const consent of expiring) {
+      const daysLeft = Math.ceil((new Date(consent.expires_at).getTime() - now) / 86400000);
+      try {
+        await supabaseRestAsService('compliance_events', new URLSearchParams(), {
+          method: 'POST',
+          body: {
+            organization_id: consent.organization_id,
+            event_type: 'consent_change',
+            severity: daysLeft <= 7 ? 'warning' : 'info',
+            resource_type: 'consent_record',
+            resource_id: consent.id,
+            details: {
+              action: 'consent_expiry_warning',
+              purpose: consent.purpose,
+              principal_type: consent.principal_type,
+              expires_at: consent.expires_at,
+              days_remaining: daysLeft,
+            },
+            remediation_status: 'in_progress',
+            created_at: nowIso,
+          },
+        });
+      } catch (err: any) {
+        logger.warn('[dpdp-ttl] Failed to log expiry warning', { id: consent.id, error: err?.message });
+      }
+    }
+
+    logger.info('[dpdp-ttl] Consent expiry warnings logged', { count: expiring.length });
+    return expiring.length;
+  } catch (err: any) {
+    logger.error('[dpdp-ttl] warnExpiringConsents failed', { error: err?.message });
+    return 0;
   }
 }
 

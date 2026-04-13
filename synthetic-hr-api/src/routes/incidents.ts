@@ -12,6 +12,7 @@ import { notifyAlertChannels } from '../lib/alert-channels';
 import { buildFrontendUrl } from '../lib/frontend-url';
 import { incidentDetection } from '../services/incident-detection';
 import { errorResponse, getOrgId, getUserJwt, safeLimit } from '../lib/route-helpers';
+import { parseCursorParams, buildCursorResponse, buildCursorFilter } from '../lib/pagination';
 
 const router = express.Router();
 
@@ -41,7 +42,7 @@ export function pushIncidentEvent(orgId: string, incident: Record<string, unknow
 // Get incidents
 router.get('/incidents', requirePermission('incidents.read'), async (req: Request, res: Response) => {
   try {
-    const { agent_id, severity, status, limit = 50 } = req.query;
+    const { agent_id, severity, status } = req.query;
     const orgId = getOrgId(req);
     if (!orgId) {
       return errorResponse(res, new Error('Organization not found'), 400);
@@ -49,19 +50,24 @@ router.get('/incidents', requirePermission('incidents.read'), async (req: Reques
 
     logger.info('Fetching incidents', { org_id: orgId, agent_id, severity, status });
 
+    const { limit, cursorId, cursorCreatedAt } = parseCursorParams(req);
+    const cursorFilter = buildCursorFilter(cursorId, cursorCreatedAt);
+
     const incidentsQuery = new URLSearchParams();
     incidentsQuery.set('organization_id', eq(orgId));
-    incidentsQuery.set('order', 'created_at.desc');
-    incidentsQuery.set('limit', String(safeLimit(limit)));
+    incidentsQuery.set('order', 'created_at.desc,id.desc');
+    incidentsQuery.set('limit', String(limit + 1));
+    if (cursorFilter) incidentsQuery.set('or', cursorFilter);
     if (agent_id) incidentsQuery.set('agent_id', eq(String(agent_id)));
     if (severity) incidentsQuery.set('severity', eq(String(severity)));
     if (status) incidentsQuery.set('status', eq(String(status)));
 
-    const data = await supabaseRestAsUser(getUserJwt(req), 'incidents', incidentsQuery);
+    const rows = await supabaseRestAsUser(getUserJwt(req), 'incidents', incidentsQuery) as any[];
+    const paged = buildCursorResponse(rows || [], limit);
 
-    logger.info('Incidents fetched successfully', { count: data?.length, org_id: orgId });
+    logger.info('Incidents fetched successfully', { count: paged.data?.length, org_id: orgId });
 
-    res.json({ success: true, data, count: data?.length || 0 });
+    res.json({ success: true, data: paged.data, count: paged.data?.length || 0, next_cursor: paged.next_cursor, has_more: paged.has_more });
   } catch (error: any) {
     errorResponse(res, error);
   }

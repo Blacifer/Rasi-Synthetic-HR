@@ -1,4 +1,9 @@
 import OpenAI from 'openai';
+import { checkCircuitBreaker, recordSuccess, recordFailure } from '../lib/circuit-breaker';
+
+// Sentinel org ID used for system-level (provider) circuit breakers.
+// Not tied to any real organization — purely for provider health tracking.
+const SYSTEM_ORG = 'system';
 
 // OpenAI Pricing (per 1M tokens)
 export const OPENAI_PRICING = {
@@ -86,14 +91,29 @@ export class OpenAIService {
   ): Promise<AIResponse> {
     const startTime = Date.now();
 
-    const response = await this.client.chat.completions.create({
-      model,
-      messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
-      temperature: options.temperature ?? 0.7,
-      ...(typeof options.maxTokens === 'number' ? { max_tokens: options.maxTokens } : {}),
-      ...(options.tools && options.tools.length > 0 ? { tools: options.tools as any, tool_choice: 'auto' } : {}),
-    });
+    const circuitState = await checkCircuitBreaker(SYSTEM_ORG, 'openai');
+    if (circuitState === 'open') {
+      const err: any = new Error('OpenAI circuit breaker is open — provider temporarily unavailable');
+      err.status = 503;
+      err.code = 'CIRCUIT_OPEN';
+      throw err;
+    }
 
+    let response: Awaited<ReturnType<typeof this.client.chat.completions.create>>;
+    try {
+      response = await this.client.chat.completions.create({
+        model,
+        messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
+        temperature: options.temperature ?? 0.7,
+        ...(typeof options.maxTokens === 'number' ? { max_tokens: options.maxTokens } : {}),
+        ...(options.tools && options.tools.length > 0 ? { tools: options.tools as any, tool_choice: 'auto' } : {}),
+      });
+    } catch (err) {
+      void recordFailure(SYSTEM_ORG, 'openai');
+      throw err;
+    }
+
+    void recordSuccess(SYSTEM_ORG, 'openai');
     const latency = Date.now() - startTime;
     const completion = response.choices[0].message;
 
@@ -223,30 +243,46 @@ export class AnthropicService {
       ? AnthropicService.toAnthropicTools(options.tools)
       : undefined;
 
-    const response = await fetch(`${this.baseUrl.replace(/\/$/, '')}/v1/messages`, {
-      method: 'POST',
-      headers: {
-        'x-api-key': this.apiKey,
-        'anthropic-version': this.version,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        ...(systemPrompt ? { system: systemPrompt } : {}),
-        messages: anthropicMessages,
-        max_tokens: options.maxTokens ?? 4096,
-        temperature: options.temperature ?? 0.7,
-        ...(anthropicTools ? { tools: anthropicTools } : {}),
-      }),
-    });
+    const circuitState = await checkCircuitBreaker(SYSTEM_ORG, 'anthropic');
+    if (circuitState === 'open') {
+      const err: any = new Error('Anthropic circuit breaker is open — provider temporarily unavailable');
+      err.status = 503;
+      err.code = 'CIRCUIT_OPEN';
+      throw err;
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl.replace(/\/$/, '')}/v1/messages`, {
+        method: 'POST',
+        headers: {
+          'x-api-key': this.apiKey,
+          'anthropic-version': this.version,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          ...(systemPrompt ? { system: systemPrompt } : {}),
+          messages: anthropicMessages,
+          max_tokens: options.maxTokens ?? 4096,
+          temperature: options.temperature ?? 0.7,
+          ...(anthropicTools ? { tools: anthropicTools } : {}),
+        }),
+      });
+    } catch (fetchErr) {
+      void recordFailure(SYSTEM_ORG, 'anthropic');
+      throw fetchErr;
+    }
 
     if (!response.ok) {
+      void recordFailure(SYSTEM_ORG, 'anthropic');
       const body = await response.text();
       const err: any = new Error(`Anthropic messages API failed: ${response.status} ${body}`);
       err.status = response.status;
       err.responseBody = body;
       throw err;
     }
+    void recordSuccess(SYSTEM_ORG, 'anthropic');
 
     const data = (await response.json()) as any;
     const latency = Date.now() - startTime;

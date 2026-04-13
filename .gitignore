@@ -7,6 +7,9 @@
 .env.*.local
 *.env
 
+# Secrets scripts — never commit with real values
+deploy/gcp/secrets.sh
+
 # Dependencies
 node_modules/
 .pnpm-store/

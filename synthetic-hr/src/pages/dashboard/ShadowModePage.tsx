@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   ShieldAlert, Play, CheckCircle2, XCircle, Bot, Activity,
-  AlertTriangle, Filter, Target, Zap, Clock, RefreshCw, X, FileTerminal, Lightbulb
+  AlertTriangle, Filter, Target, Zap, Clock, RefreshCw, X, FileTerminal, Lightbulb,
+  GitCompare, Rocket, ArrowRight,
 } from 'lucide-react';
 import { toast } from '../../lib/toast';
 import { api } from '../../lib/api-client';
@@ -52,11 +53,18 @@ export default function ShadowModePage() {
   const [testProgress, setTestProgress] = useState(0);
   const [results, setResults] = useState<({ test: TestCase; passed: boolean; details: string; latency: number })[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<TestCategory | 'all'>('all');
+  const [historicalRuns, setHistoricalRuns] = useState<any[]>([]);
 
   const [showLogModal, setShowLogModal] = useState<TestCase | null>(null);
 
+  // Compare mode
+  const [compareMode, setCompareMode] = useState(false);
+  const [baselineAgentId, setBaselineAgentId] = useState<string | null>(null);
+  const [candidateAgentId, setCandidateAgentId] = useState<string | null>(null);
+  const [comparing, setComparing] = useState(false);
+  const [compareResult, setCompareResult] = useState<Awaited<ReturnType<typeof api.agents.shadowCompare>>['data'] | null>(null);
+
   useEffect(() => {
-    // Fetch real agents available in the org
     api.agents.getAll().then(res => {
       if (res.success && res.data) {
         setAgents(res.data);
@@ -64,6 +72,14 @@ export default function ShadowModePage() {
       }
     }).catch(() => { });
   }, []);
+
+  // Load historical test runs whenever the selected agent changes
+  useEffect(() => {
+    if (!selectedAgentId) return;
+    api.agents.getTestRuns(selectedAgentId).then(res => {
+      if (res.success && Array.isArray(res.data)) setHistoricalRuns(res.data);
+    }).catch(() => { });
+  }, [selectedAgentId]);
 
   const runTests = async () => {
     if (!selectedAgentId) return;
@@ -123,6 +139,22 @@ export default function ShadowModePage() {
     else toast.error(`Critical failures detected. Only ${score}% defense rate.`);
   };
 
+  const runCompare = async () => {
+    if (!baselineAgentId || !candidateAgentId) return;
+    setComparing(true);
+    setCompareResult(null);
+    const res = await api.agents.shadowCompare(baselineAgentId, candidateAgentId);
+    setComparing(false);
+    if (!res.success || !res.data) {
+      toast.error(res.error || 'Compare failed');
+      return;
+    }
+    setCompareResult(res.data);
+    const { summary } = res.data;
+    if (summary.promotionReady) toast.success(`Candidate ready to promote — ${summary.candidate.passRate}% pass rate`);
+    else toast.warning(`Not ready: ${summary.promotionBlockReason}`);
+  };
+
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
   const filteredResults = results.filter(r => selectedCategory === 'all' || r.test.category === selectedCategory);
 
@@ -135,12 +167,131 @@ export default function ShadowModePage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-white tracking-tight">Shadow Mode</h1>
-        <p className="text-slate-400 mt-1 text-sm">Pre-deployment adversarial testing & vulnerability scanning for your agents.</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Shadow Mode</h1>
+          <p className="text-slate-400 mt-1 text-sm">Pre-deployment adversarial testing & vulnerability scanning for your agents.</p>
+        </div>
+        <div className="flex items-center gap-1 bg-slate-800/60 border border-slate-700 rounded-xl p-1">
+          <button
+            onClick={() => { setCompareMode(false); setCompareResult(null); }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${!compareMode ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5" /> Single Agent
+          </button>
+          <button
+            onClick={() => { setCompareMode(true); if (!baselineAgentId && agents[0]) setBaselineAgentId(agents[0].id); if (!candidateAgentId && agents[1]) setCandidateAgentId(agents[1].id); }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${compareMode ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            <GitCompare className="w-3.5 h-3.5" /> Compare Agents
+          </button>
+        </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6">
+      {/* ===== COMPARE MODE ===== */}
+      {compareMode && (
+        <div className="space-y-5">
+          {/* Agent selectors */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[
+              { label: 'Baseline', value: baselineAgentId, set: setBaselineAgentId, color: 'border-blue-500/30 bg-blue-500/5' },
+              { label: 'Candidate', value: candidateAgentId, set: setCandidateAgentId, color: 'border-emerald-500/30 bg-emerald-500/5' },
+            ].map(({ label, value, set, color }) => (
+              <div key={label} className={`rounded-xl border p-4 ${color} space-y-2`}>
+                <div className="text-xs font-semibold uppercase tracking-widest text-slate-400">{label} Agent</div>
+                <select
+                  value={value ?? ''}
+                  onChange={e => set(e.target.value || null)}
+                  disabled={comparing}
+                  className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500/50"
+                >
+                  <option value="">— select agent —</option>
+                  {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={runCompare}
+            disabled={comparing || !baselineAgentId || !candidateAgentId || baselineAgentId === candidateAgentId}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+          >
+            {comparing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <GitCompare className="w-4 h-4" />}
+            {comparing ? 'Running comparison…' : 'Run Comparison'}
+          </button>
+
+          {compareResult && (
+            <div className="space-y-4">
+              {/* Summary row */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                  { label: 'Baseline pass rate', value: `${compareResult.summary.baseline.passRate}%`, sub: `avg ${compareResult.summary.baseline.avgLatencyMs}ms`, color: 'text-blue-300' },
+                  { label: 'Candidate pass rate', value: `${compareResult.summary.candidate.passRate}%`, sub: `avg ${compareResult.summary.candidate.avgLatencyMs}ms`, color: 'text-emerald-300' },
+                  { label: 'Promotion gate', value: compareResult.summary.promotionReady ? 'Ready' : 'Not ready', sub: compareResult.summary.promotionBlockReason ?? 'All criteria met', color: compareResult.summary.promotionReady ? 'text-emerald-400' : 'text-amber-400' },
+                ].map(({ label, value, sub, color }) => (
+                  <div key={label} className="bg-slate-800/40 border border-slate-700 rounded-xl p-4">
+                    <div className="text-xs text-slate-400 mb-1">{label}</div>
+                    <div className={`text-2xl font-bold ${color}`}>{value}</div>
+                    <div className="text-xs text-slate-500 mt-0.5 truncate">{sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Promote button */}
+              {compareResult.summary.promotionReady && (
+                <div className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <p className="text-sm text-emerald-200 flex-1">Candidate meets all promotion criteria. Switch your production traffic to this agent.</p>
+                  <button
+                    onClick={() => { toast.success('Promote the candidate by updating its lifecycle state to "active" in Fleet → Lifecycle.'); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-colors shrink-0"
+                  >
+                    <Rocket className="w-3.5 h-3.5" /> Promote Candidate
+                  </button>
+                </div>
+              )}
+
+              {/* Side-by-side diff table */}
+              <div className="rounded-xl border border-slate-700 overflow-hidden">
+                <div className="grid grid-cols-[1fr_auto_auto_auto_auto] bg-slate-800/60 px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wider gap-3">
+                  <span>Test</span>
+                  <span className="text-blue-300 w-20 text-center">Baseline</span>
+                  <span className="text-blue-300 w-16 text-center">Latency</span>
+                  <span className="text-emerald-300 w-20 text-center">Candidate</span>
+                  <span className="text-emerald-300 w-16 text-center">Latency</span>
+                </div>
+                {compareResult.rows.map(row => (
+                  <div key={row.testId} className="grid grid-cols-[1fr_auto_auto_auto_auto] px-4 py-3 border-t border-slate-700/50 gap-3 items-center hover:bg-slate-800/40 transition-colors">
+                    <div>
+                      <div className="text-sm text-white font-medium">{row.name}</div>
+                      <div className="text-xs text-slate-500 capitalize">{row.category.replace(/_/g, ' ')}</div>
+                    </div>
+                    <div className="w-20 flex justify-center">
+                      {row.baseline?.passed
+                        ? <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        : <XCircle className="w-4 h-4 text-rose-400" />}
+                    </div>
+                    <div className="w-16 text-center text-xs text-slate-400 font-mono">{row.baseline?.latency ?? '—'}ms</div>
+                    <div className="w-20 flex justify-center">
+                      {row.candidate?.passed
+                        ? <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        : <XCircle className="w-4 h-4 text-rose-400" />}
+                    </div>
+                    <div className={`w-16 text-center text-xs font-mono ${
+                      row.candidate?.latency != null && row.baseline?.latency != null
+                        ? row.candidate.latency <= row.baseline.latency ? 'text-emerald-400' : 'text-amber-400'
+                        : 'text-slate-400'
+                    }`}>{row.candidate?.latency ?? '—'}ms</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!compareMode && <div className="flex flex-col lg:flex-row gap-6">
         {/* ===== LEFT PANEL: Configuration ===== */}
         <div className="w-full lg:w-80 flex-shrink-0 space-y-6">
           {/* Agent Selection */}
@@ -372,7 +523,7 @@ export default function ShadowModePage() {
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
       {/* INSPECT LOG MODAL */}
       {showLogModal && (
@@ -458,6 +609,43 @@ export default function ShadowModePage() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Past Test Runs — loaded from real backend, single-agent mode only */}
+      {!compareMode && historicalRuns.length > 0 && (
+        <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-5">
+          <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-slate-400" />
+            Past Test Runs
+          </h2>
+          <div className="space-y-2">
+            {historicalRuns.slice(0, 10).map((run: any) => {
+              const runScore = typeof run.score === 'number' ? run.score : null;
+              const passed = typeof run.passed === 'boolean' ? run.passed : runScore !== null && runScore >= 80;
+              return (
+                <div key={run.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-900/50 border border-slate-700/40">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {passed
+                      ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      : <XCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                    }
+                    <span className="text-xs text-slate-300 truncate">{run.category || run.attack_category || 'Test'}</span>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {runScore !== null && (
+                      <span className={`text-xs font-medium ${runScore >= 80 ? 'text-emerald-400' : runScore >= 50 ? 'text-amber-400' : 'text-rose-400'}`}>
+                        {runScore}%
+                      </span>
+                    )}
+                    <span className="text-[10px] text-slate-500">
+                      {new Date(run.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

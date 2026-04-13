@@ -197,6 +197,18 @@ export function Sidebar({
         transition={{ type: 'spring', stiffness: 300, damping: 35 }}
         className="hidden md:flex sidebar-surface flex-col min-h-screen overflow-hidden shrink-0"
       >
+        {/* Persistent SANDBOX banner — shown when running in demo mode */}
+        {isDemoMode && (
+          <div className="mx-3 mt-3 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 animate-pulse" />
+            {expanded && (
+              <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-widest">
+                Sandbox — demo data only
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Logo + toggle */}
         <div className={cn('flex items-center mb-5 px-3 pt-4', expanded ? 'justify-between' : 'justify-center')}>
           {expanded ? (

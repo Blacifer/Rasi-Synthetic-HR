@@ -65,7 +65,7 @@ export default function ComplianceHubPage() {
   const [consents, setConsents] = useState<ConsentRecord[]>([]);
   const [dprRequests, setDprRequests] = useState<DataPrincipalRequest[]>([]);
   const [dpdpDash, setDpdpDash] = useState<DpdpDashboard | null>(null);
-  const [dpdpSubTab, setDpdpSubTab] = useState<'overview' | 'consents' | 'requests'>('overview');
+  const [dpdpSubTab, setDpdpSubTab] = useState<'overview' | 'consents' | 'requests' | 'scorecard'>('overview');
 
   // Filings state
   const [filingDeadlines, setFilingDeadlines] = useState<FilingDeadline[]>([]);
@@ -481,7 +481,7 @@ export default function ComplianceHubPage() {
         <div className="space-y-6">
           {/* Sub-tabs */}
           <div className="flex gap-1 bg-slate-800/40 rounded-lg p-1 w-fit">
-            {([['overview', 'Overview'], ['consents', 'Consents'], ['requests', 'Requests']] as const).map(([id, label]) => (
+            {([['overview', 'Overview'], ['consents', 'Consents'], ['requests', 'Requests'], ['scorecard', 'Scorecard']] as const).map(([id, label]) => (
               <button key={id} onClick={() => setDpdpSubTab(id)}
                 className={cx('px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
                   dpdpSubTab === id ? 'bg-slate-700/80 text-white' : 'text-slate-400 hover:text-slate-200')}>
@@ -726,6 +726,133 @@ export default function ComplianceHubPage() {
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* DPDPA Scorecard */}
+          {dpdpSubTab === 'scorecard' && (
+            <div className="space-y-6">
+              {/* Score hero */}
+              <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
+                <h3 className="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-wider">DPDP Act 2023 — Compliance Scorecard</h3>
+                <div className="flex items-center gap-8">
+                  <div className={cx('w-28 h-28 rounded-full ring-4 flex flex-col items-center justify-center shrink-0',
+                    (dpdpDash?.compliance_score ?? 0) >= 80 ? 'ring-emerald-500/40' : (dpdpDash?.compliance_score ?? 0) >= 50 ? 'ring-amber-500/40' : 'ring-rose-500/40')}>
+                    <span className={cx('text-3xl font-bold',
+                      (dpdpDash?.compliance_score ?? 0) >= 80 ? 'text-emerald-400' : (dpdpDash?.compliance_score ?? 0) >= 50 ? 'text-amber-400' : 'text-rose-400')}>
+                      {dpdpDash?.compliance_score ?? '—'}
+                    </span>
+                    <span className="text-xs text-slate-500 mt-1">/ 100</span>
+                  </div>
+                  <div className="flex-1 space-y-3">
+                    {[
+                      { label: 'Active consent coverage', value: dpdpDash ? `${dpdpDash.consent_summary.active} active` : '—', ok: (dpdpDash?.consent_summary.active ?? 0) > 0 },
+                      { label: 'DPR response SLA (72h)', value: (dpdpDash?.request_summary.overdue ?? 0) === 0 ? 'No breaches' : `${dpdpDash?.request_summary.overdue} overdue`, ok: (dpdpDash?.request_summary.overdue ?? 0) === 0 },
+                      { label: 'Retention policies', value: `${dpdpDash?.retention_policies ?? 0} active`, ok: (dpdpDash?.retention_policies ?? 0) > 0 },
+                      { label: 'Consent expiry risk', value: (dpdpDash?.consent_summary.expiring_soon ?? 0) > 0 ? `${dpdpDash?.consent_summary.expiring_soon} expiring in 30d` : 'None', ok: (dpdpDash?.consent_summary.expiring_soon ?? 0) === 0 },
+                    ].map(item => (
+                      <div key={item.label} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {item.ok
+                            ? <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                            : <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0" />}
+                          <span className="text-sm text-slate-300">{item.label}</span>
+                        </div>
+                        <span className={cx('text-sm font-medium', item.ok ? 'text-emerald-400' : 'text-rose-400')}>{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Principals breakdown */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-4">
+                  <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                    <UserCheck className="h-4 w-4 text-cyan-400" /> Data Principals
+                  </h3>
+                  {consents.length === 0 ? (
+                    <p className="text-sm text-slate-500">No consent records yet</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {Object.entries(
+                        consents.reduce<Record<string, number>>((acc, c) => {
+                          acc[c.principal_type] = (acc[c.principal_type] || 0) + 1;
+                          return acc;
+                        }, {}),
+                      ).sort((a, b) => b[1] - a[1]).map(([type, count]) => (
+                        <div key={type} className="flex items-center justify-between text-sm">
+                          <span className="text-slate-300 capitalize">{type}</span>
+                          <div className="flex items-center gap-2">
+                            <div className="w-24 h-1.5 bg-slate-700/60 rounded-full overflow-hidden">
+                              <div className="h-full bg-cyan-500 rounded-full" style={{ width: `${Math.round((count / consents.length) * 100)}%` }} />
+                            </div>
+                            <span className="text-white font-medium w-6 text-right">{count}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-4">
+                  <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                    <FileSearch className="h-4 w-4 text-violet-400" /> DPR Throughput
+                  </h3>
+                  <div className="space-y-2">
+                    {[
+                      { label: 'Pending', value: dpdpDash?.request_summary.pending ?? 0, color: 'bg-blue-500' },
+                      { label: 'In Progress', value: dpdpDash?.request_summary.in_progress ?? 0, color: 'bg-cyan-500' },
+                      { label: 'Completed', value: dpdpDash?.request_summary.completed ?? 0, color: 'bg-emerald-500' },
+                      { label: 'Escalated / Overdue', value: (dpdpDash?.request_summary.escalated ?? 0) + (dpdpDash?.request_summary.overdue ?? 0), color: 'bg-rose-500' },
+                    ].map(s => {
+                      const total = dpdpDash?.request_summary.total || 1;
+                      return (
+                        <div key={s.label} className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className={cx('w-2 h-2 rounded-full shrink-0', s.color)} />
+                            <span className="text-slate-300">{s.label}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-1.5 bg-slate-700/60 rounded-full overflow-hidden">
+                              <div className={cx('h-full rounded-full', s.color)} style={{ width: `${Math.round((s.value / total) * 100)}%` }} />
+                            </div>
+                            <span className="text-white font-medium w-4 text-right">{s.value}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Breach incidents */}
+              <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-4">
+                <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                  <AlertOctagon className="h-4 w-4 text-rose-400" /> DPDP Act Sec 11 — 72h Deadline Breaches
+                </h3>
+                {overdueRequests.length === 0 ? (
+                  <div className="flex items-center gap-2 text-sm text-emerald-400">
+                    <Check className="h-4 w-4" /> No active deadline breaches — fully compliant
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {overdueRequests.map(r => (
+                      <div key={r.id} className="flex items-center justify-between py-1 border-b border-slate-700/40 last:border-0">
+                        <div>
+                          <span className="text-sm text-white font-medium capitalize">{r.request_type}</span>
+                          <span className="text-xs text-slate-400 ml-2">{r.principal_email || r.principal_id}</span>
+                          <span className="text-xs text-slate-500 ml-2 capitalize">{r.principal_type}</span>
+                        </div>
+                        <span className="text-xs font-medium text-rose-400">{daysLabel(r.due_at)}</span>
+                      </div>
+                    ))}
+                    <p className="text-xs text-slate-500 mt-2">
+                      {overdueRequests.length} breach{overdueRequests.length > 1 ? 'es' : ''} — may attract penalties under DPDP Act Schedule II
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
 # deploy/gcp/secrets.sh
 # Populate all Secret Manager secrets for Zapheit production.
-# Edit the values below (copy from Railway Variables), then run:
+#
+# IMPORTANT: Never commit this file with real values.
+# Fill in the values below locally, run once, then leave as placeholders.
+#
+# Usage:
 #   export PROJECT_ID=rasisynthetichr
 #   bash deploy/gcp/secrets.sh
-#
-# Safe to re-run — adds a new secret version if the secret already exists.
 
 set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:?Set PROJECT_ID env var first}"
 
-# Helper: creates secret if missing, then adds a new version
 secret() {
   local NAME="$1"
   local VALUE="$2"
-  if [ -z "${VALUE}" ]; then
-    echo "  [SKIP] ${NAME} — value is empty, skipping"
+  if [ -z "${VALUE}" ] || [[ "${VALUE}" == COPY_FROM_* ]] || [[ "${VALUE}" == FILL_* ]]; then
+    echo "  [SKIP] ${NAME} — placeholder not filled, skipping"
     return
   fi
   gcloud secrets describe "${NAME}" --project="${PROJECT_ID}" &>/dev/null \
@@ -46,7 +47,6 @@ secret DATABASE_URL                 "COPY_FROM_RAILWAY"
 
 # ── URLs ──────────────────────────────────────────────────────────────────────
 secret FRONTEND_URL                 "COPY_FROM_RAILWAY"
-# Leave API_URL as placeholder — update AFTER first deploy with the Cloud Run URL
 secret API_URL                      "COPY_FROM_RAILWAY"
 secret CORS_ALLOWED_ORIGINS         "COPY_FROM_RAILWAY"
 
@@ -67,12 +67,12 @@ secret EMAIL_FROM                   "COPY_FROM_RAILWAY"
 secret ALERT_EMAIL_TO               "COPY_FROM_RAILWAY"
 secret RESEND_API_KEY               "COPY_FROM_RAILWAY"
 
-# ── Payments (Cashfree — add after KYC verified) ──────────────────────────────
+# ── Payments (Cashfree) ───────────────────────────────────────────────────────
 secret CASHFREE_CLIENT_ID           "COPY_FROM_CASHFREE_DASHBOARD"
 secret CASHFREE_CLIENT_SECRET       "COPY_FROM_CASHFREE_DASHBOARD"
 secret CASHFREE_API_VERSION         "2023-08-01"
 secret CASHFREE_ENVIRONMENT         "production"
-secret CASHFREE_WEBHOOK_SECRET      "COPY_FROM_CASHFREE_DASHBOARD"
+# secret CASHFREE_WEBHOOK_SECRET    "COPY_FROM_CASHFREE_DASHBOARD"
 
 # ── OAuth Integrations ────────────────────────────────────────────────────────
 secret GOOGLE_CLIENT_ID             "COPY_FROM_RAILWAY"

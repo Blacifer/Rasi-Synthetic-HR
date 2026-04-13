@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { refreshOAuthToken } from '../services/integration-service';
 import crypto from 'crypto';
 import { z } from 'zod';
 import { SignJWT, jwtVerify } from 'jose';
@@ -28,7 +29,7 @@ const getUserJwt = (req: any): string => {
 };
 
 type RestOptions = { method?: string; body?: any; headers?: Record<string, string> };
-type RestFn = (table: string, query: string | URLSearchParams, options?: RestOptions) => Promise<any>;
+export type RestFn = (table: string, query: string | URLSearchParams, options?: RestOptions) => Promise<any>;
 
 const restAsUser = (req: any): RestFn => {
   const jwt = getUserJwt(req);
@@ -39,7 +40,7 @@ const restAsService: RestFn = (table, query, options = {}) => supabaseRestAsServ
 
 type IntegrationStatus = 'disconnected' | 'configured' | 'connected' | 'error' | 'syncing' | 'expired';
 
-type StoredIntegrationRow = {
+export type StoredIntegrationRow = {
   id: string;
   organization_id: string;
   service_type: string;
@@ -500,7 +501,7 @@ async function pruneDisconnectedIntegrationFromAgents(rest: RestFn, orgId: strin
   }));
 }
 
-async function safeQuery<T>(rest: RestFn, table: string, query: URLSearchParams): Promise<T[]> {
+export async function safeQuery<T>(rest: RestFn, table: string, query: URLSearchParams): Promise<T[]> {
   try {
     return (await rest(table, query)) as T[];
   } catch (err: any) {
@@ -554,7 +555,7 @@ async function upsertIntegration(rest: RestFn, orgId: string, serviceType: strin
   return created?.[0] || null;
 }
 
-async function upsertCredential(rest: RestFn, integrationId: string, key: string, value: string, isSensitive = true, expiresAt?: string | null) {
+export async function upsertCredential(rest: RestFn, integrationId: string, key: string, value: string, isSensitive = true, expiresAt?: string | null) {
   const query = new URLSearchParams();
   query.set('integration_id', eq(integrationId));
   query.set('key', eq(key));
@@ -588,7 +589,7 @@ async function upsertCredential(rest: RestFn, integrationId: string, key: string
   return created?.[0] || null;
 }
 
-async function readCredentials(rest: RestFn, integrationId: string) {
+export async function readCredentials(rest: RestFn, integrationId: string) {
   const query = new URLSearchParams();
   query.set('integration_id', eq(integrationId));
   query.set('select', 'key,value,is_sensitive,expires_at');
@@ -608,7 +609,7 @@ function toServiceAliases(service: string) {
   return Array.from(aliases);
 }
 
-async function writeConnectionLog(
+export async function writeConnectionLog(
   rest: RestFn,
   integrationId: string,
   action: string,
@@ -2745,42 +2746,11 @@ router.post('/refresh/:service', requirePermission('connectors.manage'), async (
   const orgId = getOrgId(req);
   if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
 
-  const rest = restAsUser(req);
-  const service = req.params.service;
-  const spec = getIntegrationSpec(service);
-  if (!spec) return res.status(404).json({ success: false, error: 'Integration not found' });
-  if (spec.authType !== 'oauth2') return res.status(400).json({ success: false, error: 'Integration is not OAuth2 based' });
-
-  const query = new URLSearchParams();
-  query.set('organization_id', eq(orgId));
-  query.set('service_type', eq(service));
-  query.set('select', '*');
-  const rows = await safeQuery<StoredIntegrationRow>(rest, 'integrations', query);
-  const row = rows?.[0];
-  if (!row?.id) return res.status(400).json({ success: false, error: 'Integration not connected' });
-
-  const adapter = getAdapter(service);
-  if (!adapter?.refreshToken) return res.status(501).json({ success: false, error: 'Refresh token not implemented for this provider' });
-
-  const creds = await readCredentials(rest, row.id);
-  if (!creds.refresh_token) return res.status(400).json({ success: false, error: 'No refresh token stored. Please reconnect.' });
-
-  try {
-    const token = await adapter.refreshToken(creds);
-    const expiresIn = Number(token?.expires_in || 0);
-    const expiresAt = expiresIn > 0 ? new Date(Date.now() + expiresIn * 1000).toISOString() : null;
-
-    await upsertCredential(rest, row.id, 'access_token', encryptSecret(String(token.access_token)), true, expiresAt);
-    if (token.refresh_token) {
-      await upsertCredential(rest, row.id, 'refresh_token', encryptSecret(String(token.refresh_token)), true, null);
-    }
-
-    await writeConnectionLog(rest, row.id, 'refresh', 'success', 'Token refreshed', { service });
-    return res.json({ success: true, data: { refreshed: true, expiresAt } });
-  } catch (err: any) {
-    await writeConnectionLog(rest, row.id, 'refresh', 'failed', err?.message || 'Token refresh failed', { service });
-    return res.status(500).json({ success: false, error: err?.message || 'Token refresh failed' });
+  const result = await refreshOAuthToken(orgId, req.params.service, restAsUser(req));
+  if (!result.ok) {
+    return res.status(result.status ?? 400).json({ success: false, error: result.error });
   }
+  return res.json({ success: true, data: { refreshed: true, expiresAt: result.expiresAt } });
 });
 
 // OAuth authorize: redirects the user to the provider.

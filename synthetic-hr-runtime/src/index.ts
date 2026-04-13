@@ -184,6 +184,14 @@ async function completeJob(jobId: string, body: { status: 'succeeded' | 'failed'
   }
 }
 
+async function heartbeatJob(jobId: string): Promise<void> {
+  const jwt = signRuntimeJwt();
+  await fetch(`${CONTROL_PLANE_URL}/api/runtimes/jobs/${jobId}/heartbeat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+  }).catch(() => void 0); // fire-and-forget; don't interrupt execution on failure
+}
+
 async function logJob(jobId: string, line: string, level: 'debug' | 'info' | 'warn' | 'error' = 'info') {
   const jwt = signRuntimeJwt();
   await fetch(`${CONTROL_PLANE_URL}/api/runtimes/jobs/${jobId}/log`, {
@@ -541,7 +549,22 @@ async function runWorkflow(job: JobRow) {
   };
 }
 
+const JOB_HEARTBEAT_INTERVAL_MS = 30_000; // 30 seconds — well under the 5-min reaper threshold
+
 async function executeJob(job: JobRow) {
+  // Send periodic heartbeats so the reaper knows this job is still alive.
+  const heartbeatTimer = setInterval(() => {
+    void heartbeatJob(job.id);
+  }, JOB_HEARTBEAT_INTERVAL_MS);
+
+  try {
+    await executeJobInner(job);
+  } finally {
+    clearInterval(heartbeatTimer);
+  }
+}
+
+async function executeJobInner(job: JobRow) {
   if (job.type === 'chat_turn') {
     const result = await runChatTurn(job);
     await completeJob(job.id, { status: 'succeeded', output: result });

@@ -63,10 +63,11 @@ export const TYPE_OPTIONS = [
 ] as const;
 
 export const BADGE_STYLE: Record<string, string> = {
-  Popular:          'bg-blue-500/15 border-blue-400/25 text-blue-200',
-  Verified:         'bg-emerald-500/15 border-emerald-400/25 text-emerald-200',
-  'India Priority': 'bg-amber-500/15 border-amber-400/25 text-amber-200',
-  New:              'bg-violet-500/15 border-violet-400/25 text-violet-200',
+  Popular:              'bg-blue-500/15 border-blue-400/25 text-blue-200',
+  Verified:             'bg-emerald-500/15 border-emerald-400/25 text-emerald-200',
+  'India Priority':     'bg-amber-500/15 border-amber-400/25 text-amber-200',
+  New:                  'bg-violet-500/15 border-violet-400/25 text-violet-200',
+  'Zapheit Certified':  'bg-cyan-500/15 border-cyan-400/30 text-cyan-200',
 };
 
 // ─── Intents (ConnectorsPage "What are you trying to automate?") ────────────

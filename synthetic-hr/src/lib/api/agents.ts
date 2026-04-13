@@ -228,6 +228,57 @@ export const agentApi = {
     });
   },
 
+  /** Get agent performance scorecard (composite 0–100 score + 3-period trend) */
+  async getScorecard(id: string): Promise<ApiResponse<{
+    agentId: string;
+    agentName: string;
+    current: {
+      score: number;
+      grade: 'A' | 'B' | 'C' | 'D';
+      breakdown: { satisfaction: number; slo_pass_rate: number; incident_score: number; cost_efficiency: number };
+      inputs: { total_conversations: number; incident_rate_pct: number; total_cost_usd: number; cost_per_conv_usd: number; satisfaction_pct: number | null };
+    };
+    trend: 'improving' | 'declining' | 'stable';
+    history: Array<{ score: number; grade: 'A' | 'B' | 'C' | 'D'; breakdown: any; inputs: any }>;
+    slo_targets: Record<string, any>;
+  }>> {
+    return authenticatedFetch(`/agents/${id}/scorecard`, { method: 'GET' });
+  },
+
+  /** Get agent manifest + live SLO status */
+  async getManifest(id: string): Promise<ApiResponse<{
+    agent_id: string;
+    manifest: {
+      capabilities?: string[];
+      slo_targets?: {
+        uptime_pct?: number;
+        max_latency_ms?: number;
+        min_satisfaction?: number;
+        max_cost_per_request_usd?: number;
+      };
+      tags?: string[];
+      owner_email?: string;
+      deployment_environment?: 'production' | 'staging' | 'sandbox';
+      review_cadence?: 'weekly' | 'monthly' | 'quarterly' | 'none';
+      notes?: string;
+    };
+    slo_status: {
+      satisfaction: { target: number | null; actual: number | null; passing: boolean | null };
+      cost_per_request: { target: number | null; actual: number | null; passing: boolean | null };
+      incidents_30d: number;
+    };
+  }>> {
+    return authenticatedFetch(`/agents/${id}/manifest`);
+  },
+
+  /** Update agent manifest fields */
+  async updateManifest(id: string, manifest: Record<string, any>): Promise<ApiResponse<any>> {
+    return authenticatedFetch(`/agents/${id}/manifest`, {
+      method: 'PATCH',
+      body: JSON.stringify(manifest),
+    });
+  },
+
   /**
    * Run a shadow-mode adversarial test on an agent
    */
@@ -246,6 +297,14 @@ export const agentApi = {
       method: 'POST',
       body: JSON.stringify({ attackPrompt, category }),
     });
+  },
+
+  /**
+   * Fetch historical shadow-mode test runs for an agent
+   */
+  async getTestRuns(id: string, limit = 20): Promise<ApiResponse<any[]>> {
+    const query = new URLSearchParams({ limit: String(limit) });
+    return authenticatedFetch(`/agents/${id}/test-runs?${query}`);
   },
 
   async getTraces(params?: {
@@ -289,6 +348,50 @@ export const agentApi = {
       method: 'PATCH',
       body: JSON.stringify({ is_enabled }),
     });
+  },
+
+  /** Transition an agent to a new lifecycle state */
+  async transitionLifecycle(
+    agentId: string,
+    to_state: 'draft' | 'provisioning' | 'active' | 'suspended' | 'decommissioning' | 'terminated',
+    reason?: string,
+  ): Promise<ApiResponse<{ agentId: string; fromState: string; toState: string; transitionId: string }>> {
+    return authenticatedFetch(`/agents/${agentId}/lifecycle`, {
+      method: 'POST',
+      body: JSON.stringify({ to_state, reason }),
+    });
+  },
+
+  /** Shadow compare: run standard test suite against two agents side-by-side */
+  async shadowCompare(baseline_agent_id: string, candidate_agent_id: string): Promise<ApiResponse<{
+    rows: Array<{
+      testId: string; category: string; name: string;
+      baseline: { passed: boolean; latency: number; details: string } | undefined;
+      candidate: { passed: boolean; latency: number; details: string } | undefined;
+    }>;
+    summary: {
+      baseline: { passRate: number; avgLatencyMs: number };
+      candidate: { passRate: number; avgLatencyMs: number };
+      promotionReady: boolean;
+      promotionBlockReason: string | null;
+    };
+  }>> {
+    return authenticatedFetch('/agents/shadow-compare', {
+      method: 'POST',
+      body: JSON.stringify({ baseline_agent_id, candidate_agent_id }),
+    });
+  },
+
+  /** Get lifecycle transition history for an agent */
+  async getLifecycleHistory(agentId: string): Promise<ApiResponse<Array<{
+    id: string;
+    from_state: string;
+    to_state: string;
+    reason: string | null;
+    actor_email: string | null;
+    created_at: string;
+  }>>> {
+    return authenticatedFetch(`/agents/${agentId}/lifecycle`, { method: 'GET' });
   },
 
   /**

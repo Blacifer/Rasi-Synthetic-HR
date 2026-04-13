@@ -7,6 +7,7 @@ import { SupabaseRestError, eq, supabaseRestAsUser } from '../lib/supabase-rest'
 import { runtimeSchemas, validateRequestBody } from '../schemas/validation';
 import { auditLog } from '../lib/audit-logger';
 import { notifyApprovalAssignedAsync } from '../lib/notification-service';
+import { notifySlackApprovalRequestAsync } from '../lib/slack-approvals';
 import { evaluatePolicyConstraints, type PolicyConstraints } from '../lib/action-policy-constraints';
 
 const router = Router();
@@ -275,6 +276,19 @@ router.post('/', requirePermission('agents.update'), async (req: Request, res: R
     }
 
     const approval = approvals?.[0] || null;
+
+    // Send Block Kit approval message with Approve / Deny buttons to the org's Slack channel.
+    if (!autoApproved && approval?.id) {
+      notifySlackApprovalRequestAsync({
+        organizationId: orgId,
+        approvalId: approval.id,
+        agentId: data.agent_id,
+        service: connectorService,
+        action: connectorAction,
+        requestedByEmail: req.user?.email ?? null,
+        jobId: job.id,
+      });
+    }
 
     await auditLog.log({
       user_id: userId,

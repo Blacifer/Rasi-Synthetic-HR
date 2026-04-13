@@ -1,9 +1,9 @@
 import express, { Request, Response } from 'express';
-import crypto from 'crypto';
 import { z } from 'zod';
 import { logger } from '../lib/logger';
 import { encryptSecret } from '../lib/integrations/encryption';
 import { eq, supabaseRestAsService } from '../lib/supabase-rest';
+import { installApp, uninstallApp } from '../services/marketplace-service';
 
 const router = express.Router();
 
@@ -27,10 +27,17 @@ export type MarketplaceApp = {
   installCount: number;
   featured: boolean;
   badge?: string;
+  is_certified?: boolean;
   colorHex: string;
   logoLetter: string;
   comingSoon?: boolean;
 };
+
+/** Apps that have passed Zapheit's integration review and carry the Certified badge */
+const CERTIFIED_APP_IDS = new Set([
+  'slack', 'zoho-people', 'workday', 'sap-successfactors', 'bamboohr',
+  'jira', 'zendesk', 'salesforce', 'google-workspace', 'microsoft-teams',
+]);
 
 export type AppBundle = {
   id: string;
@@ -2582,7 +2589,7 @@ function toServiceAliases(serviceType: string) {
   return Array.from(aliases);
 }
 
-async function findInstalledIntegrationByAliases(orgId: string, serviceType: string) {
+export async function findInstalledIntegrationByAliases(orgId: string, serviceType: string) {
   const aliases = new Set(toServiceAliases(serviceType));
   const rows = (await supabaseRestAsService('integrations', new URLSearchParams({
     organization_id: eq(orgId),
@@ -2618,16 +2625,54 @@ router.get('/bundles', (_req: Request, res: Response) => {
 });
 
 // GET /marketplace/apps — full catalog with installation status + health
+/** Fetch live install counts for all apps from marketplace_install_events */
+async function getLiveInstallCounts(): Promise<Map<string, number>> {
+  try {
+    const rows = await supabaseRestAsService('marketplace_install_events', new URLSearchParams({ select: 'app_id,action' })) as any[];
+    const counts = new Map<string, number>();
+    for (const row of rows ?? []) {
+      const cur = counts.get(row.app_id) ?? 0;
+      counts.set(row.app_id, row.action === 'install' ? cur + 1 : Math.max(0, cur - 1));
+    }
+    return counts;
+  } catch {
+    return new Map();
+  }
+}
+
 router.get('/apps', async (req: Request, res: Response) => {
   try {
     const orgId = req.user?.organization_id;
     if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-    const healthMap = await getInstalledAppHealth(orgId);
-    const apps = PARTNER_APP_CATALOG.map((app) => {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim().toLowerCase() : '';
+
+    const [healthMap, installCounts] = await Promise.all([
+      getInstalledAppHealth(orgId),
+      getLiveInstallCounts(),
+    ]);
+
+    let catalog = PARTNER_APP_CATALOG;
+
+    // Full-text search across name, description, developer
+    if (q) {
+      catalog = catalog.filter(app =>
+        app.name.toLowerCase().includes(q) ||
+        app.description.toLowerCase().includes(q) ||
+        app.developer.toLowerCase().includes(q) ||
+        app.category.toLowerCase().includes(q),
+      );
+    }
+
+    const apps = catalog.map((app) => {
       const health = healthMap.get(app.id);
+      const liveCount = installCounts.get(app.id) ?? app.installCount;
+      const isCertified = CERTIFIED_APP_IDS.has(app.id);
       return {
         ...app,
+        installCount: liveCount,
+        is_certified: isCertified,
+        badge: isCertified ? 'Zapheit Certified' : app.badge,
         installed: healthMap.has(app.id),
         connectionStatus: health?.status ?? null,
         lastSyncAt: health?.last_sync_at ?? null,
@@ -2673,7 +2718,7 @@ router.get('/apps/installed', async (req: Request, res: Response) => {
   }
 });
 
-const installSchema = z.object({
+export const installSchema = z.object({
   credentials: z.record(z.string()).optional().default({}),
 });
 
@@ -2683,148 +2728,35 @@ router.post('/apps/:id/install', async (req: Request, res: Response) => {
     const orgId = req.user?.organization_id;
     if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-    const app = PARTNER_APP_CATALOG.find((a) => a.id === req.params.id);
-    if (!app) return res.status(404).json({ success: false, error: 'App not found' });
-
     const parsed = installSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ success: false, errors: parsed.error.errors.map((e) => e.message) });
     }
 
-    // For OAuth apps: build real auth URL and store state for callback verification
-    if (app.installMethod === 'oauth2') {
-      const state = crypto.randomUUID();
-      const callbackUrl = `${process.env.API_URL || 'http://localhost:3001'}/api/marketplace/oauth/callback`;
-      const authUrl = buildOAuthUrl(app.id, state, callbackUrl);
+    const result = await installApp(
+      orgId,
+      (req.user as any)?.id ?? null,
+      req.params.id,
+      parsed.data.credentials,
+      process.env.API_URL || 'http://localhost:3001',
+    );
 
-      if (!authUrl) {
-        return res.status(400).json({
-          success: false,
-          error: `OAuth for ${app.name} is not yet configured. Contact your administrator to set up the required credentials.`,
-        });
-      }
-
-      // Store state for verification on callback
-      await supabaseRestAsService('integration_oauth_states', '', {
-        method: 'POST',
-        body: {
-          state,
-          organization_id: orgId,
-          user_id: (req.user as any)?.id ?? null,
-          provider_name: app.id,
-          app_id: app.id,
-          redirect_uri: callbackUrl,
-          expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-        },
-      });
-
+    if (result.type === 'error') {
+      return res.status(result.status).json({ success: false, error: result.error });
+    }
+    if (result.type === 'oauth') {
       return res.json({
         success: true,
         oauth: true,
-        state,
-        authUrl,
-        message: `Redirect to ${app.name} to authorize access.`,
+        state: result.state,
+        authUrl: result.authUrl,
+        message: `Redirect to ${result.appName} to authorize access.`,
       });
     }
-
-    // Validate required fields for api_key apps
-    if (app.installMethod === 'api_key' && app.requiredFields) {
-      const missing = app.requiredFields
-        .filter((f) => f.required && !parsed.data.credentials[f.name])
-        .map((f) => f.label);
-      if (missing.length > 0) {
-        return res.status(400).json({ success: false, error: `Missing required fields: ${missing.join(', ')}` });
-      }
-    }
-
-    const now = new Date().toISOString();
-
-    // Check if any row already exists for this org + service_type (any status, any source)
-    const existingRows = (await supabaseRestAsService('integrations', new URLSearchParams({
-      organization_id: eq(orgId),
-      service_type: eq(app.id),
-      select: 'id,status',
-      limit: '1',
-    }))) as Array<{ id: string; status: string }>;
-
-    let integrationId: string;
-
-    if (existingRows?.length > 0) {
-      // Row exists (waitlisted, configured, or from the old integrations system) — update in place
-      integrationId = existingRows[0].id;
-      await supabaseRestAsService('integrations', new URLSearchParams({ id: eq(integrationId) }), {
-        method: 'PATCH',
-        body: {
-          service_name: app.name,
-          category: app.category.toUpperCase(),
-          auth_type: app.installMethod,
-          status: 'configured',
-          ai_enabled: true,
-          updated_at: now,
-          metadata: { marketplace_app: 'true', developer: app.developer },
-        },
-      });
-    } else {
-      // No existing row — create one
-      const integrationBody = {
-        organization_id: orgId,
-        service_type: app.id,
-        service_name: app.name,
-        category: app.category.toUpperCase(),
-        auth_type: app.installMethod,
-        status: 'configured',
-        ai_enabled: true,
-        created_at: now,
-        updated_at: now,
-        metadata: { marketplace_app: 'true', developer: app.developer },
-      };
-
-      const created = (await supabaseRestAsService('integrations', '', {
-        method: 'POST',
-        body: integrationBody,
-      })) as any[];
-
-      const integration = Array.isArray(created) ? created[0] : created;
-      integrationId = integration?.id;
-
-      if (!integrationId) {
-        return res.status(500).json({ success: false, error: 'Failed to create integration record' });
-      }
-    }
-
-    // Store credentials (encrypted)
-    if (app.installMethod === 'api_key' && Object.keys(parsed.data.credentials).length > 0) {
-      const credInserts = await Promise.allSettled(
-        Object.entries(parsed.data.credentials).map(async ([key, value]) => {
-          const field = app.requiredFields?.find((f) => f.name === key);
-          const isSensitive = field?.type === 'password';
-          const encrypted = isSensitive ? await encryptSecret(value) : value;
-          return supabaseRestAsService('integration_credentials', '', {
-            method: 'POST',
-            body: {
-              integration_id: integrationId,
-              key,
-              value: encrypted,
-              is_sensitive: isSensitive,
-              label: field?.label || key,
-              created_at: now,
-              updated_at: now,
-            },
-          });
-        })
-      );
-      const failed = credInserts.filter((r) => r.status === 'rejected');
-      if (failed.length > 0) {
-        logger.warn('Some credentials failed to store', { integrationId, count: failed.length });
-      }
-    }
-
-    logger.info('Marketplace app installed', { app_id: app.id, org_id: orgId, integration_id: integrationId });
-
     return res.status(201).json({
       success: true,
-      integration_id: integrationId,
-      message: `${app.name} has been installed successfully.`,
+      integration_id: result.integrationId,
+      message: `${result.appName} has been installed successfully.`,
     });
   } catch (error: any) {
     logger.error('Failed to install marketplace app', { error: error.message });
@@ -2838,19 +2770,10 @@ router.delete('/apps/:id', async (req: Request, res: Response) => {
     const orgId = req.user?.organization_id;
     if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-    const installed = await findInstalledIntegrationByAliases(orgId, req.params.id);
-    if (!installed) {
-      return res.status(404).json({ success: false, error: 'App not installed' });
+    const result = await uninstallApp(orgId, req.params.id, (req.user as any)?.id ?? null);
+    if (!result.ok) {
+      return res.status(result.status ?? 400).json({ success: false, error: result.error });
     }
-
-    const integrationId = installed.id;
-
-    await supabaseRestAsService('integrations', new URLSearchParams({ id: eq(integrationId) }), {
-      method: 'DELETE',
-    });
-
-    logger.info('Marketplace app uninstalled', { app_id: req.params.id, org_id: orgId });
-
     return res.json({ success: true, message: 'App uninstalled.' });
   } catch (error: any) {
     logger.error('Failed to uninstall marketplace app', { error: error.message });
@@ -3172,7 +3095,7 @@ router.get('/oauth/callback', async (req: Request, res: Response) => {
 // OAuth helpers
 // ---------------------------------------------------------------------------
 
-function buildOAuthUrl(appId: string, state: string, redirectUri: string): string | null {
+export function buildOAuthUrl(appId: string, state: string, redirectUri: string): string | null {
   const enc = encodeURIComponent;
   switch (appId) {
     case 'hubspot':

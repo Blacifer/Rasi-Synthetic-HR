@@ -56,6 +56,9 @@ const DeployAgentModal = lazy(async () => {
   const mod = await import('./fleet/DeployAgentModal');
   return { default: mod.DeployAgentModal };
 });
+const WorkspaceManifestSection = lazy(() => import('./fleet/WorkspaceManifestSection'));
+const WorkspaceLifecycleSection = lazy(() => import('./fleet/WorkspaceLifecycleSection'));
+const WorkspaceScorecardSection = lazy(() => import('./fleet/WorkspaceScorecardSection'));
 
 interface FleetPageProps {
   agents: AIAgent[];
@@ -67,7 +70,7 @@ interface FleetPageProps {
   isLoading?: boolean;
 }
 
-type WorkspaceTab = 'overview' | 'deployment' | 'conversations' | 'integrations' | 'policies' | 'analytics' | 'controls' | 'settings' | 'compliance' | 'history' | 'health';
+type WorkspaceTab = 'overview' | 'deployment' | 'conversations' | 'integrations' | 'policies' | 'analytics' | 'controls' | 'settings' | 'compliance' | 'history' | 'health' | 'manifest' | 'lifecycle' | 'scorecard';
 type DeployMethod = 'website' | 'api' | 'terminal' | 'advanced';
 type DeployCodeTab = 'curl' | 'python' | 'nodejs' | 'php';
 const FLEET_AUTO_REFRESH_MS = 5000;
@@ -1737,6 +1740,9 @@ export default function FleetPage({
               ['analytics', 'Analytics / Usage'],
               ['compliance', 'Compliance'],
               ['controls', 'Controls'],
+              ['manifest', 'Manifest'],
+              ['lifecycle', 'Lifecycle'],
+              ['scorecard', 'Scorecard'],
               ['settings', 'Settings'],
               ['history', 'Version History'],
               ['health', 'Health'],
@@ -1968,6 +1974,24 @@ export default function FleetPage({
 
             {workspaceTab === 'compliance' ? (
               <ComplianceScorecardTab agentId={activeWorkspaceAgent.id} />
+            ) : null}
+
+            {workspaceTab === 'manifest' ? (
+              <Suspense fallback={lazyFallback}>
+                <WorkspaceManifestSection agent={activeWorkspaceAgent} />
+              </Suspense>
+            ) : null}
+
+            {workspaceTab === 'lifecycle' ? (
+              <Suspense fallback={lazyFallback}>
+                <WorkspaceLifecycleSection agent={activeWorkspaceAgent} />
+              </Suspense>
+            ) : null}
+
+            {workspaceTab === 'scorecard' ? (
+              <Suspense fallback={lazyFallback}>
+                <WorkspaceScorecardSection agent={activeWorkspaceAgent} />
+              </Suspense>
             ) : null}
 
             {workspaceTab === 'controls' ? (

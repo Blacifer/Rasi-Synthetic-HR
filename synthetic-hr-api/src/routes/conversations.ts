@@ -2,14 +2,15 @@ import express, { Request, Response } from 'express';
 import { requirePermission } from '../middleware/rbac';
 import { supabaseRestAsUser, eq, in_ } from '../lib/supabase-rest';
 import { logger } from '../lib/logger';
-import { errorResponse, getOrgId, getUserJwt, safeLimit } from '../lib/route-helpers';
+import { errorResponse, getOrgId, getUserJwt } from '../lib/route-helpers';
+import { parseCursorParams, buildCursorResponse, buildCursorFilter } from '../lib/pagination';
 
 const router = express.Router();
 
 // Get conversations list
 router.get('/conversations', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
   try {
-    const { agent_id, status, limit = 50 } = req.query;
+    const { agent_id, status } = req.query;
     const orgId = getOrgId(req);
     if (!orgId) {
       return errorResponse(res, new Error('Organization not found'), 400);
@@ -17,23 +18,28 @@ router.get('/conversations', requirePermission('dashboard.read'), async (req: Re
 
     logger.info('Fetching conversations', { org_id: orgId, agent_id, status });
 
+    const { limit, cursorId, cursorCreatedAt } = parseCursorParams(req);
+    const cursorFilter = buildCursorFilter(cursorId, cursorCreatedAt);
+
     const query = new URLSearchParams();
     query.set('organization_id', eq(orgId));
-    query.set('order', 'created_at.desc');
-    query.set('limit', String(safeLimit(limit)));
+    query.set('order', 'created_at.desc,id.desc');
+    query.set('limit', String(limit + 1));
+    if (cursorFilter) query.set('or', cursorFilter);
     if (agent_id) query.set('agent_id', eq(String(agent_id)));
     if (status) query.set('status', eq(String(status)));
 
-    const data = await supabaseRestAsUser(
+    const rows = await supabaseRestAsUser(
       getUserJwt(req),
       'conversations',
       query,
       { headers: { 'Prefer': 'return=representation' } }
-    );
+    ) as any[];
+    const paged = buildCursorResponse(rows || [], limit);
 
-    logger.info('Conversations fetched successfully', { count: data?.length, org_id: orgId });
+    logger.info('Conversations fetched successfully', { count: paged.data?.length, org_id: orgId });
 
-    res.json({ success: true, data, count: data?.length || 0 });
+    res.json({ success: true, data: paged.data, count: paged.data?.length || 0, next_cursor: paged.next_cursor, has_more: paged.has_more });
   } catch (error: any) {
     errorResponse(res, error);
   }

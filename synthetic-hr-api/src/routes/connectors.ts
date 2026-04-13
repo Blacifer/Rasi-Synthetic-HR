@@ -17,7 +17,7 @@ const router = Router();
 
 const CONNECTOR_VALIDATION_TIMEOUT_MS = 10000;
 
-type ConnectorValidationResult = {
+export type ConnectorValidationResult = {
   valid: boolean;
   accountLabel?: string;
   details?: Record<string, any>;
@@ -91,7 +91,7 @@ const REQUIRED_CONNECTOR_FIELDS: Record<string, string[]> = {
 
 const SENSITIVE_CONFIG_KEYS = ['token', 'secret', 'password', 'key', 'webhook'];
 
-function redactSensitiveConfig(value: any): any {
+export function redactSensitiveConfig(value: any): any {
   if (!value || typeof value !== 'object') {
     return value;
   }
@@ -119,7 +119,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
   }
 }
 
-function validateRequiredCredentials(provider: string, credentials: Record<string, string>): string[] {
+export function validateRequiredCredentials(provider: string, credentials: Record<string, string>): string[] {
   const required = REQUIRED_CONNECTOR_FIELDS[provider] || [];
   return required.filter((field) => !credentials[field] || !String(credentials[field]).trim());
 }
@@ -1281,7 +1281,7 @@ async function refreshSalesforceAccessToken(credentials: Record<string, string>)
   };
 }
 
-async function validateProviderConnection(
+export async function validateProviderConnection(
   provider: string,
   credentials: Record<string, string>
 ): Promise<ConnectorValidationResult> {

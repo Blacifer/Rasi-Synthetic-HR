@@ -25,6 +25,7 @@ import { notifyAlertChannels } from '../lib/alert-channels';
 import { firePlaybookTriggers } from '../lib/trigger-evaluator';
 import { usdToInr } from '../lib/currency';
 import { appendAuditChainEvent } from '../lib/trust-audit-chain';
+import { checkAgentBudget as checkAgentBudgetService, recordCost } from '../services/billing-service';
 import { applyCrossBorderMasking, reinjectMaskedValues } from '../lib/cross-border-pii';
 
 const router = express.Router();
@@ -650,131 +651,6 @@ const routeViaOllama = async (
   };
 };
 
-// ── Per-agent rate limiting (Redis-backed when REDIS_URL is set, in-memory fallback) ──
-import { checkAgentRateLimitDistributed } from '../lib/rate-limiter';
-
-const checkAgentBudget = async (req: Request, res: Response): Promise<string | null | false> => {
-  const agentId = req.header('x-rasi-agent-id') || req.body?.agent_id;
-  if (!agentId || !req.apiKey) return null;
-
-  try {
-    const query = new URLSearchParams();
-    query.set('id', eq(agentId));
-    query.set('organization_id', eq(req.apiKey.organization_id));
-    const agents = await supabaseRest('ai_agents', query) as any[];
-
-    if (!agents || agents.length === 0) {
-      res.status(404).json({ error: { message: 'Agent not found', type: 'invalid_request_error' } });
-      return false;
-    }
-
-    const agent = agents[0];
-
-    // Per-agent rate limiting (Redis-backed when REDIS_URL set, in-memory fallback otherwise)
-    const rl = await checkAgentRateLimitDistributed(agentId, agent.config || {});
-    if (!rl.allowed) {
-      res.status(429).json({
-        error: { message: 'Agent rate limit exceeded', type: 'rate_limit_error', retry_after: rl.retryAfter }
-      });
-      return false;
-    }
-
-    const budgetLimit = Number(agent.config?.budget_limit ?? 0);
-    let currentSpend = Number(agent.config?.current_spend ?? 0);
-
-    if (budgetLimit > 0) {
-      const monthStart = new Date();
-      monthStart.setUTCDate(1);
-      const costQuery = new URLSearchParams();
-      costQuery.set('organization_id', eq(req.apiKey.organization_id));
-      costQuery.set('agent_id', eq(agentId));
-      costQuery.set('date', gte(monthStart.toISOString().split('T')[0]));
-      const costRows = await supabaseRest('cost_tracking', costQuery) as any[];
-      const totalCostUsd = (costRows || []).reduce((sum, row) => sum + Number(row?.cost_usd || 0), 0);
-      currentSpend = usdToInr(totalCostUsd);
-    }
-
-    if (budgetLimit > 0 && currentSpend >= budgetLimit) {
-      res.status(402).json({
-        error: {
-          message: 'Budget limit exceeded',
-          type: 'payment_required_error'
-        }
-      });
-      return false;
-    }
-
-    return agentId;
-  } catch (err) {
-    logger.error('Failed to check agent budget limit', { error: err });
-    // Fail open if db error for resiliency
-    return agentId;
-  }
-};
-
-const updateAgentBudgetAndLogCost = async (
-  req: Request,
-  agentId: string | null,
-  modelId: string,
-  modelProvider: string,
-  billedModel: string,
-  completion: { inputTokens: number; outputTokens: number; totalTokens: number; costUSD: number; latency: number; }
-) => {
-  if (!req.apiKey) return;
-
-  try {
-    await supabaseRest('cost_tracking', '', {
-      method: 'POST',
-      body: {
-        organization_id: req.apiKey.organization_id,
-        agent_id: agentId || undefined,
-        date: new Date().toISOString().split('T')[0],
-        model_name: modelId,
-        input_tokens: completion.inputTokens,
-        output_tokens: completion.outputTokens,
-        total_tokens: completion.totalTokens,
-        cost_usd: completion.costUSD,
-        request_count: 1,
-        avg_latency_ms: completion.latency,
-        metadata: {
-          api_key_id: req.apiKey.id,
-          provider: modelProvider,
-          billed_model: billedModel,
-          gateway_model_id: modelId,
-          endpoint: req.path,
-          request_id: req.requestId,
-        },
-      },
-    });
-
-    if (agentId && completion.costUSD > 0) {
-      const query = new URLSearchParams();
-      query.set('id', eq(agentId));
-      const agents = await supabaseRest('ai_agents', query) as any[];
-      if (agents && agents.length > 0) {
-        const agent = agents[0];
-        const monthStart = new Date();
-        monthStart.setUTCDate(1);
-        const costQuery = new URLSearchParams();
-        costQuery.set('organization_id', eq(req.apiKey.organization_id));
-        costQuery.set('agent_id', eq(agentId));
-        costQuery.set('date', gte(monthStart.toISOString().split('T')[0]));
-        const costRows = await supabaseRest('cost_tracking', costQuery) as any[];
-        const totalCostUsd = (costRows || []).reduce((sum, row) => sum + Number(row?.cost_usd || 0), 0);
-        const newSpend = usdToInr(totalCostUsd);
-        // Also atomic update isn't directly supported by pure rest patch config JSONB,
-        // but this is acceptable for now.
-        const newConfig = { ...agent.config, current_spend: newSpend };
-        await supabaseRest('ai_agents', query, {
-          method: 'PATCH',
-          body: { config: newConfig }
-        });
-      }
-    }
-  } catch (err) {
-    logger.error('Failed to log cost or update budget', { error: err });
-  }
-};
 
 // ─── Connector Tool Injection ─────────────────────────────────────────────────
 
@@ -1995,8 +1871,16 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
     return;
   }
 
-  const agentId = await checkAgentBudget(req, res);
-  if (agentId === false) return; // budget exceeded or agent not found
+  const _agentIdHeader = (req.header('x-rasi-agent-id') || req.body?.agent_id) as string | undefined;
+  let agentId: string | null = _agentIdHeader || null;
+  if (_agentIdHeader && req.apiKey) {
+    const _budgetResult = await checkAgentBudgetService(req.apiKey.organization_id, _agentIdHeader);
+    if (!_budgetResult.ok) {
+      res.status(_budgetResult.status).json(_budgetResult.body);
+      return;
+    }
+    agentId = _budgetResult.agentId;
+  }
 
   const idem = await prepareIdempotency(req, res, { supportsStreaming: false });
   if (idem.handled) return;
@@ -2258,7 +2142,21 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
       latency: totalLatency,
     };
 
-    await updateAgentBudgetAndLogCost(req, agentId, modelConfig.id, modelConfig.provider, modelConfig.upstreamModel, completion);
+    await recordCost({
+      organizationId: req.apiKey?.organization_id || '',
+      agentId,
+      modelId: modelConfig.id,
+      modelProvider: modelConfig.provider,
+      billedModel: modelConfig.upstreamModel,
+      inputTokens: completion.inputTokens,
+      outputTokens: completion.outputTokens,
+      totalTokens: completion.totalTokens,
+      costUSD: completion.costUSD,
+      latencyMs: completion.latency,
+      apiKeyId: req.apiKey?.id || '',
+      requestId: req.requestId || '',
+      endpoint: req.path,
+    });
 
     if (req.apiKey?.organization_id) {
       void recordPromptCacheObservation({
@@ -3260,7 +3158,21 @@ router.post('/agents/:agentId/chat', async (req: Request, res: Response) => {
     });
 
     // Cost tracking (fire and forget)
-    void updateAgentBudgetAndLogCost(req, agentId, modelConfig.id, modelConfig.provider, modelConfig.upstreamModel, completion).catch((err: any) => {
+    void recordCost({
+      organizationId: req.apiKey?.organization_id || '',
+      agentId,
+      modelId: modelConfig.id,
+      modelProvider: modelConfig.provider,
+      billedModel: modelConfig.upstreamModel,
+      inputTokens: completion.inputTokens,
+      outputTokens: completion.outputTokens,
+      totalTokens: completion.totalTokens,
+      costUSD: completion.costUSD,
+      latencyMs: completion.latency,
+      apiKeyId: req.apiKey?.id || '',
+      requestId: req.requestId || '',
+      endpoint: req.path,
+    }).catch((err: any) => {
       logger.error('Failed to log cost for agent chat', { err: err.message, agentId });
     });
 

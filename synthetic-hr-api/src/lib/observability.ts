@@ -1,12 +1,23 @@
 import { trace, metrics as metricsApi, SpanStatusCode } from '@opentelemetry/api';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
+import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
+import { resourceFromAttributes } from '@opentelemetry/resources';
+import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
+import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
 import { Request, Response } from 'express';
 import { logger } from './logger';
 
 const OTEL_ENABLED = process.env.OTEL_ENABLED !== 'false';
 
+let sdk: NodeSDK | null = null;
+
 /**
- * Initialize OpenTelemetry SDK
- * Sets up distributed tracing and metrics collection
+ * Initialize OpenTelemetry SDK.
+ * Starts tracing + metrics collection. No-ops when OTEL_ENABLED=false.
+ * When OTEL_EXPORTER_OTLP_ENDPOINT is set, exports to that collector;
+ * otherwise instruments in-process only (useful for local spans + tracingMiddleware).
  */
 export const initializeObservability = async (): Promise<void> => {
   if (!OTEL_ENABLED) {
@@ -15,7 +26,33 @@ export const initializeObservability = async (): Promise<void> => {
   }
 
   try {
-    logger.info('OpenTelemetry observability initialized');
+    const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+
+    const resource = resourceFromAttributes({
+      'service.name': process.env.OTEL_SERVICE_NAME || 'synthetic-hr-api',
+      'service.version': process.env.npm_package_version || '1.0.0',
+      'deployment.environment': process.env.NODE_ENV || 'development',
+    });
+
+    sdk = new NodeSDK({
+      resource,
+      traceExporter: new OTLPTraceExporter({
+        ...(endpoint ? { url: `${endpoint}/v1/traces` } : {}),
+      }),
+      metricReader: new PeriodicExportingMetricReader({
+        exporter: new OTLPMetricExporter({
+          ...(endpoint ? { url: `${endpoint}/v1/metrics` } : {}),
+        }),
+        exportIntervalMillis: 60_000,
+      }),
+      instrumentations: [
+        new HttpInstrumentation({ ignoreIncomingRequestHook: (req) => req.url === '/health' }),
+        new ExpressInstrumentation(),
+      ],
+    });
+
+    sdk.start();
+    logger.info('OpenTelemetry SDK started', { endpoint: endpoint || 'in-process only' });
   } catch (error: any) {
     logger.error('Failed to initialize OpenTelemetry', {
       error: error?.message || 'Unknown error',
@@ -25,11 +62,15 @@ export const initializeObservability = async (): Promise<void> => {
 };
 
 /**
- * Shutdown observability SDK
- * Called during graceful shutdown
+ * Shutdown observability SDK gracefully.
+ * Called during SIGTERM / graceful shutdown.
  */
 export const shutdownObservability = async (): Promise<void> => {
   try {
+    if (sdk) {
+      await sdk.shutdown();
+      sdk = null;
+    }
     logger.info('OpenTelemetry SDK shutdown complete');
   } catch (error: any) {
     logger.error('Error during observability shutdown', {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, BriefcaseBusiness, Building2, CheckCircle2, ChevronLeft, ChevronRight, Copy, Gavel, HandCoins, Headset, Key, Loader2, Rocket, ShieldCheck, ShoppingBag, Sparkles, Trash2, Wrench, Zap } from 'lucide-react';
+import { ArrowRight, BriefcaseBusiness, Building2, CheckCircle2, ChevronLeft, ChevronRight, Copy, Gavel, HandCoins, Headset, Key, Loader2, Rocket, ShieldCheck, ShoppingBag, Sparkles, Star, Target, Trash2, Wrench, Zap } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
 import type { AIAgent } from '../../types';
@@ -8,8 +8,8 @@ import { supabase } from '../../lib/supabase-client';
 import { getFrontendConfig } from '../../lib/config';
 import { PageHero } from '../../components/dashboard/PageHero';
 
-type StepId = 'workspace' | 'agent' | 'apps' | 'test' | 'verify';
-const STEP_ORDER: StepId[] = ['workspace', 'agent', 'apps', 'test', 'verify'];
+type StepId = 'workspace' | 'agent' | 'apps' | 'slo' | 'test' | 'verify' | 'confirm';
+const STEP_ORDER: StepId[] = ['workspace', 'agent', 'apps', 'slo', 'test', 'verify', 'confirm'];
 
 type LiveModel = { id: string; name?: string; provider?: string };
 
@@ -62,6 +62,13 @@ export default function GettingStartedPage(props: {
   const [testPrompt, setTestPrompt] = useState('Write a short welcome message for a new employee joining today.');
   const [testResult, setTestResult] = useState<string | null>(null);
   const [installedAppCount, setInstalledAppCount] = useState(0);
+
+  // SLO step state
+  const [sloMinSatisfaction, setSloMinSatisfaction] = useState('80');
+  const [sloMaxCostPerReq, setSloMaxCostPerReq] = useState('0.05');
+  const [sloMaxLatency, setSloMaxLatency] = useState('3000');
+  const [sloSaving, setSloSaving] = useState(false);
+  const [sloSaved, setSloSaved] = useState(false);
 
   const selectedAgent = useMemo(() => {
     return props.agents.find((agent) => agent.id === selectedAgentId) || null;
@@ -292,6 +299,28 @@ export default function GettingStartedPage(props: {
     }
   };
 
+  const saveSloTargets = async () => {
+    const agentId = selectedAgentId || selectedAgent?.id;
+    if (!agentId) { goNext(); return; }
+    setSloSaving(true);
+    const sloTargets: Record<string, any> = {};
+    const sat = parseFloat(sloMinSatisfaction);
+    const cost = parseFloat(sloMaxCostPerReq);
+    const lat = parseInt(sloMaxLatency, 10);
+    if (!isNaN(sat) && sat > 0) sloTargets.min_satisfaction = sat;
+    if (!isNaN(cost) && cost > 0) sloTargets.max_cost_per_request_usd = cost;
+    if (!isNaN(lat) && lat > 0) sloTargets.max_latency_ms = lat;
+    const res = await api.agents.updateManifest(agentId, { slo_targets: sloTargets });
+    setSloSaving(false);
+    if (!res.success) {
+      toast.error(res.error || 'Could not save SLO targets — skipping');
+    } else {
+      setSloSaved(true);
+      toast.success('SLO targets saved to manifest');
+    }
+    goNext();
+  };
+
   const finishSetup = async () => {
     setIsBusy(true);
     try {
@@ -359,7 +388,7 @@ export default function GettingStartedPage(props: {
           },
         ]}
         stats={[
-          { label: 'Journey', value: '5 steps', detail: 'Workspace, agent, app, test, verify' },
+          { label: 'Journey', value: '7 steps', detail: 'Workspace, agent, apps, SLOs, test, verify, confirm' },
           { label: 'Goal', value: hasGatewayTraffic ? 'Visible' : 'Warm up signal', detail: hasGatewayTraffic ? 'Tracked request already observed' : 'Need one tracked request' },
           { label: 'Advanced setup', value: 'Optional', detail: 'Only use when you need deeper diagnostics' },
         ]}
@@ -448,8 +477,10 @@ export default function GettingStartedPage(props: {
           <StepPill id="workspace" label="Check workspace" icon={ShieldCheck} done={!coverageLoading && !coverageError} />
           <StepPill id="agent" label="Pick first agent" icon={Sparkles} done={Boolean(selectedAgentId) || hasAnyAgent} />
           <StepPill id="apps" label="Connect an app" icon={ShoppingBag} done={installedAppCount > 0} />
+          <StepPill id="slo" label="Set SLO targets" icon={Target} done={sloSaved} />
           <StepPill id="test" label="Run one test" icon={Rocket} done={Boolean(testResult)} />
           <StepPill id="verify" label="Confirm visibility" icon={CheckCircle2} done={hasGatewayTraffic} />
+          <StepPill id="confirm" label="Review & complete" icon={Star} done={false} />
         </div>
 
         <div className="lg:col-span-8">
@@ -844,6 +875,82 @@ export default function GettingStartedPage(props: {
               </div>
             )}
 
+            {step === 'slo' && (
+              <div className="space-y-5">
+                <div>
+                  <h2 className="text-xl font-bold text-white">Set SLO targets</h2>
+                  <p className="text-slate-400 text-sm mt-1">
+                    Define performance goals for your agent. These become the baseline for the Scorecard and Manifest — you can change them anytime.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-300">Min Satisfaction %</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={sloMinSatisfaction}
+                      onChange={(e) => setSloMinSatisfaction(e.target.value)}
+                      className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50"
+                      placeholder="80"
+                    />
+                    <p className="text-xs text-slate-500">Thumb-up rate target. 0 = skip.</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-300">Max Cost / Request ($)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.001"
+                      value={sloMaxCostPerReq}
+                      onChange={(e) => setSloMaxCostPerReq(e.target.value)}
+                      className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50"
+                      placeholder="0.05"
+                    />
+                    <p className="text-xs text-slate-500">e.g. 0.05 = 5¢ per call. 0 = skip.</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-300">Max Latency (ms)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={sloMaxLatency}
+                      onChange={(e) => setSloMaxLatency(e.target.value)}
+                      className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50"
+                      placeholder="3000"
+                    />
+                    <p className="text-xs text-slate-500">p95 target in ms. 0 = skip.</p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-700 bg-slate-900/20 p-4 text-sm text-slate-400 leading-6">
+                  SLO targets are stored in the agent's <strong className="text-slate-200">Manifest</strong> and used by the <strong className="text-slate-200">Scorecard</strong> to compute a weekly grade. You can set advanced targets (uptime %, review cadence) from <strong className="text-slate-200">Fleet → Manifest</strong> after setup.
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={saveSloTargets}
+                    disabled={sloSaving || !selectedAgentId}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm transition-colors"
+                  >
+                    {sloSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Target className="w-4 h-4" />}
+                    {sloSaved ? 'Saved — continue' : 'Save & continue'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goNext}
+                    className="px-4 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-800/40 text-slate-300 text-sm border border-slate-700 transition-colors"
+                  >
+                    Skip for now
+                  </button>
+                </div>
+              </div>
+            )}
+
             {step === 'verify' && (
               <div className="space-y-4">
                 <h2 className="text-xl font-bold text-white">Confirm your first insight</h2>
@@ -944,6 +1051,93 @@ export default function GettingStartedPage(props: {
                 ) : null}
               </div>
             )}
+            {step === 'confirm' && (
+              <div className="space-y-5">
+                <div>
+                  <h2 className="text-xl font-bold text-white">Your agent is live</h2>
+                  <p className="text-slate-400 text-sm mt-1">
+                    Setup is complete. Here's a summary of what was configured — bookmark the Fleet workspace to manage this agent going forward.
+                  </p>
+                </div>
+
+                {selectedAgent && (
+                  <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-300">
+                        <Sparkles className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-semibold text-white">{selectedAgent.name}</div>
+                        <div className="text-xs text-slate-400">{selectedAgent.agent_type} · {selectedAgent.model_name}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs font-mono bg-slate-900/60 border border-slate-700 rounded px-2 py-1 text-slate-300 flex-1 truncate">{selectedAgent.id}</code>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(selectedAgent.id, 'Agent ID')}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition-colors"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    {sloSaved && (
+                      <div className="text-xs text-emerald-300 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        SLO targets saved to manifest — Scorecard will grade against these weekly.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-1">
+                    <div className="text-xs font-semibold uppercase tracking-widest text-slate-400">Next: Manage</div>
+                    <p className="text-xs text-slate-300">Open Fleet → this agent to access the Manifest, Lifecycle, Scorecard, and Health tabs.</p>
+                    <button
+                      type="button"
+                      onClick={() => props.onNavigate('agents')}
+                      className="mt-2 text-xs text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1"
+                    >
+                      Open Fleet <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-1">
+                    <div className="text-xs font-semibold uppercase tracking-widest text-slate-400">Next: Monitor</div>
+                    <p className="text-xs text-slate-300">Check Overview for fleet-wide health, cost trends, and active incidents.</p>
+                    <button
+                      type="button"
+                      onClick={() => props.onNavigate('overview')}
+                      className="mt-2 text-xs text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1"
+                    >
+                      Open Overview <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-1">
+                    <div className="text-xs font-semibold uppercase tracking-widest text-slate-400">Next: Govern</div>
+                    <p className="text-xs text-slate-300">Set action policies and approval workflows from the Playbooks section.</p>
+                    <button
+                      type="button"
+                      onClick={() => props.onNavigate('playbooks')}
+                      className="mt-2 text-xs text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1"
+                    >
+                      Open Playbooks <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={finishSetup}
+                  disabled={isBusy}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-sm font-medium transition-colors"
+                >
+                  {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  Complete setup
+                </button>
+              </div>
+            )}
+
             {/* Prev / Next navigation */}
             <div className="mt-6 pt-4 border-t border-slate-700 flex items-center justify-between">
               <button
