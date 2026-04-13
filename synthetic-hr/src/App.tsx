@@ -160,7 +160,7 @@ function App() {
     if (!demoEnabled) return;
     const demoUser: AuthUser = {
       id: 'demo-' + crypto.randomUUID(),
-      email: 'demo@synthetic-hr.com',
+      email: 'demo@zapheit.com',
       organizationName: 'Demo Organization',
     };
     setUser(demoUser);

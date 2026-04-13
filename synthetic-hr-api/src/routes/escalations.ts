@@ -639,7 +639,7 @@ async function escalateToPagerDuty(
             payload: {
               summary: description,
               severity: pdSeverity,
-              source: 'Synthetic HR',
+              source: 'Zapheit',
               component: incident.agent_name || 'Unknown Agent',
               custom_details: {
                 incident_id: incident.id,

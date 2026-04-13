@@ -342,7 +342,7 @@ app.get('/health', async (req, res) => {
   const response = {
     status: allHealthy ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
-    service: 'Synthetic HR API',
+    service: 'Zapheit API',
     version: '1.0.0',
     uptime_ms: Math.round(process.uptime() * 1000),
     build,
@@ -588,7 +588,7 @@ async function startServer() {
   }, 2 * 60 * 1000);
 
   const server = app.listen(PORT, () => {
-    logger.info('Synthetic HR API server started', {
+    logger.info('Zapheit API server started', {
       port: PORT,
       health: `http://localhost:${PORT}/health`,
       api: `http://localhost:${PORT}/api`,

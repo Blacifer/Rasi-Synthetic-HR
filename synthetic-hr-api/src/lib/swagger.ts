@@ -6,12 +6,12 @@ const options: swaggerJsdoc.Options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'Synthetic HR API',
+      title: 'Zapheit API',
       version: '1.0.0',
       description: 'AI Agent Governance Platform - REST API for managing AI agents, incidents, costs, and compliance monitoring',
       contact: {
         name: 'API Support',
-        email: 'support@synthetic-hr.com',
+        email: 'support@zapheit.com',
       },
     },
     servers: [
@@ -75,7 +75,7 @@ const swaggerSpec = swaggerJsdoc(options);
 export function setupSwagger(app: Express): void {
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     customCss: '.swagger-ui .topbar { display: none }',
-    customSiteTitle: 'Synthetic HR API Docs',
+    customSiteTitle: 'Zapheit API Docs',
   }));
 
   // Serve OpenAPI spec as JSON
