@@ -110,6 +110,7 @@ echo "[6/8] Building and pushing images..."
 
 echo "  Building synthetic-hr-api..."
 docker build \
+  --platform=linux/amd64 \
   -t "${REGISTRY}/synthetic-hr-api:${COMMIT_SHA}" \
   -t "${REGISTRY}/synthetic-hr-api:latest" \
   ./synthetic-hr-api
@@ -117,6 +118,7 @@ docker push --all-tags "${REGISTRY}/synthetic-hr-api"
 
 echo "  Building synthetic-hr-runtime..."
 docker build \
+  --platform=linux/amd64 \
   -t "${REGISTRY}/synthetic-hr-runtime:${COMMIT_SHA}" \
   -t "${REGISTRY}/synthetic-hr-runtime:latest" \
   ./synthetic-hr-runtime
