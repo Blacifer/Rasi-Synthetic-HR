@@ -249,7 +249,7 @@ export function useSettingsState({ isDemoMode = false }: { isDemoMode?: boolean 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `rasi-data-export-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.download = `zapheit-data-export-${new Date().toISOString().slice(0, 10)}.zip`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success('Full data export downloaded.');

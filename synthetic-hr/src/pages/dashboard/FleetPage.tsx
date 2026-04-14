@@ -1043,7 +1043,7 @@ export default function FleetPage({
           model: 'openai/gpt-4o-mini',
           messages: [
             { role: 'system', content: 'Reply in one short sentence.' },
-            { role: 'user', content: 'Return: SyntheticHR runtime connection verified.' },
+            { role: 'user', content: 'Return: Zapheit runtime connection verified.' },
           ],
           temperature: 0.2,
         }

@@ -312,7 +312,7 @@ async function runChatTurn(job: JobRow) {
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${API_KEY}`,
-      'x-rasi-agent-id': job.agent_id || '',
+      'x-zapheit-agent-id': job.agent_id || '',
     },
     body: JSON.stringify({
       model,
@@ -420,7 +420,7 @@ async function evalBranch(conditions: BranchCondition[], text: string, agentId: 
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${API_KEY}`,
-            'x-rasi-agent-id': agentId,
+            'x-zapheit-agent-id': agentId,
           },
           body: JSON.stringify({
             model: DEFAULT_MODEL,
@@ -519,7 +519,7 @@ async function runWorkflow(job: JobRow) {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${API_KEY}`,
-          'x-rasi-agent-id': agentId,
+          'x-zapheit-agent-id': agentId,
         },
         body: JSON.stringify({ model, messages, temperature, stream: false, agent_id: agentId || undefined }),
       });

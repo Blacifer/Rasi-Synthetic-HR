@@ -182,7 +182,7 @@ export default function GettingStartedPage(props: {
       return 'Not authenticated. Refresh the page and sign in again.';
     }
     if (text.toLowerCase().includes('invalid api key') || text.toLowerCase().includes('api key')) {
-      return 'The SyntheticHR API key may be invalid or revoked. Create a new temporary key and try again.';
+      return 'The Zapheit API key may be invalid or revoked. Create a new temporary key and try again.';
     }
     return message;
   };
@@ -278,7 +278,7 @@ export default function GettingStartedPage(props: {
         model: selectedModelId,
         agentId: agent.id,
         messages: [
-          { role: 'system', content: 'You are SyntheticHR. Respond as a helpful HR assistant.' },
+          { role: 'system', content: 'You are Zapheit. Respond as a helpful HR assistant.' },
           { role: 'user', content: testPrompt },
         ],
         temperature: 0.3,
@@ -370,7 +370,7 @@ export default function GettingStartedPage(props: {
       <PageHero
         eyebrow="Guided setup"
         title="Get to first useful signal"
-        subtitle="Set up one agent, connect one app, run one safe test, and confirm that SyntheticHR is showing real activity you can act on."
+        subtitle="Set up one agent, connect one app, run one safe test, and confirm that Zapheit is showing real activity you can act on."
         recommendation={{
           label: 'Recommended next step',
           title: hasAnyAgent ? 'Connect one app, then run the first tracked test.' : 'Pick one agent so the first test has a clear owner.',
@@ -410,7 +410,7 @@ export default function GettingStartedPage(props: {
             <span className="text-sm font-semibold">What success looks like</span>
           </div>
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            You finish when SyntheticHR shows a tracked request, a model observed, and a clear next place to operate from.
+            You finish when Zapheit shows a tracked request, a model observed, and a clear next place to operate from.
           </p>
         </div>
         <div className="rounded-2xl border border-slate-700 bg-slate-900/30 p-4">
@@ -516,7 +516,7 @@ export default function GettingStartedPage(props: {
                         <div className="text-xs text-slate-400 mt-1">Active agents: {coverage?.agents?.active ?? 0}</div>
                       </div>
                       <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
-                        <div className="text-xs text-slate-400">Can SyntheticHR see traffic?</div>
+                        <div className="text-xs text-slate-400">Can Zapheit see traffic?</div>
                         <div className={`text-2xl font-bold ${hasGatewayTraffic ? 'text-emerald-300' : 'text-slate-200'}`}>
                           {hasGatewayTraffic ? 'Yes' : 'No'}
                         </div>
@@ -738,7 +738,7 @@ export default function GettingStartedPage(props: {
               <div className="space-y-4">
                 <h2 className="text-xl font-bold text-white">Run one tracked test</h2>
                 <p className="text-slate-400">
-                  Send one safe test message through the runtime. This is where SyntheticHR proves it can see real activity and give you useful visibility.
+                  Send one safe test message through the runtime. This is where Zapheit proves it can see real activity and give you useful visibility.
                 </p>
 
                 <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4 space-y-3">
@@ -983,8 +983,8 @@ export default function GettingStartedPage(props: {
                     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">What happened</div>
                     <p className="mt-2 text-sm leading-6 text-slate-300">
                       {hasGatewayTraffic
-                        ? 'SyntheticHR observed a real tracked request. You now have enough signal to use the dashboard and agents workspace with confidence.'
-                        : 'SyntheticHR has not observed a tracked request yet. Refresh once more or rerun the test so the system can capture first activity.'}
+                        ? 'Zapheit observed a real tracked request. You now have enough signal to use the dashboard and agents workspace with confidence.'
+                        : 'Zapheit has not observed a tracked request yet. Refresh once more or rerun the test so the system can capture first activity.'}
                     </p>
                   </div>
                   <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">

@@ -40,7 +40,7 @@ function generateForensicPayload(incident: Incident) {
     },
     trigger: {
       policy_id: "pol_" + (seed % 100000000).toString(36),
-      detected_by: 'rasi-governance-review',
+      detected_by: 'zapheit-governance-review',
       confidence_score: (0.85 + (seed % 15) / 100).toFixed(3)
     },
     message: incident.description,

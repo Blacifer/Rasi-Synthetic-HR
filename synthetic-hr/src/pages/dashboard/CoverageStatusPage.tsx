@@ -1034,7 +1034,7 @@ export default function CoverageStatusPage() {
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Provider sync framework</p>
           <h2 className="mt-2 text-2xl font-black tracking-[-0.04em] text-white">Provider sync configuration</h2>
           <p className="mt-3 text-sm leading-7 text-slate-400">
-            SyntheticHR now uses one shared provider-sync framework. OpenAI, Anthropic, and OpenRouter are live adapters; the others still reconcile through manual totals until their sync adapters are implemented.
+            Zapheit now uses one shared provider-sync framework. OpenAI, Anthropic, and OpenRouter are live adapters; the others still reconcile through manual totals until their sync adapters are implemented.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             <button

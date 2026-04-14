@@ -262,7 +262,7 @@ export default function ConnectAgentPage(props: {
         model: modelId,
         messages: [
           { role: 'system', content: 'Reply in one sentence.' },
-          { role: 'user', content: 'Return: SyntheticHR agent connection verified.' },
+          { role: 'user', content: 'Return: Zapheit agent connection verified.' },
         ],
         temperature: 0.2,
       });
@@ -291,7 +291,7 @@ export default function ConnectAgentPage(props: {
   const envSnippet = useMemo(() => {
     const agent = selectedAgentId || '<AGENT_ID>';
     const key = createdSecret ? createdSecret : '$RASI_API_KEY';
-    return `# SyntheticHR gateway\n` +
+    return `# Zapheit gateway\n` +
       `export RASI_BASE_URL="${gatewayBaseUrl}"\n` +
       `export RASI_API_KEY="${key}"\n` +
       `export RASI_AGENT_ID="${agent}"\n`;
@@ -299,7 +299,7 @@ export default function ConnectAgentPage(props: {
 
   const nodeSnippet = useMemo(() => {
     const agent = selectedAgentId || '<AGENT_ID>';
-    return `// Node.js (OpenAI SDK) via SyntheticHR gateway\n` +
+    return `// Node.js (OpenAI SDK) via Zapheit gateway\n` +
       `// 1) npm i openai\n` +
       `// 2) ${createdSecret ? 'Use the .env exports below (includes API key)' : 'export RASI_API_KEY="sk_..."'}\n` +
       `// 3) export RASI_AGENT_ID="${agent}"\n` +
@@ -310,7 +310,7 @@ export default function ConnectAgentPage(props: {
       `  apiKey: process.env.RASI_API_KEY,\n` +
       `  baseURL: process.env.RASI_BASE_URL || "${gatewayBaseUrl}",\n` +
       `  defaultHeaders: {\n` +
-      `    "x-rasi-agent-id": process.env.RASI_AGENT_ID,\n` +
+      `    "x-zapheit-agent-id": process.env.RASI_AGENT_ID,\n` +
       `  },\n` +
       `});\n` +
       `\n` +
@@ -324,7 +324,7 @@ export default function ConnectAgentPage(props: {
 
   const pythonSnippet = useMemo(() => {
     const agent = selectedAgentId || '<AGENT_ID>';
-    return `# Python (OpenAI SDK) via SyntheticHR gateway\n` +
+    return `# Python (OpenAI SDK) via Zapheit gateway\n` +
       `# 1) pip install openai\n` +
       `# 2) ${createdSecret ? 'Use the .env exports below (includes API key)' : 'export RASI_API_KEY="sk_..."'}\n` +
       `# 3) export RASI_AGENT_ID="${agent}"\n` +
@@ -336,7 +336,7 @@ export default function ConnectAgentPage(props: {
       `  api_key=os.environ["RASI_API_KEY"],\n` +
       `  base_url=os.environ.get("RASI_BASE_URL", "${gatewayBaseUrl}"),\n` +
       `  default_headers={\n` +
-      `    "x-rasi-agent-id": os.environ["RASI_AGENT_ID"],\n` +
+      `    "x-zapheit-agent-id": os.environ["RASI_AGENT_ID"],\n` +
       `  },\n` +
       `)\n` +
       `\n` +
@@ -353,7 +353,7 @@ export default function ConnectAgentPage(props: {
     return `curl "${'${RASI_BASE_URL:-' + gatewayBaseUrl + '}'}/chat/completions" \\\n` +
       `  -H "Authorization: Bearer $RASI_API_KEY" \\\n` +
       `  -H "Content-Type: application/json" \\\n` +
-      `  -H "x-rasi-agent-id: ${agent}" \\\n` +
+      `  -H "x-zapheit-agent-id: ${agent}" \\\n` +
       `  -d '{\n` +
       `    "model": "${modelId}",\n` +
       `    "messages": [{ "role": "user", "content": "Hello from a customer-hosted agent." }]\n` +
@@ -374,7 +374,7 @@ export default function ConnectAgentPage(props: {
         <div>
           <h1 className="text-3xl font-bold text-white">Advanced / Developer Setup</h1>
           <p className="mt-2 text-slate-400 max-w-3xl">
-            This is the fallback path for admins or developers connecting a custom system through the SyntheticHR gateway.
+            This is the fallback path for admins or developers connecting a custom system through the Zapheit gateway.
             Non-technical users should publish agents from Fleet into Integrations instead of handling API keys or runtime code here.
           </p>
         </div>
@@ -753,7 +753,7 @@ export default function ConnectAgentPage(props: {
               <div>
                 <h2 className="text-xl font-bold text-white">Integration contract</h2>
                 <p className="mt-1 text-slate-400 text-sm">
-                  Send all model calls through the gateway and include `x-rasi-agent-id` so traffic is attributed to the right agent.
+                  Send all model calls through the gateway and include `x-zapheit-agent-id` so traffic is attributed to the right agent.
                 </p>
               </div>
               <div className="flex items-center gap-2 text-xs text-slate-300">

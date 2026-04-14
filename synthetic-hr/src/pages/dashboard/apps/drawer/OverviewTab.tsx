@@ -29,8 +29,8 @@ export function OverviewTab({ app, agentNames, onConfigure: _onConfigure, onDisc
         <p className="text-[10px] uppercase tracking-wider text-cyan-300">What this app lets agents do</p>
         <p className="mt-1 text-xs text-slate-300">
           {app.connected
-            ? 'Connected agents can use governed capabilities from this app through Rasi. Read actions can run directly; higher-risk write actions pause for approval when policy requires it.'
-            : 'Connect this app once, then assign which agents can use it and supervise every governed action from Rasi.'}
+            ? 'Connected agents can use governed capabilities from this app through Zapheit. Read actions can run directly; higher-risk write actions pause for approval when policy requires it.'
+            : 'Connect this app once, then assign which agents can use it and supervise every governed action from Zapheit.'}
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <div className="rounded-lg border border-white/8 bg-black/10 px-3 py-2">
@@ -357,7 +357,7 @@ export function OverviewTab({ app, agentNames, onConfigure: _onConfigure, onDisc
       {/* Governance note */}
       <div className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3 flex items-start gap-3">
         <Shield className="w-4 h-4 text-slate-500 mt-0.5 shrink-0" />
-        <p className="text-xs text-slate-400">This app is exposed as a governed operational rail. Actions can be blocked, approval-gated, audited, and investigated from Rasi.</p>
+        <p className="text-xs text-slate-400">This app is exposed as a governed operational rail. Actions can be blocked, approval-gated, audited, and investigated from Zapheit.</p>
       </div>
 
       {/* Danger zone */}

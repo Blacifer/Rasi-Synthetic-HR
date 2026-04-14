@@ -392,10 +392,10 @@ export default function WebhooksPage() {
     ? [
         `curl -X POST '${selectedWebhook.url}'`,
         `  -H 'Content-Type: application/json'`,
-        `  -H 'X-Rasi-Event: ${selectedTestEvent}'`,
-        `  -H 'X-Rasi-Delivery-Id: dlv_<uuid>'`,
-        `  -H 'X-Rasi-Timestamp: <unix-seconds>'`,
-        `  -H 'X-Rasi-Signature: sha256=<HMAC-SHA256(secret, "<timestamp>.<body>")>'`,
+        `  -H 'X-Zapheit-Event: ${selectedTestEvent}'`,
+        `  -H 'X-Zapheit-Delivery-Id: dlv_<uuid>'`,
+        `  -H 'X-Zapheit-Timestamp: <unix-seconds>'`,
+        `  -H 'X-Zapheit-Signature: sha256=<HMAC-SHA256(secret, "<timestamp>.<body>")>'`,
         `  -d '${JSON.stringify(selectedPayload)}'`,
         `# Secret: ${selectedWebhook.secret}`,
       ].join(' \\\n')
@@ -471,7 +471,7 @@ export default function WebhooksPage() {
                 }}
                 className={`w-full rounded-2xl border bg-slate-950/80 px-4 py-3 text-white outline-none transition-colors placeholder:text-slate-600 ${errors.url ? 'border-rose-500/50 focus:border-rose-500' : 'border-slate-800 focus:border-cyan-500/50'}`}
               />
-              <p className="mt-2 text-xs text-slate-500">Must be HTTPS, publicly accessible, and capable of verifying `X-Rasi-Signature`.</p>
+              <p className="mt-2 text-xs text-slate-500">Must be HTTPS, publicly accessible, and capable of verifying `X-Zapheit-Signature`.</p>
               {errors.url && <p className="mt-2 text-sm text-rose-300">{errors.url}</p>}
             </div>
 
@@ -824,7 +824,7 @@ export default function WebhooksPage() {
             <DocCard
               title="Custom endpoint"
               body="Verify the signature header, store the event id for idempotency, then respond with HTTP 2xx before async processing."
-              code={`POST /webhooks/rasi\nX-Rasi-Signature: whsec_...`}
+              code={`POST /webhooks/zapheit\nX-Zapheit-Signature: whsec_...`}
             />
           </div>
         )}

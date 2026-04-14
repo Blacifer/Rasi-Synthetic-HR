@@ -566,7 +566,7 @@ export async function generateSafeHarborDocument(orgId: string, type: DocumentTy
   const lines = [...commonHeader, ...typeSpecific, ...footer].flatMap((line) => wrapText(line));
 
   return {
-    filename: `rasi-${type}-summary.pdf`,
+    filename: `zapheit-${type}-summary.pdf`,
     buffer: buildSimplePdf(lines),
   };
 }

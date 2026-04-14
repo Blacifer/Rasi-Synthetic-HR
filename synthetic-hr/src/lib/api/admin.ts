@@ -618,7 +618,7 @@ export const gatewayApi = {
         headers: {
           Authorization: `Bearer ${options.apiKey}`,
           'Content-Type': 'application/json',
-          ...(options.agentId ? { 'x-rasi-agent-id': options.agentId } : {}),
+          ...(options.agentId ? { 'x-zapheit-agent-id': options.agentId } : {}),
         },
         body: JSON.stringify({
           model: options.model,

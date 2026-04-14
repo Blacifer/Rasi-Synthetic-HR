@@ -1871,7 +1871,7 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
     return;
   }
 
-  const _agentIdHeader = (req.header('x-rasi-agent-id') || req.body?.agent_id) as string | undefined;
+  const _agentIdHeader = (req.header('x-zapheit-agent-id') || req.header('x-rasi-agent-id') || req.body?.agent_id) as string | undefined;
   let agentId: string | null = _agentIdHeader || null;
   if (_agentIdHeader && req.apiKey) {
     const _budgetResult = await checkAgentBudgetService(req.apiKey.organization_id, _agentIdHeader);

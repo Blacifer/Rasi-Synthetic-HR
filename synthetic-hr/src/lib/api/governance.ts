@@ -282,7 +282,7 @@ export const safeHarborApi = {
       const blob = await response.blob();
       const contentDisposition = response.headers.get('content-disposition') || '';
       const match = contentDisposition.match(/filename="([^"]+)"/);
-      const filename = match?.[1] || `rasi-${type}-summary.pdf`;
+      const filename = match?.[1] || `zapheit-${type}-summary.pdf`;
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;

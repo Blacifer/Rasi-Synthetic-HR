@@ -4,9 +4,9 @@ const API_CALLBACK_BASE = '/api/integrations/oauth/callback';
 
 const INTERNAL_INTEGRATION: IntegrationSpec = {
   id: 'internal',
-  name: 'SyntheticHR (Built-in)',
+  name: 'Zapheit (Built-in)',
   category: 'OTHER',
-  description: 'Built-in work items and safe actions inside SyntheticHR. No external credentials required.',
+  description: 'Built-in work items and safe actions inside Zapheit. No external credentials required.',
   // Kept as api_key for compatibility; UI/API special-case this to show as connected without configuration.
   authType: 'api_key',
   tags: ['BUILTIN', 'INTERNAL'],
@@ -25,7 +25,7 @@ const INTERNAL_INTEGRATION: IntegrationSpec = {
       { id: 'it.access_request.decide', label: 'Approve/deny access request (internal)', risk: 'high', pack: 'it' },
     ],
   },
-  notes: 'These actions create records inside SyntheticHR and run through Jobs & Approvals via connector_action.',
+  notes: 'These actions create records inside Zapheit and run through Jobs & Approvals via connector_action.',
 };
 
 export const PHASE1_INTEGRATIONS: IntegrationSpec[] = [

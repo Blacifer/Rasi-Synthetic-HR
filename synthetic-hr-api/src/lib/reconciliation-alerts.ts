@@ -223,7 +223,7 @@ export async function dispatchReconciliationAlertsForOrganization(orgId: string)
     if (recipients.length > 0) {
       await Promise.allSettled(recipients.map((email) => sendTransactionalEmail({
         to: email,
-        subject: `[SyntheticHR] ${alert.title}`,
+        subject: `[Zapheit] ${alert.title}`,
         text: `${alert.title}\n\n${alert.message}\n\nOrganization: ${organization.name || orgId}`,
         html: `<p><strong>${alert.title}</strong></p><p>${alert.message}</p><p>Organization: ${organization.name || orgId}</p>`,
       })));

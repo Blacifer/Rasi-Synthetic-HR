@@ -630,7 +630,7 @@ export default function PricingPage({ onNavigate }: { onNavigate?: (page: string
         {/* HR Scenario presets */}
         <div className="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-5">
           <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-            <Bot className="w-4 h-4 text-cyan-400" /> SyntheticHR Agent Presets
+            <Bot className="w-4 h-4 text-cyan-400" /> Zapheit Agent Presets
           </h3>
           <div className="grid grid-cols-2 gap-3">
             {SCENARIOS.map(s => (

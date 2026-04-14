@@ -359,7 +359,7 @@ export default function SafeHarborPage({ onNavigate, userRole }: { onNavigate?: 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `rasi-compliance-report-${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.download = `zapheit-compliance-report-${new Date().toISOString().slice(0, 10)}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success('Compliance report downloaded.');
@@ -385,7 +385,7 @@ export default function SafeHarborPage({ onNavigate, userRole }: { onNavigate?: 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `rasi-iso42001-report-${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.download = `zapheit-iso42001-report-${new Date().toISOString().slice(0, 10)}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success('ISO 42001 evidence package downloaded.');
@@ -695,7 +695,7 @@ export default function SafeHarborPage({ onNavigate, userRole }: { onNavigate?: 
         </SectionCard>
       </div>
 
-      <SectionCard title="Regulatory Compliance" description="How Rasi's governance features map to India and international AI regulatory frameworks." icon={Shield}>
+      <SectionCard title="Regulatory Compliance" description="How Zapheit's governance features map to India and international AI regulatory frameworks." icon={Shield}>
         {/* Tab bar */}
         <div className="flex gap-2 mb-6 flex-wrap">
           {([
