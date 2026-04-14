@@ -69,7 +69,8 @@ export function requireRuntimeAuth() {
         return res.status(401).json({ success: false, error: 'Runtime not enrolled' });
       }
 
-      const secret = decryptSecret(String(runtime.runtime_secret_enc));
+      const rawEnc = String(runtime.runtime_secret_enc ?? '');
+      const secret = decryptSecret(rawEnc);
       if (!secret) {
         return res.status(401).json({ success: false, error: 'Runtime secret unavailable' });
       }
@@ -82,6 +83,15 @@ export function requireRuntimeAuth() {
       }
       const expectedSig = crypto.createHmac('sha256', secret).update(`${parts[0]}.${parts[1]}`).digest('base64url');
       if (expectedSig !== parts[2]) {
+        logger.warn('Runtime HMAC mismatch', {
+          runtime_id: runtimeId,
+          enc_prefix: rawEnc.slice(0, 6),
+          enc_len: rawEnc.length,
+          secret_len: secret.length,
+          secret_prefix: secret.slice(0, 8),
+          sig_from_token: parts[2].slice(0, 12),
+          sig_expected: expectedSig.slice(0, 12),
+        });
         return res.status(401).json({ success: false, error: 'Runtime token signature invalid' });
       }
       const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as any;

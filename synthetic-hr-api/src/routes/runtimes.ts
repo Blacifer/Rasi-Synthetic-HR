@@ -367,6 +367,14 @@ router.post('/enroll', async (req: Request, res: Response) => {
 
     const finalRuntime = patched?.[0] || runtime;
 
+    logger.info('[enrollment] DB patch result', {
+      rows_returned: patched?.length ?? 0,
+      secret_enc_prefix: secretEnc.slice(0, 6),
+      secret_enc_len: secretEnc.length,
+      runtime_id: data.runtime_id,
+      used_fallback: !patched?.[0],
+    });
+
     const jwt = await signRuntimeJwt(runtimeSecret, {
       runtime_id: finalRuntime.id,
       organization_id: finalRuntime.organization_id,
