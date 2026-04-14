@@ -914,7 +914,31 @@ async function main() {
   runSchedulerTick();
   setInterval(runSchedulerTick, SCHEDULER_INTERVAL_MS);
 
-  await heartbeat();
+  // Initial heartbeat with automatic secret recovery.
+  // On GCP Cloud Run, two instances may briefly overlap on restart. If a newer instance
+  // enrolled and rotated runtime_secret_enc in the DB, this instance's cached secret is
+  // now stale and the first heartbeat will get a 401. Recovery: wait for the API to persist
+  // the new secret to Secret Manager (~5-10s async), then reload and retry.
+  let heartbeatOk = false;
+  for (let attempt = 0; attempt < 4 && !heartbeatOk; attempt++) {
+    try {
+      await heartbeat();
+      heartbeatOk = true;
+    } catch (err: any) {
+      const msg = String(err?.message || '');
+      const isAuthError = msg.includes('401') || msg.includes('signature') || msg.includes('authentication');
+      if (!isAuthError || attempt >= 3) throw err;
+      console.warn(`[runtime] initial heartbeat auth error (attempt ${attempt + 1}), reloading secret in 6s…`);
+      await new Promise((r) => setTimeout(r, 6000));
+      const fresh = await loadRuntimeSecretFromGCP();
+      if (fresh.secret.length >= MIN_RUNTIME_SECRET_LENGTH && fresh.secret !== runtimeSecret) {
+        runtimeSecret = fresh.secret;
+        if (fresh.orgId) organizationId = fresh.orgId;
+        console.log('[runtime] updated secret from Secret Manager, retrying heartbeat');
+      }
+    }
+  }
+
   await loopPoll();
 }
 
