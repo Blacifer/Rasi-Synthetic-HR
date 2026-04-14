@@ -134,15 +134,27 @@ async function persistRuntimeSecretToGCP(secret: string, orgId: string): Promise
 // Placeholder values like "pending-first-enrollment" are shorter and must be ignored.
 const MIN_RUNTIME_SECRET_LENGTH = 32;
 
+function parseSecretValue(raw: string): { secret: string; orgId: string } {
+  try {
+    const parsed = JSON.parse(raw) as { secret?: string; org_id?: string };
+    if (parsed?.secret && parsed.secret.length >= MIN_RUNTIME_SECRET_LENGTH) {
+      return { secret: parsed.secret, orgId: parsed.org_id || '' };
+    }
+  } catch {
+    // Not JSON — plain secret string
+  }
+  return { secret: raw, orgId: '' };
+}
+
 async function loadRuntimeSecret(): Promise<{ secret: string; orgId: string }> {
   if (RUNTIME_SECRET_ENV && RUNTIME_SECRET_ENV.length >= MIN_RUNTIME_SECRET_LENGTH) {
-    return { secret: RUNTIME_SECRET_ENV, orgId: '' };
+    return parseSecretValue(RUNTIME_SECRET_ENV);
   }
   if (RUNTIME_SECRET_FILE) {
     try {
       if (fs.existsSync(RUNTIME_SECRET_FILE)) {
         const value = fs.readFileSync(RUNTIME_SECRET_FILE, 'utf8').trim();
-        if (value && value.length >= MIN_RUNTIME_SECRET_LENGTH) return { secret: value, orgId: '' };
+        if (value && value.length >= MIN_RUNTIME_SECRET_LENGTH) return parseSecretValue(value);
       }
     } catch {
       // ignore
