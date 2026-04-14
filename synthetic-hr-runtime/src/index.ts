@@ -109,7 +109,7 @@ async function loadRuntimeSecretFromGCP(): Promise<{ secret: string; orgId: stri
 async function persistRuntimeSecretToGCP(secret: string, orgId: string): Promise<void> {
   try {
     const { token, project } = await gcpGetTokenAndProject();
-    const url = `https://secretmanager.googleapis.com/v1/projects/${project}/secrets/${GCP_SECRET_NAME}/versions:add`;
+    const url = `https://secretmanager.googleapis.com/v1/projects/${project}/secrets/${GCP_SECRET_NAME}:addVersion`;
     const payload = JSON.stringify({ secret, org_id: orgId });
     const res = await fetch(url, {
       method: 'POST',

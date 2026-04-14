@@ -112,11 +112,13 @@ export const supabaseRest = supabaseRestAsService;
 /**
  * URL encoding helpers for Supabase PostgREST filters
  */
-export const eq = (value: string | number) => `eq.${encodeURIComponent(String(value))}`;
-export const gte = (value: string | number) => `gte.${encodeURIComponent(String(value))}`;
-export const lte = (value: string | number) => `lte.${encodeURIComponent(String(value))}`;
-export const gt = (value: string | number) => `gt.${encodeURIComponent(String(value))}`;
-export const lt = (value: string | number) => `lt.${encodeURIComponent(String(value))}`;
+// These helpers return raw PostgREST filter values. Do NOT call encodeURIComponent here —
+// callers use URLSearchParams.set() which handles encoding automatically.
+export const eq = (value: string | number) => `eq.${String(value)}`;
+export const gte = (value: string | number) => `gte.${String(value)}`;
+export const lte = (value: string | number) => `lte.${String(value)}`;
+export const gt = (value: string | number) => `gt.${String(value)}`;
+export const lt = (value: string | number) => `lt.${String(value)}`;
 export const like = (value: string) => `like.${encodeURIComponent(value)}`;
 export const ilike = (value: string) => `ilike.${encodeURIComponent(value)}`;
 export const in_ = (values: Array<string | number>) => `in.(${values.map(v => encodeURIComponent(String(v))).join(',')})`;
