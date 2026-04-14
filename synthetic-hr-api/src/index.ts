@@ -122,7 +122,13 @@ const writeLimiter = buildRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 60,
   keyPrefix: 'rl:http:write:',
-  skip: (req: express.Request) => ['GET', 'HEAD', 'OPTIONS'].includes(req.method),
+  skip: (req: express.Request) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return true;
+    // Runtime-auth routes have their own auth + rate logic; exclude from generic write limiter
+    // so periodic heartbeats (1/15s) and scheduler ticks don't exceed the 60/15min bucket.
+    if (req.path.startsWith('/api/runtimes') || req.path.startsWith('/api/v1/runtimes')) return true;
+    return false;
+  },
   keyGenerator: jwtSubFromReq,
   message: {
     success: false,
