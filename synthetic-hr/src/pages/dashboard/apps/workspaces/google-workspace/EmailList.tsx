@@ -1,7 +1,7 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Search, Mail, Paperclip, Plus, ArrowLeft,
-  Reply, Forward, Archive, Send, Loader2, X,
+  Reply, Forward, Archive, Send, Loader2, X, ChevronDown,
 } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
@@ -37,9 +37,11 @@ interface EmailDetail extends GmailMessage {
 interface EmailListProps {
   emails: GmailMessage[];
   loading: boolean;
-  onSend: (data: Record<string, string>) => void;
   pendingApprovals?: ApprovalRequest[];
   onApprovalResolved?: (id: string) => void;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -166,19 +168,22 @@ function EmailDetailView({ emailMeta, onBack, onArchived }: EmailDetailViewProps
   const [loading, setLoading] = useState(true);
   const [compose, setCompose] = useState<'reply' | 'forward' | null>(null);
   const [archiving, setArchiving] = useState(false);
+  const loaded = useRef(false);
 
-  // Load full email on mount
-  useState(() => {
+  useEffect(() => {
+    if (loaded.current) return;
+    loaded.current = true;
     (async () => {
       setLoading(true);
       try {
         const res = await api.unifiedConnectors.executeAction('google-workspace', 'get_email', { id: emailMeta.id });
-        if (res.success && res.data?.data) setDetail(res.data.data);
+        const payload = res.data as any;
+        if (res.success && payload?.data) setDetail(payload.data);
         else setDetail({ ...emailMeta });
       } catch { setDetail({ ...emailMeta }); }
       finally { setLoading(false); }
     })();
-  });
+  }, [emailMeta]);
 
   const handleArchive = async () => {
     setArchiving(true);
@@ -276,39 +281,39 @@ function EmailDetailView({ emailMeta, onBack, onArchived }: EmailDetailViewProps
 /*  Main component                                                     */
 /* ------------------------------------------------------------------ */
 
-export function EmailList({ emails, loading, onSend, pendingApprovals = [], onApprovalResolved }: EmailListProps) {
+export function EmailList({
+  emails, loading,
+  pendingApprovals = [], onApprovalResolved,
+  hasMore = false, loadingMore = false, onLoadMore,
+}: EmailListProps) {
   const [search, setSearch] = useState('');
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [openEmail, setOpenEmail] = useState<GmailMessage | null>(null);
   const [showCompose, setShowCompose] = useState(false);
-  const [localEmails, setLocalEmails] = useState<GmailMessage[]>([]);
-
-  // Merge prop emails with local state (for archiving)
-  const allEmails = useMemo(() => {
-    if (localEmails.length) return localEmails;
-    return emails;
-  }, [emails, localEmails]);
-
-  // Sync prop emails in
-  useState(() => { setLocalEmails(emails); });
+  const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
 
   const handleArchived = useCallback((id: string) => {
-    setLocalEmails((prev) => prev.filter((e) => e.id !== id));
+    setArchivedIds((prev) => new Set([...prev, id]));
   }, []);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return allEmails;
-    const q = search.toLowerCase();
-    return allEmails.filter((e) =>
-      (e.subject || '').toLowerCase().includes(q) ||
-      (e.from || '').toLowerCase().includes(q) ||
-      (e.snippet || '').toLowerCase().includes(q),
-    );
-  }, [allEmails, search]);
+    let list = emails.filter((e) => !archivedIds.has(e.id));
+    if (unreadOnly) list = list.filter((e) => e.isUnread);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((e) =>
+        (e.subject || '').toLowerCase().includes(q) ||
+        (e.from || '').toLowerCase().includes(q) ||
+        (e.snippet || '').toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [emails, archivedIds, search, unreadOnly]);
 
-  const sendWrapper = useCallback(async (data: Record<string, string>) => {
-    await onSend(data);
-    setShowCompose(false);
-  }, [onSend]);
+  const unreadCount = useMemo(
+    () => emails.filter((e) => e.isUnread && !archivedIds.has(e.id)).length,
+    [emails, archivedIds],
+  );
 
   // Email detail view
   if (openEmail) {
@@ -347,6 +352,28 @@ export function EmailList({ emails, loading, onSend, pendingApprovals = [], onAp
             className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
           />
         </div>
+
+        {/* Unread filter toggle */}
+        <button
+          onClick={() => setUnreadOnly((v) => !v)}
+          className={cn(
+            'flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0',
+            unreadOnly
+              ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+              : 'bg-white/[0.05] text-slate-500 hover:text-slate-300',
+          )}
+        >
+          Unread
+          {unreadCount > 0 && (
+            <span className={cn(
+              'text-[9px] px-1 py-0.5 rounded-full font-bold leading-none',
+              unreadOnly ? 'bg-blue-500/30 text-blue-200' : 'bg-white/10 text-slate-400',
+            )}>
+              {unreadCount}
+            </span>
+          )}
+        </button>
+
         <span className="text-[11px] text-slate-600 shrink-0">{filtered.length}</span>
         <button
           onClick={() => setShowCompose((v) => !v)}
@@ -358,11 +385,11 @@ export function EmailList({ emails, loading, onSend, pendingApprovals = [], onAp
 
       {/* Compose */}
       {showCompose && (
-        <ComposeBox mode="compose" onSend={sendWrapper} onClose={() => setShowCompose(false)} />
+        <ComposeBox mode="compose" onClose={() => setShowCompose(false)} />
       )}
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-h-0">
         {loading ? (
           <div className="animate-pulse space-y-px p-4">
             {Array.from({ length: 10 }).map((_, i) => (
@@ -372,7 +399,14 @@ export function EmailList({ emails, loading, onSend, pendingApprovals = [], onAp
         ) : filtered.length === 0 ? (
           <div className="text-center py-16">
             <Mail className="w-8 h-8 text-slate-600 mx-auto mb-3" />
-            <p className="text-sm text-slate-500">No emails found</p>
+            <p className="text-sm text-slate-500">
+              {unreadOnly ? 'No unread emails' : 'No emails found'}
+            </p>
+            {unreadOnly && (
+              <button onClick={() => setUnreadOnly(false)} className="mt-2 text-xs text-blue-400 hover:underline">
+                Show all
+              </button>
+            )}
           </div>
         ) : (
           <div>
@@ -385,8 +419,11 @@ export function EmailList({ emails, loading, onSend, pendingApprovals = [], onAp
                   e.isUnread && 'bg-blue-500/[0.03]',
                 )}
               >
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500/25 to-violet-500/25 flex items-center justify-center text-white text-xs font-semibold shrink-0 mt-0.5">
+                <div className="relative w-8 h-8 rounded-full bg-gradient-to-br from-blue-500/25 to-violet-500/25 flex items-center justify-center text-white text-xs font-semibold shrink-0 mt-0.5">
                   {senderInitial(e.from)}
+                  {e.isUnread && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-blue-500 border border-[#0a0a0f]" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-2 justify-between">
@@ -403,6 +440,22 @@ export function EmailList({ emails, loading, onSend, pendingApprovals = [], onAp
                 {e.hasAttachment && <Paperclip className="w-3 h-3 text-slate-500 shrink-0 mt-1.5" />}
               </div>
             ))}
+
+            {/* Load more */}
+            {hasMore && (
+              <div className="px-4 py-3 border-t border-white/[0.04]">
+                <button
+                  onClick={onLoadMore}
+                  disabled={loadingMore}
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.07] text-xs text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-40"
+                >
+                  {loadingMore
+                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Loading…</>
+                    : <><ChevronDown className="w-3.5 h-3.5" />Load more emails</>
+                  }
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

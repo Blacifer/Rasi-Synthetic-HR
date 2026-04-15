@@ -41,6 +41,8 @@ export default function GoogleWorkspace() {
 
   /* Data state */
   const [emails, setEmails] = useState<GmailMessage[]>([]);
+  const [emailsNextPageToken, setEmailsNextPageToken] = useState<string | null>(null);
+  const [loadingMoreEmails, setLoadingMoreEmails] = useState(false);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [filesNextPageToken, setFilesNextPageToken] = useState<string | null>(null);
@@ -66,7 +68,11 @@ export default function GoogleWorkspace() {
     setLoadingEmails(true);
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_emails', { maxResults: 50 });
-      if (res.success && res.data?.data) setEmails(res.data.data);
+      const payload = res.data as any;
+      if (res.success && payload?.data) {
+        setEmails(payload.data);
+        setEmailsNextPageToken(payload.nextPageToken ?? null);
+      }
       setConnectionStatus('connected');
     } catch {
       setConnectionStatus('disconnected');
@@ -74,6 +80,20 @@ export default function GoogleWorkspace() {
       setLoadingEmails(false);
     }
   }, []);
+
+  const loadMoreEmails = useCallback(async () => {
+    if (!emailsNextPageToken || loadingMoreEmails) return;
+    setLoadingMoreEmails(true);
+    try {
+      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_emails', { maxResults: 50, pageToken: emailsNextPageToken });
+      const payload = res.data as any;
+      if (res.success && payload?.data) {
+        setEmails((prev) => [...prev, ...payload.data]);
+        setEmailsNextPageToken(payload.nextPageToken ?? null);
+      }
+    } catch { /* empty */ }
+    finally { setLoadingMoreEmails(false); }
+  }, [emailsNextPageToken, loadingMoreEmails]);
 
   const loadEvents = useCallback(async () => {
     setLoadingEvents(true);
@@ -138,18 +158,6 @@ export default function GoogleWorkspace() {
   /* --------------------------------------------------------------- */
   /*  Write actions                                                    */
   /* --------------------------------------------------------------- */
-
-  const sendEmail = useCallback(async (data: Record<string, string>) => {
-    try {
-      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'send_email', data);
-      if (res.success) {
-        toast.success('Email sent');
-        void loadEmails();
-      } else {
-        toast.error(res.error || 'Failed to send email');
-      }
-    } catch { toast.error('Network error'); }
-  }, [loadEmails]);
 
   const createEvent = useCallback(async (data: Record<string, string>) => {
     try {
@@ -303,9 +311,11 @@ export default function GoogleWorkspace() {
           <EmailList
             emails={emails}
             loading={loadingEmails}
-            onSend={sendEmail}
             pendingApprovals={pendingApprovals.filter((a) => a.action === 'send_email')}
             onApprovalResolved={handleApprovalResolved}
+            hasMore={!!emailsNextPageToken}
+            loadingMore={loadingMoreEmails}
+            onLoadMore={loadMoreEmails}
           />
         </div>
       ) : activeTab === 'calendar' ? (

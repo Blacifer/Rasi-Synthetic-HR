@@ -1,32 +1,54 @@
-# Rasi-Synthetic-HR (SyntheticHR)
+# Zapheit
 
-Rasi-Synthetic-HR is an **AI Agent control plane**: define **Playbooks**, route runs through **Jobs & Approvals**, execute via a **Runtime**, and keep an **audit trail**.
+**Zapheit** is an AI Agent control plane for enterprises. Connect your AI agents, govern every action, track costs, and keep a complete audit trail — all in one place.
+
+## What it does
+
+- **Fleet management** — register and monitor all your AI agents in one dashboard
+- **Governance** — set policies that auto-approve, require human sign-off, or block agent actions
+- **Integrations** — agents can act on Google Workspace, Slack, Jira, and more through a governed connector layer
+- **Cost tracking** — per-agent LLM spend across OpenAI, Anthropic, and OpenRouter
+- **Incident detection** — automatic flagging of PII leakage and hallucinations
+- **Playbooks** — define multi-step automation workflows agents can execute
 
 ## Services
 
-- Frontend dashboard: `./synthetic-hr` (Vercel)
-- Backend API: `./synthetic-hr-api` (Railway)
-- Runtime worker: `./synthetic-hr-runtime` (your compute / container)
-- Database & migrations: `./synthetic-hr-database` (Supabase / Postgres)
-
-## Key docs
-
-- Documentation index: [`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md)
-- Org rollout (agents): [`docs/ORGANIZATION_AGENT_ROLLOUT.md`](docs/ORGANIZATION_AGENT_ROLLOUT.md)
-- Internal connectors (Support/Sales/IT): [`docs/INTERNAL_CONNECTORS_SUPPORT_SALES_IT.md`](docs/INTERNAL_CONNECTORS_SUPPORT_SALES_IT.md)
+| Service | Folder | Hosting |
+|---|---|---|
+| Frontend dashboard | `./synthetic-hr` | Vercel |
+| Backend API | `./synthetic-hr-api` | GCP Cloud Run |
+| Runtime worker | `./synthetic-hr-runtime` | GCP Cloud Run |
+| Database & migrations | `./synthetic-hr-database` | Supabase (PostgreSQL) |
 
 ## Quick start (local)
 
-- Frontend: see `./synthetic-hr/README.md`
-- Database: `./synthetic-hr-database/DEPLOYMENT_GUIDE.md`
+```bash
+# Frontend
+cd synthetic-hr && pnpm install && pnpm dev
 
-## Self-host / enterprise
+# Backend API
+cd synthetic-hr-api && npm install && npm run dev
 
-- Deployment guide: [`docs/DEPLOYMENT_QUICK_REFERENCE.md`](docs/DEPLOYMENT_QUICK_REFERENCE.md)
+# Runtime worker
+cd synthetic-hr-runtime && npm install && npm run dev
+```
+
+See `synthetic-hr/README.md` and `synthetic-hr-database/DEPLOYMENT_GUIDE.md` for full setup.
+
+## Self-host / deploy to GCP
+
+```bash
+# First-time GCP setup
+bash deploy/gcp/deploy.sh
+```
+
+- GCP deployment guide: [`deploy/gcp/README.md`](deploy/gcp/README.md)
+- Deployment quick reference: [`docs/DEPLOYMENT_QUICK_REFERENCE.md`](docs/DEPLOYMENT_QUICK_REFERENCE.md)
 - Enterprise checklist: [`docs/ENTERPRISE_DEPLOYMENT_CHECKLIST.md`](docs/ENTERPRISE_DEPLOYMENT_CHECKLIST.md)
-- Docker Compose (all services): `docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/stack.env up -d`
-- Note: deployments still require a Supabase instance (cloud or self-hosted) for auth + PostgREST.
+- Docker Compose (local all-in-one): `docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/stack.env up -d`
 
-## Archive
+> Supabase is required for auth and the database regardless of where the API runs.
 
-Older planning/status docs are in [`docs/archive/`](docs/archive/).
+## Company
+
+Built by **Rasi Cyber Solutions Private Limited**.
