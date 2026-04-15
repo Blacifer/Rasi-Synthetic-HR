@@ -136,7 +136,19 @@ export function DriveFiles({
                   <div className="flex items-center gap-3">
                     <Icon className="w-4 h-4 text-blue-400 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-200 truncate">{f.name || 'Untitled'}</p>
+                      {f.webViewLink ? (
+                        <a
+                          href={f.webViewLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-xs font-semibold text-slate-200 hover:text-blue-300 hover:underline truncate block transition-colors"
+                        >
+                          {f.name || 'Untitled'}
+                        </a>
+                      ) : (
+                        <p className="text-xs font-semibold text-slate-200 truncate">{f.name || 'Untitled'}</p>
+                      )}
                       <div className="flex items-center gap-3 text-[10px] text-slate-500 flex-wrap">
                         {f.owners?.[0]?.displayName && <span>{f.owners[0].displayName}</span>}
                         {f.size && <span>{fmtSize(f.size)}</span>}

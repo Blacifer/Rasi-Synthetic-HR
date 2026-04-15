@@ -870,7 +870,11 @@ async function googleWorkspaceAction(
     }
     case 'list_events':
     case 'list_calendar_events': {
-      const qs = new URLSearchParams({ maxResults: String(params.maxResults || params.limit || 20) });
+      const qs = new URLSearchParams({
+        maxResults: String(params.maxResults || params.limit || 50),
+        singleEvents: 'true',
+        orderBy: 'startTime',
+      });
       if (params.time_min) qs.set('timeMin', params.time_min);
       if (params.time_max) qs.set('timeMax', params.time_max);
       const r = await jsonFetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${qs}`, { headers: h });
