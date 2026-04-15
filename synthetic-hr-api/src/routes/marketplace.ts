@@ -3011,8 +3011,10 @@ router.get('/oauth/callback', async (req: Request, res: Response) => {
     const result = await exchangeOAuthCode(appId, code, stateRow.redirect_uri as string, zohoAccountsServer ? { zohoAccountsServer } : undefined);
     accessToken = result.accessToken;
     refreshToken = result.refreshToken ?? null;
+    logger.info('OAuth token exchange succeeded', { app_id: appId, org_id: stateRow.organization_id, has_refresh: !!refreshToken });
   } catch (e: any) {
     exchangeError = e.message;
+    logger.error('OAuth token exchange failed', { app_id: appId, org_id: stateRow.organization_id, error: exchangeError });
   }
 
   if (!accessToken) {
@@ -3218,9 +3220,15 @@ async function exchangeOAuthCode(
     body: new URLSearchParams(params),
   });
   const json = await resp.json() as any;
-  if (!resp.ok || !json.access_token) {
+
+  // Slack returns HTTP 200 even on errors — check json.ok explicitly for Slack
+  const slackFailed = appId === 'slack' && json.ok === false;
+  if (!resp.ok || slackFailed || !json.access_token) {
     throw new Error(json.error_description || json.error || `Token exchange failed (${resp.status})`);
   }
+
+  // Slack OAuth v2 bot flow: access_token is the bot token at top level
+  // User token (if requested) is at authed_user.access_token — we use the bot token
   return { accessToken: json.access_token as string, refreshToken: json.refresh_token as string | undefined };
 }
 
