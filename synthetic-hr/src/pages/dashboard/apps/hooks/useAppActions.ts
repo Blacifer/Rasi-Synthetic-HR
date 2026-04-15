@@ -17,7 +17,7 @@ export function useAppActions({ reload, markConnected, markDisconnected, onPostC
     try {
       if (app.source === 'marketplace') {
         const res = await api.marketplace.install(app.appId, creds);
-        const data = res.data as any;
+        const data = res as any;
         if (!res.success) {
           toast.error((res as any).error || 'Connection failed');
           return;
@@ -28,8 +28,8 @@ export function useAppActions({ reload, markConnected, markDisconnected, onPostC
         }
       } else if (app.authType === 'oauth2') {
         const res = await api.integrations.initOAuth(serviceId, '/dashboard/apps', creds, false);
-        if (res.success && (res.data as any)?.url) {
-          window.location.href = (res.data as any).url;
+        if (res.success && (res as any)?.url) {
+          window.location.href = (res as any).url;
           return;
         }
         toast.error((res as any).error || 'Connection failed');
@@ -70,7 +70,7 @@ export function useAppActions({ reload, markConnected, markDisconnected, onPostC
       if (app.source === 'marketplace') {
         if (app.authType === 'oauth2') {
           const res = await api.marketplace.install(app.appId, creds);
-          const data = res.data as any;
+          const data = res as any;
           if (res.success && data?.authUrl) {
             window.location.href = data.authUrl;
             return;
@@ -85,8 +85,8 @@ export function useAppActions({ reload, markConnected, markDisconnected, onPostC
       }
       if (app.authType === 'oauth2') {
         const res = await api.integrations.initOAuth(serviceId, '/dashboard/apps', creds, false);
-        if (res.success && (res.data as any)?.url) {
-          window.location.href = (res.data as any).url;
+        if (res.success && (res as any)?.url) {
+          window.location.href = (res as any).url;
           return;
         }
         throw new Error((res as any).error || 'Reauthorization failed');
@@ -143,7 +143,7 @@ export function useAppActions({ reload, markConnected, markDisconnected, onPostC
       const res = app.source === 'marketplace'
         ? await api.marketplace.install(app.appId)
         : await api.integrations.initOAuth(serviceId, '/dashboard/apps', {}, false);
-      const url = (res.data as any)?.url || (res.data as any)?.authUrl;
+      const url = (res as any)?.url || (res as any)?.authUrl;
       if (res.success && url) {
         window.location.href = url;
       } else {
