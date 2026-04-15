@@ -55,6 +55,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   // Overlay state
   const [drawerApp, setDrawerApp] = useState<UnifiedApp | null>(null);
   const [connectTarget, setConnectTarget] = useState<UnifiedApp | null>(null);
+  const [postOAuthApp, setPostOAuthApp] = useState<UnifiedApp | null>(null);
 
   // Health summary: maps appId → 'ok' | 'error' | null
   const [healthMap, setHealthMap] = useState<Map<string, 'ok' | 'error'>>(new Map());
@@ -115,7 +116,14 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
       toast.error(`Connection failed: ${oauthError}`);
     } else if (oauthApp) {
       void reload().then(() => {
-        toast.success(`${oauthApp.charAt(0).toUpperCase() + oauthApp.slice(1)} connected successfully`);
+        // Re-open the wizard at the configure step so the user can set policies,
+        // link agents, and run a connection test — steps skipped during the OAuth redirect.
+        const connected = allApps.find((a) => a.appId === oauthApp || a.name.toLowerCase() === oauthApp.toLowerCase());
+        if (connected) {
+          setPostOAuthApp(connected);
+        } else {
+          toast.success(`${oauthApp.charAt(0).toUpperCase() + oauthApp.slice(1)} connected successfully`);
+        }
       });
     }
     setSearchParams((p) => {
@@ -342,6 +350,30 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
           )}
         </div>
       </div>
+
+      {/* Post-OAuth wizard — resumes from Configure step after OAuth redirect */}
+      {postOAuthApp && (
+        <ConnectWizard
+          app={postOAuthApp}
+          agents={agents}
+          initialStep="configure"
+          onConnect={async (app, creds) => { await handleConnect(app, creds); }}
+          onClose={() => setPostOAuthApp(null)}
+          onOpenWorkspace={(app) => {
+            setPostOAuthApp(null);
+            if (app.appId === 'slack' && onNavigate) onNavigate('apps/slack/workspace');
+            else if (app.appId === 'jira' && onNavigate) onNavigate('apps/jira/workspace');
+            else if (app.appId === 'github' && onNavigate) onNavigate('apps/github/workspace');
+            else if (app.appId === 'hubspot' && onNavigate) onNavigate('apps/hubspot/workspace');
+            else if (app.appId === 'quickbooks' && onNavigate) onNavigate('apps/quickbooks/workspace');
+            else if (app.appId === 'google-workspace' && onNavigate) onNavigate('apps/google-workspace/workspace');
+            else if (app.appId === 'zoho-people' && onNavigate) onNavigate('apps/zoho/workspace');
+            else if (app.appId === 'notion' && onNavigate) onNavigate('apps/notion/workspace');
+            else if (app.appId === 'whatsapp' && onNavigate) onNavigate('apps/whatsapp/workspace');
+            else setDrawerApp(app);
+          }}
+        />
+      )}
 
       {/* Connect wizard */}
       {connectTarget && (

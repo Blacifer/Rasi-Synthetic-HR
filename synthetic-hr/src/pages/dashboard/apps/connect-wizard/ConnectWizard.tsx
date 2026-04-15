@@ -44,14 +44,15 @@ interface ConnectWizardProps {
   onConnect: (app: UnifiedApp, creds: Record<string, string>) => Promise<void>;
   onClose: () => void;
   onOpenWorkspace?: (app: UnifiedApp) => void;
+  initialStep?: Step;
 }
 
 /* ------------------------------------------------------------------ */
 /*  Wizard                                                             */
 /* ------------------------------------------------------------------ */
 
-export function ConnectWizard({ app, agents, onConnect, onClose, onOpenWorkspace }: ConnectWizardProps) {
-  const [step, setStep] = useState<Step>('preview');
+export function ConnectWizard({ app, agents, onConnect, onClose, onOpenWorkspace, initialStep }: ConnectWizardProps) {
+  const [step, setStep] = useState<Step>(initialStep ?? 'preview');
   const [creds, setCreds] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [testResult, setTestResult] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
