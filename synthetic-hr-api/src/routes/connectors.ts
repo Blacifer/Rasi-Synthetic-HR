@@ -4145,7 +4145,8 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
 
     if (!action) return res.status(400).json({ success: false, error: 'action is required' });
 
-    const preflight = await runPreflightGate(orgId, connectorId, action, params, agentId || null);
+    const actorRole = (req as any).user?.role as string | undefined;
+    const preflight = await runPreflightGate(orgId, connectorId, action, params, agentId || null, actorRole);
     if (!preflight.allowed) {
       const now = new Date().toISOString();
       let approvalId: string | null = null;

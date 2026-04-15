@@ -88,7 +88,12 @@ export async function runPreflightGate(
   action: string,
   params: Record<string, any>,
   agentId?: string | null,
+  actorRole?: string | null,
 ): Promise<PreflightResult> {
+  // Admins and super-admins acting directly from the connector console are the
+  // approvers themselves — they bypass require_approval but are still subject to
+  // block decisions (DLP, emergency disable, capability restrictions).
+  const actorIsPrivileged = actorRole === 'admin' || actorRole === 'super_admin';
   const auditRef = `pf_${crypto.randomUUID()}`;
   const policySnapshot: Record<string, any> = {};
   const budgetSnapshot: Record<string, any> = {};
@@ -174,7 +179,9 @@ export async function runPreflightGate(
     }
 
     const needsApproval = evaluation.approvalRequired || policy.require_approval;
-    if (needsApproval) {
+    if (needsApproval && actorIsPrivileged) {
+      // Privileged direct action — skip approval gate, continue to DLP + blast-radius checks
+    } else if (needsApproval) {
       return {
         allowed: false,
         decision: 'require_approval',
