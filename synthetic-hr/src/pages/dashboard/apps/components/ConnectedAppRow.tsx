@@ -37,7 +37,7 @@ export function ConnectedAppRow({ app, agentNames, onClick, onConfigure, onDisco
                 healthResult === 'ok' ? 'healthy'
                   : healthResult === 'error' ? 'error'
                   : app.supportsHealthTest === false ? 'unknown'
-                  : 'pending'
+                  : 'connected'
               }
             />
           </div>

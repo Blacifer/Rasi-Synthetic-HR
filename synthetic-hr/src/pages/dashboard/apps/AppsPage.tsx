@@ -302,23 +302,23 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
                     agentNames={agentNamesFor(app)}
                     onClick={(_a) => {
                       if (app.appId === 'slack' && onNavigate) {
-                        onNavigate('/dashboard/apps/slack/workspace');
+                        onNavigate('apps/slack/workspace');
                       } else if (app.appId === 'jira' && onNavigate) {
-                        onNavigate('/dashboard/apps/jira/workspace');
+                        onNavigate('apps/jira/workspace');
                       } else if (app.appId === 'github' && onNavigate) {
-                        onNavigate('/dashboard/apps/github/workspace');
+                        onNavigate('apps/github/workspace');
                       } else if (app.appId === 'hubspot' && onNavigate) {
-                        onNavigate('/dashboard/apps/hubspot/workspace');
+                        onNavigate('apps/hubspot/workspace');
                       } else if (app.appId === 'quickbooks' && onNavigate) {
-                        onNavigate('/dashboard/apps/quickbooks/workspace');
+                        onNavigate('apps/quickbooks/workspace');
                       } else if (app.appId === 'google-workspace' && onNavigate) {
-                        onNavigate('/dashboard/apps/google-workspace/workspace');
+                        onNavigate('apps/google-workspace/workspace');
                       } else if (app.appId === 'zoho-people' && onNavigate) {
-                        onNavigate('/dashboard/apps/zoho/workspace');
+                        onNavigate('apps/zoho/workspace');
                       } else if (app.appId === 'notion' && onNavigate) {
-                        onNavigate('/dashboard/apps/notion/workspace');
+                        onNavigate('apps/notion/workspace');
                       } else if (app.appId === 'whatsapp' && onNavigate) {
-                        onNavigate('/dashboard/apps/whatsapp/workspace');
+                        onNavigate('apps/whatsapp/workspace');
                       } else {
                         setDrawerApp(app);
                       }
@@ -355,21 +355,21 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
           onOpenWorkspace={(app) => {
             setConnectTarget(null);
             if (app.appId === 'slack' && onNavigate) {
-              onNavigate('/dashboard/apps/slack/workspace');
+              onNavigate('apps/slack/workspace');
             } else if (app.appId === 'jira' && onNavigate) {
-              onNavigate('/dashboard/apps/jira/workspace');
+              onNavigate('apps/jira/workspace');
             } else if (app.appId === 'github' && onNavigate) {
-              onNavigate('/dashboard/apps/github/workspace');
+              onNavigate('apps/github/workspace');
             } else if (app.appId === 'hubspot' && onNavigate) {
-              onNavigate('/dashboard/apps/hubspot/workspace');
+              onNavigate('apps/hubspot/workspace');
             } else if (app.appId === 'quickbooks' && onNavigate) {
-              onNavigate('/dashboard/apps/quickbooks/workspace');
+              onNavigate('apps/quickbooks/workspace');
             } else if (app.appId === 'google-workspace' && onNavigate) {
-              onNavigate('/dashboard/apps/google-workspace/workspace');
+              onNavigate('apps/google-workspace/workspace');
             } else if (app.appId === 'zoho-people' && onNavigate) {
-              onNavigate('/dashboard/apps/zoho/workspace');
+              onNavigate('apps/zoho/workspace');
             } else if (app.appId === 'notion' && onNavigate) {
-              onNavigate('/dashboard/apps/notion/workspace');
+              onNavigate('apps/notion/workspace');
             } else {
               setDrawerApp(app);
             }
