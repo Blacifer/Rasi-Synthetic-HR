@@ -56,6 +56,8 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   const [drawerApp, setDrawerApp] = useState<UnifiedApp | null>(null);
   const [connectTarget, setConnectTarget] = useState<UnifiedApp | null>(null);
   const [postOAuthApp, setPostOAuthApp] = useState<UnifiedApp | null>(null);
+  // Pending post-OAuth app ID — set after callback, resolved once allApps has loaded
+  const [pendingPostOAuthId, setPendingPostOAuthId] = useState<string | null>(null);
 
   // Health summary: maps appId → 'ok' | 'error' | null
   const [healthMap, setHealthMap] = useState<Map<string, 'ok' | 'error'>>(new Map());
@@ -109,21 +111,14 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
     },
   });
 
-  // OAuth callback: marketplace
+  // OAuth callback: marketplace — store the app ID, resolve once allApps loads
   useEffect(() => {
     if (!oauthConnected && !oauthApp && !oauthError) return;
     if (oauthError) {
       toast.error(`Connection failed: ${oauthError}`);
     } else if (oauthApp) {
       void reload().then(() => {
-        // Re-open the wizard at the configure step so the user can set policies,
-        // link agents, and run a connection test — steps skipped during the OAuth redirect.
-        const connected = allApps.find((a) => a.appId === oauthApp || a.name.toLowerCase() === oauthApp.toLowerCase());
-        if (connected) {
-          setPostOAuthApp(connected);
-        } else {
-          toast.success(`${oauthApp.charAt(0).toUpperCase() + oauthApp.slice(1)} connected successfully`);
-        }
+        setPendingPostOAuthId(oauthApp);
       });
     }
     setSearchParams((p) => {
@@ -131,6 +126,20 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
       return p;
     }, { replace: true });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Resolve pendingPostOAuthId once allApps is populated after reload
+  useEffect(() => {
+    if (!pendingPostOAuthId || !allApps.length) return;
+    const connected = allApps.find(
+      (a) => a.appId === pendingPostOAuthId || a.name.toLowerCase() === pendingPostOAuthId.toLowerCase(),
+    );
+    setPendingPostOAuthId(null);
+    if (connected) {
+      setPostOAuthApp(connected);
+    } else {
+      toast.success(`${pendingPostOAuthId.charAt(0).toUpperCase() + pendingPostOAuthId.slice(1)} connected successfully`);
+    }
+  }, [pendingPostOAuthId, allApps]);
 
   // OAuth callback: integration (connectors.ts)
   useEffect(() => {
