@@ -23,7 +23,7 @@ export interface OutlookEvent {
 interface OutlookCalendarProps {
   events: OutlookEvent[];
   loading: boolean;
-  onCreate: (data: Record<string, string>) => void;
+  onCreate: (data: Record<string, string>) => void | Promise<void>;
   pendingApprovals?: ApprovalRequest[];
   onApprovalResolved?: (id: string) => void;
 }

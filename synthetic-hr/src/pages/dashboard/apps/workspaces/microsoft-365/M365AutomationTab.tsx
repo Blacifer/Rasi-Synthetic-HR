@@ -49,9 +49,10 @@ export function M365AutomationTab() {
     setExecuting(true);
     setCommandResult(null);
     try {
-      const res = await api.agents.runPlaybook(selectedAgent, {
-        trigger: 'manual_command',
-        context: { command, connector: CONNECTOR_ID },
+      const res = await api.jobs.create({
+        agent_id: selectedAgent,
+        type: 'workflow_run',
+        input: { trigger: 'manual_command', context: { command, connector: CONNECTOR_ID } },
       });
       if (res.success) {
         setCommandResult({ success: true, message: 'Command dispatched to agent' });
