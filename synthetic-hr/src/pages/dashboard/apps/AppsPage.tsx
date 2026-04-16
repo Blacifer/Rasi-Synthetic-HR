@@ -330,6 +330,8 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
                         onNavigate('apps/quickbooks/workspace');
                       } else if (app.appId === 'google-workspace' && onNavigate) {
                         onNavigate('apps/google-workspace/workspace');
+                      } else if (app.appId === 'microsoft-365' && onNavigate) {
+                        onNavigate('apps/microsoft-365/workspace');
                       } else if (app.appId === 'zoho-people' && onNavigate) {
                         onNavigate('apps/zoho/workspace');
                       } else if (app.appId === 'notion' && onNavigate) {
@@ -376,6 +378,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
             else if (app.appId === 'hubspot' && onNavigate) onNavigate('apps/hubspot/workspace');
             else if (app.appId === 'quickbooks' && onNavigate) onNavigate('apps/quickbooks/workspace');
             else if (app.appId === 'google-workspace' && onNavigate) onNavigate('apps/google-workspace/workspace');
+            else if (app.appId === 'microsoft-365' && onNavigate) onNavigate('apps/microsoft-365/workspace');
             else if (app.appId === 'zoho-people' && onNavigate) onNavigate('apps/zoho/workspace');
             else if (app.appId === 'notion' && onNavigate) onNavigate('apps/notion/workspace');
             else if (app.appId === 'whatsapp' && onNavigate) onNavigate('apps/whatsapp/workspace');
@@ -407,6 +410,8 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
               onNavigate('apps/quickbooks/workspace');
             } else if (app.appId === 'google-workspace' && onNavigate) {
               onNavigate('apps/google-workspace/workspace');
+            } else if (app.appId === 'microsoft-365' && onNavigate) {
+              onNavigate('apps/microsoft-365/workspace');
             } else if (app.appId === 'zoho-people' && onNavigate) {
               onNavigate('apps/zoho/workspace');
             } else if (app.appId === 'notion' && onNavigate) {

@@ -57,6 +57,7 @@ const GitHubWorkspace = lazy(() => import('./dashboard/apps/workspaces/github/Gi
 const HubSpotWorkspace = lazy(() => import('./dashboard/apps/workspaces/hubspot/HubSpotWorkspace'));
 const QuickBooksWorkspace = lazy(() => import('./dashboard/apps/workspaces/quickbooks/QuickBooksWorkspace'));
 const GoogleWorkspace = lazy(() => import('./dashboard/apps/workspaces/google-workspace/GoogleWorkspace'));
+const Microsoft365Workspace = lazy(() => import('./dashboard/apps/workspaces/microsoft-365/Microsoft365'));
 const ZohoWorkspace = lazy(() => import('./dashboard/apps/workspaces/zoho/ZohoWorkspace'));
 const NotionWorkspace = lazy(() => import('./dashboard/apps/workspaces/notion/NotionWorkspace'));
 const WhatsAppWorkspace = lazy(() => import('./dashboard/apps/workspaces/whatsapp/WhatsAppWorkspace'));
@@ -1096,6 +1097,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="apps/hubspot/workspace" element={<SectionErrorBoundary fallbackMessage="HubSpot workspace failed to load"><HubSpotWorkspace /></SectionErrorBoundary>} />
                   <Route path="apps/quickbooks/workspace" element={<SectionErrorBoundary fallbackMessage="QuickBooks workspace failed to load"><QuickBooksWorkspace /></SectionErrorBoundary>} />
                   <Route path="apps/google-workspace/workspace" element={<SectionErrorBoundary fallbackMessage="Google Workspace failed to load"><GoogleWorkspace /></SectionErrorBoundary>} />
+                  <Route path="apps/microsoft-365/workspace" element={<SectionErrorBoundary fallbackMessage="Microsoft 365 failed to load"><Microsoft365Workspace /></SectionErrorBoundary>} />
                   <Route path="apps/zoho/workspace" element={<SectionErrorBoundary fallbackMessage="Zoho People workspace failed to load"><ZohoWorkspace /></SectionErrorBoundary>} />
                   <Route path="apps/notion/workspace" element={<SectionErrorBoundary fallbackMessage="Notion workspace failed to load"><NotionWorkspace /></SectionErrorBoundary>} />
                   <Route path="apps/whatsapp/workspace" element={<SectionErrorBoundary fallbackMessage="WhatsApp workspace failed to load"><WhatsAppWorkspace /></SectionErrorBoundary>} />

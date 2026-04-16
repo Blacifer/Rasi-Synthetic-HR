@@ -3134,7 +3134,7 @@ export function buildOAuthUrl(appId: string, state: string, redirectUri: string)
       return `https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=${enc(process.env.GOOGLE_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=${enc('openid email profile https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/admin.directory.user.readonly https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/documents')}&access_type=offline&prompt=consent&state=${state}`;
     case 'microsoft-365':
       if (!process.env.MICROSOFT_CLIENT_ID) return null;
-      return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?response_type=code&client_id=${enc(process.env.MICROSOFT_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=${enc('openid email profile offline_access User.Read Mail.Send Calendars.ReadWrite Team.ReadBasic.All')}&state=${state}`;
+      return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?response_type=code&client_id=${enc(process.env.MICROSOFT_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=${enc('openid email profile offline_access User.Read Mail.ReadWrite Calendars.ReadWrite Files.Read.All Team.ReadBasic.All Channel.ReadBasic.All ChannelMessage.Send ChannelMessage.Read.All')}&state=${state}`;
     case 'slack':
       if (!process.env.SLACK_CLIENT_ID) return null;
       return `https://slack.com/oauth/v2/authorize?client_id=${enc(process.env.SLACK_CLIENT_ID)}&redirect_uri=${enc(redirectUri)}&scope=chat%3Awrite%2Cchannels%3Ahistory%2Cusers%3Aread%2Cchannels%3Aread&state=${state}`;

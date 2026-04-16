@@ -1037,10 +1037,86 @@ async function microsoft365Action(
       return { success: true, data: { sent: true } };
     }
     case 'list_emails': {
-      const qs = new URLSearchParams({ $top: String(params.limit || 10) });
+      const qs = new URLSearchParams({
+        $top: String(params.limit || params.maxResults || 50),
+        $select: 'id,subject,from,toRecipients,receivedDateTime,bodyPreview,hasAttachments,isRead,internetMessageId,conversationId',
+        $orderby: 'receivedDateTime desc',
+      });
+      if (params.skipToken) qs.set('$skiptoken', params.skipToken);
+      if (params.filter) qs.set('$filter', params.filter);
       const r = await jsonFetch(`${base}/me/messages?${qs}`, { headers: h });
       if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
-      return { success: true, data: r.data.value };
+      const messages = (r.data.value || []).map((m: any) => ({
+        id: m.id,
+        internetMessageId: m.internetMessageId,
+        conversationId: m.conversationId,
+        subject: m.subject,
+        from: m.from?.emailAddress ? `${m.from.emailAddress.name || ''} <${m.from.emailAddress.address}>`.trim() : '',
+        to: (m.toRecipients || []).map((r: any) => r.emailAddress?.address).filter(Boolean).join(', '),
+        date: m.receivedDateTime,
+        snippet: m.bodyPreview,
+        isUnread: !m.isRead,
+        hasAttachment: m.hasAttachments,
+      }));
+      return { success: true, data: messages, nextPageToken: r.data['@odata.nextLink'] ? extractSkipToken(r.data['@odata.nextLink']) : null };
+    }
+    case 'get_email': {
+      if (!params.id) return { success: false, error: 'get_email requires: id' };
+      const r = await jsonFetch(`${base}/me/messages/${params.id}`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      const m = r.data;
+      const bodyContent = m.body?.contentType === 'html'
+        ? m.body.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+        : (m.body?.content || '');
+      return {
+        success: true,
+        data: {
+          id: m.id,
+          internetMessageId: m.internetMessageId,
+          conversationId: m.conversationId,
+          subject: m.subject,
+          from: m.from?.emailAddress ? `${m.from.emailAddress.name || ''} <${m.from.emailAddress.address}>`.trim() : '',
+          to: (m.toRecipients || []).map((r: any) => r.emailAddress?.address).filter(Boolean).join(', '),
+          cc: (m.ccRecipients || []).map((r: any) => r.emailAddress?.address).filter(Boolean).join(', '),
+          date: m.receivedDateTime,
+          snippet: m.bodyPreview,
+          body: bodyContent,
+          isHtml: false,
+          isUnread: !m.isRead,
+          hasAttachment: m.hasAttachments,
+        },
+      };
+    }
+    case 'reply_email': {
+      if (!params.id || !params.body) return { success: false, error: 'reply_email requires: id, body' };
+      const r = await jsonFetch(`${base}/me/messages/${params.id}/reply`, {
+        method: 'POST', headers: h,
+        body: JSON.stringify({ comment: params.body }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: { sent: true } };
+    }
+    case 'forward_email': {
+      if (!params.id || !params.to) return { success: false, error: 'forward_email requires: id, to' };
+      const r = await jsonFetch(`${base}/me/messages/${params.id}/forward`, {
+        method: 'POST', headers: h,
+        body: JSON.stringify({
+          comment: params.body || '',
+          toRecipients: [{ emailAddress: { address: params.to } }],
+        }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: { sent: true } };
+    }
+    case 'archive_email': {
+      if (!params.id) return { success: false, error: 'archive_email requires: id' };
+      // Move to Archive folder
+      const r = await jsonFetch(`${base}/me/messages/${params.id}/move`, {
+        method: 'POST', headers: h,
+        body: JSON.stringify({ destinationId: 'archive' }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: { archived: true } };
     }
     case 'create_calendar_event': {
       if (!params.subject || !params.start || !params.end) {
@@ -1053,6 +1129,7 @@ async function microsoft365Action(
           start: { dateTime: params.start, timeZone: params.timezone || 'Asia/Kolkata' },
           end: { dateTime: params.end, timeZone: params.timezone || 'Asia/Kolkata' },
           body: { contentType: 'Text', content: params.description || '' },
+          location: params.location ? { displayName: params.location } : undefined,
           attendees: params.attendees
             ? (params.attendees as string[]).map((e) => ({ emailAddress: { address: e }, type: 'required' }))
             : [],
@@ -1061,14 +1138,119 @@ async function microsoft365Action(
       if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
       return { success: true, data: r.data };
     }
+    case 'list_calendar_events': {
+      const now = new Date().toISOString();
+      const future = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const qs = new URLSearchParams({
+        $top: String(params.limit || 50),
+        $select: 'id,subject,start,end,location,attendees,organizer,bodyPreview,webLink,isCancelled',
+        $orderby: 'start/dateTime asc',
+        startDateTime: params.startDateTime || now,
+        endDateTime: params.endDateTime || future,
+      });
+      if (params.skipToken) qs.set('$skiptoken', params.skipToken);
+      const r = await jsonFetch(`${base}/me/calendarView?${qs}`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return {
+        success: true,
+        data: r.data.value || [],
+        nextPageToken: r.data['@odata.nextLink'] ? extractSkipToken(r.data['@odata.nextLink']) : null,
+      };
+    }
+    case 'list_files': {
+      const qs = new URLSearchParams({
+        $top: String(params.limit || params.pageSize || 50),
+        $select: 'id,name,file,folder,size,lastModifiedDateTime,createdBy,shared,webUrl,parentReference',
+        $orderby: 'lastModifiedDateTime desc',
+      });
+      if (params.skipToken) qs.set('$skiptoken', params.skipToken);
+      if (params.query) {
+        // Search mode
+        const searchQs = new URLSearchParams({ q: params.query, $top: String(params.limit || 50) });
+        const r = await jsonFetch(`${base}/me/drive/root/search(q='${encodeURIComponent(params.query)}')?${searchQs}`, { headers: h });
+        if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+        return { success: true, data: r.data.value || [], nextPageToken: r.data['@odata.nextLink'] ? extractSkipToken(r.data['@odata.nextLink']) : null };
+      }
+      const path = params.folderId ? `/items/${params.folderId}/children` : '/root/children';
+      const r = await jsonFetch(`${base}/me/drive${path}?${qs}`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      const files = (r.data.value || []).map((f: any) => ({
+        id: f.id,
+        name: f.name,
+        mimeType: f.file?.mimeType || (f.folder ? 'folder' : 'unknown'),
+        size: f.size ? String(f.size) : undefined,
+        modifiedTime: f.lastModifiedDateTime,
+        webViewLink: f.webUrl,
+        isFolder: !!f.folder,
+        shared: !!f.shared,
+        owners: f.createdBy?.user ? [{ displayName: f.createdBy.user.displayName || '', emailAddress: f.createdBy.user.email || '' }] : [],
+      }));
+      return { success: true, data: files, nextPageToken: r.data['@odata.nextLink'] ? extractSkipToken(r.data['@odata.nextLink']) : null };
+    }
+    case 'share_file': {
+      if (!params.fileId || !params.email) return { success: false, error: 'share_file requires: fileId, email' };
+      const permission = params.role === 'write' ? 'write' : 'read';
+      const r = await jsonFetch(`${base}/me/drive/items/${params.fileId}/invite`, {
+        method: 'POST', headers: h,
+        body: JSON.stringify({
+          requireSignIn: true,
+          sendInvitation: true,
+          roles: [permission],
+          recipients: [{ email: params.email }],
+        }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: { shared: true } };
+    }
+    case 'list_teams': {
+      const r = await jsonFetch(`${base}/me/joinedTeams`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data.value || [] };
+    }
     case 'list_teams_channels': {
       if (!params.team_id) return { success: false, error: 'list_teams_channels requires: team_id' };
       const r = await jsonFetch(`${base}/teams/${params.team_id}/channels`, { headers: h });
       if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
-      return { success: true, data: r.data.value };
+      return { success: true, data: r.data.value || [] };
+    }
+    case 'get_channel_messages': {
+      if (!params.team_id || !params.channel_id) return { success: false, error: 'get_channel_messages requires: team_id, channel_id' };
+      const qs = new URLSearchParams({ $top: String(params.limit || 50) });
+      if (params.skipToken) qs.set('$skiptoken', params.skipToken);
+      const r = await jsonFetch(`${base}/teams/${params.team_id}/channels/${params.channel_id}/messages?${qs}`, { headers: h });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      const messages = (r.data.value || []).map((m: any) => ({
+        id: m.id,
+        from: m.from?.user?.displayName || m.from?.application?.displayName || 'Unknown',
+        body: m.body?.content || '',
+        isHtml: m.body?.contentType === 'html',
+        createdAt: m.createdDateTime,
+        edited: !!m.lastModifiedDateTime && m.lastModifiedDateTime !== m.createdDateTime,
+      }));
+      return { success: true, data: messages, nextPageToken: r.data['@odata.nextLink'] ? extractSkipToken(r.data['@odata.nextLink']) : null };
+    }
+    case 'send_teams_message': {
+      if (!params.team_id || !params.channel_id || !params.body) {
+        return { success: false, error: 'send_teams_message requires: team_id, channel_id, body' };
+      }
+      const r = await jsonFetch(`${base}/teams/${params.team_id}/channels/${params.channel_id}/messages`, {
+        method: 'POST', headers: h,
+        body: JSON.stringify({ body: { contentType: 'text', content: params.body } }),
+      });
+      if (!r.ok) return { success: false, error: r.data?.error?.message || `HTTP ${r.status}`, statusCode: r.status };
+      return { success: true, data: r.data };
     }
     default:
       return { success: false, error: `Microsoft 365 action "${action}" not supported`, statusCode: 400 };
+  }
+}
+
+function extractSkipToken(nextLink: string): string | null {
+  try {
+    const url = new URL(nextLink);
+    return url.searchParams.get('$skiptoken') || url.searchParams.get('$skipToken') || null;
+  } catch {
+    return null;
   }
 }
 
