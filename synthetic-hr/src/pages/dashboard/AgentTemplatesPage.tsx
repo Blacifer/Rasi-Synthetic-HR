@@ -20,10 +20,11 @@ type MonthlyCost =
   | { status: 'unknown' };
 
 interface AgentTemplatesPageProps {
-  onDeploy: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[] }) => void;
+  onDeploy: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[] }) => Promise<void>;
+  onLaunchInChat: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[] }) => Promise<void>;
 }
 
-export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps) {
+export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTemplatesPageProps) {
   const [selectedIndustry, setSelectedIndustry] = useState<string>('all');
   const [selectedTemplate, setSelectedTemplate] = useState<AgentTemplate | null>(null);
   const [templateSearchQuery, setTemplateSearchQuery] = useState('');
@@ -36,6 +37,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
   const [systemPrompt, setSystemPrompt] = useState('');
   const [sandboxMessage, setSandboxMessage] = useState('');
   const [sandboxChat, setSandboxChat] = useState<{ role: 'user' | 'agent', content: string }[]>([]);
+  const [pendingAction, setPendingAction] = useState<'fleet' | 'chat' | null>(null);
   const WORKLOAD_PRESETS = useMemo(() => [1_000_000, 10_000_000, 100_000_000], []);
   const MIN_MONTHLY_TOKENS = 1_000_000;
   const MAX_MONTHLY_TOKENS = 100_000_000;
@@ -212,7 +214,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Agent Templates</h1>
-          <p className="text-slate-400 mt-1">Pre-built agent starting points for your governed fleet</p>
+          <p className="text-slate-400 mt-1">Pre-built governed agent starting points that can go directly into operator chat or fleet deployment.</p>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <div className="relative w-full sm:w-64">
@@ -798,20 +800,53 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
 
                     <div className="flex gap-3 mt-6">
                       <button
-                        onClick={() => {
-                          onDeploy({
-                            ...selectedTemplate,
-                            model: selectedModel?.id ?? selectedTemplate.model,
-                            platform: selectedModel?.provider ?? selectedTemplate.platform,
-                            system_prompt: systemPrompt,
-                            integration_ids: [],
-                          });
-                          toast.success(`${selectedTemplate.name} added to Fleet — connect a channel from the workspace to go live`);
-                          setSelectedTemplate(null);
+                        onClick={async () => {
+                          setPendingAction('chat');
+                          try {
+                            await onLaunchInChat({
+                              ...selectedTemplate,
+                              model: selectedModel?.id ?? selectedTemplate.model,
+                              platform: selectedModel?.provider ?? selectedTemplate.platform,
+                              system_prompt: systemPrompt,
+                              integration_ids: [],
+                            });
+                            toast.success(`${selectedTemplate.name} deployed and opened in governed Chat`);
+                            setSelectedTemplate(null);
+                          } catch (error) {
+                            toast.error(error instanceof Error ? error.message : 'Failed to launch template in chat');
+                          } finally {
+                            setPendingAction(null);
+                          }
                         }}
-                        className={`flex-1 py-3 rounded-xl font-bold text-white transition-all shadow-lg ${getColorClasses(selectedTemplate.color).bg} hover:brightness-110 active:scale-[0.98]`}
+                        disabled={pendingAction !== null}
+                        className="flex-1 py-3 rounded-xl font-bold text-slate-950 bg-cyan-300 hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60 transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
                       >
-                        Add to Fleet →
+                        <MessageSquare className="w-4 h-4" />
+                        {pendingAction === 'chat' ? 'Launching...' : 'Launch in Chat'}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setPendingAction('fleet');
+                          try {
+                            await onDeploy({
+                              ...selectedTemplate,
+                              model: selectedModel?.id ?? selectedTemplate.model,
+                              platform: selectedModel?.provider ?? selectedTemplate.platform,
+                              system_prompt: systemPrompt,
+                              integration_ids: [],
+                            });
+                            toast.success(`${selectedTemplate.name} added to Fleet — connect a channel from the workspace to go live`);
+                            setSelectedTemplate(null);
+                          } catch (error) {
+                            toast.error(error instanceof Error ? error.message : 'Failed to add template to fleet');
+                          } finally {
+                            setPendingAction(null);
+                          }
+                        }}
+                        disabled={pendingAction !== null}
+                        className={`flex-1 py-3 rounded-xl font-bold text-white transition-all shadow-lg ${getColorClasses(selectedTemplate.color).bg} hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60`}
+                      >
+                        {pendingAction === 'fleet' ? 'Adding...' : 'Add to Fleet'}
                       </button>
                       <a
                         href={`/interview/${selectedTemplate.id}`}
@@ -823,6 +858,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
                       </a>
                       <button
                         onClick={() => setSelectedTemplate(null)}
+                        disabled={pendingAction !== null}
                         className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-xl transition-colors"
                       >
                         Cancel
@@ -832,7 +868,7 @@ export default function AgentTemplatesPage({ onDeploy }: AgentTemplatesPageProps
               )}
 
               <p className="text-center text-slate-500 text-xs mt-3">
-                Adding this template to fleet will create a governed agent record. Connect a channel from the Fleet workspace to go live.
+                Launch in Chat deploys a governed agent and opens an operator-ready session. Add to Fleet keeps the template in your managed agent inventory.
               </p>
             </div>
           </div>

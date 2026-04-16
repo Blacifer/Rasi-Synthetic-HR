@@ -21,6 +21,7 @@ import { OnboardingTour } from '../components/OnboardingTour';
 import { useDashboardNotifications, readNotificationState, buildCoverageNotifications } from '../hooks/useDashboardNotifications';
 import { useDashboardAgentConnections, writeFocusedAgentWorkspace } from '../hooks/useDashboardAgentConnections';
 import { useDashboardSetup } from '../hooks/useDashboardSetup';
+import type { AgentTemplate } from '../config/agentTemplates';
 
 import { MfaNudgeBanner } from '../components/MfaNudgeBanner';
 const DashboardOverview = lazy(() => import('./dashboard/DashboardOverview'));
@@ -66,6 +67,8 @@ interface DashboardProps {
   isDemoMode?: boolean;
   onSignUp?: () => void;
 }
+
+type DeployableTemplate = AgentTemplate & { system_prompt?: string; integration_ids?: string[] };
 
 function DashboardSectionLoading() {
   return (
@@ -226,7 +229,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
 
   const [error, setError] = useState<string | null>(null);
 
-  const handleTemplateDeploy = useCallback(async (template: any) => {
+  const createAgentFromTemplate = useCallback(async (template: DeployableTemplate) => {
     const TEMPLATE_TYPE_TO_PACK: Record<string, string> = {
       customer_support: 'support', customer_success: 'support', call_center: 'support', healthcare: 'support',
       sales: 'sales', marketing: 'sales',
@@ -235,39 +238,75 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
       finance: 'finance', procurement: 'finance', logistics: 'finance', refund: 'finance', payroll: 'finance',
       it_support: 'it', devops: 'it', data_analyst: 'it', data_analysis: 'it', engineering: 'it', qa: 'it', documentation: 'it', facilities: 'it',
     };
-    try {
-      const primaryPack = TEMPLATE_TYPE_TO_PACK[template.type];
-      const created = await api.agents.create({
-        name: template.name, description: template.description, agent_type: template.type,
-        platform: template.platform, model_name: template.model, budget_limit: template.budget,
-        ...(primaryPack ? { primary_pack: primaryPack } : {}),
-        integration_ids: (template as any).integration_ids || [],
-        system_prompt: (template as any).system_prompt || '', config: {},
+    const primaryPack = TEMPLATE_TYPE_TO_PACK[template.type];
+    const created = await api.agents.create({
+      name: template.name, description: template.description, agent_type: template.type,
+      platform: template.platform, model_name: template.model, budget_limit: template.budget,
+      ...(primaryPack ? { primary_pack: primaryPack } : {}),
+      integration_ids: template.integration_ids || [],
+      system_prompt: template.system_prompt || '', config: {},
+    });
+    if (!created.success || !created.data) {
+      throw new Error(created.error || created.errors?.join(', ') || 'Agent creation rejected by server');
+    }
+
+    const newId = (created.data as any).id;
+    if (!newId) {
+      throw new Error('Agent creation did not return an id');
+    }
+
+    const newAgent: AIAgent = {
+      id: newId, name: template.name, description: template.description,
+      agent_type: template.type, platform: template.platform, model_name: template.model,
+      status: (created.data as any).status || 'active', lifecycle_state: 'idle',
+      risk_level: (created.data as any).risk_level || 'low', risk_score: (created.data as any).risk_score || 50,
+      created_at: (created.data as any).created_at || new Date().toISOString(),
+      conversations: 0, satisfaction: 0, uptime: 100, budget_limit: template.budget, current_spend: 0, auto_throttle: false,
+    };
+
+    if (isDemoMode) {
+      setDemoAgents(prev => [...prev, newAgent]);
+    } else {
+      queryClient.setQueryData<AIAgent[]>(queryKeys.agents, (current) => {
+        if (!Array.isArray(current)) return [newAgent];
+        if (current.some((agent) => agent.id === newAgent.id)) return current;
+        return [newAgent, ...current];
       });
-      if (created.success && created.data) {
-        const newId = (created.data as any).id;
-        if (newId) {
-          const newAgent: AIAgent = {
-            id: newId, name: template.name, description: template.description,
-            agent_type: template.type, platform: template.platform, model_name: template.model,
-            status: (created.data as any).status || 'active', lifecycle_state: 'idle',
-            risk_level: (created.data as any).risk_level || 'low', risk_score: (created.data as any).risk_score || 50,
-            created_at: (created.data as any).created_at || new Date().toISOString(),
-            conversations: 0, satisfaction: 0, uptime: 100, budget_limit: template.budget, current_spend: 0, auto_throttle: false,
-          };
-          if (isDemoMode) { setDemoAgents(prev => [...prev, newAgent]); }
-          else { void queryClient.invalidateQueries({ queryKey: queryKeys.agents }); }
-          addNotification('success', 'Agent Added To Fleet', `${template.name} is now available for governance and monitoring`);
-          navigateTo('agents', { userInitiated: false });
-        }
-      } else {
-        throw new Error(created.error || created.errors?.join(', ') || 'Agent creation rejected by server');
-      }
+      void queryClient.invalidateQueries({ queryKey: queryKeys.agents });
+    }
+
+    return { agentId: newId };
+  }, [isDemoMode, queryClient]);
+
+  const handleTemplateDeploy = useCallback(async (template: DeployableTemplate) => {
+    try {
+      await createAgentFromTemplate(template);
+      addNotification('success', 'Agent Added To Fleet', `${template.name} is now available for governance and monitoring`);
+      navigateTo('agents', { userInitiated: false });
     } catch (err) {
       console.error('Template deploy error:', err);
       setError(err instanceof Error ? err.message : 'Failed to add agent from template.');
+      throw err;
     }
-  }, [isDemoMode, queryClient, navigateTo, addNotification, setError]);
+  }, [addNotification, createAgentFromTemplate, navigateTo, setError]);
+
+  const handleTemplateLaunchInChat = useCallback(async (template: DeployableTemplate) => {
+    try {
+      const { agentId } = await createAgentFromTemplate(template);
+      saveToStorage(STORAGE_KEYS.TEMPLATE_CHAT_CONTEXT, {
+        agentId,
+        templateId: template.id,
+        prompt: template.samplePrompts?.[0] || `Help me get ${template.name} ready for live governed work.`,
+        mode: 'operator',
+      });
+      addNotification('success', 'Template Ready In Chat', `${template.name} is deployed and ready for a governed operator run.`);
+      navigateTo('chat', { userInitiated: false });
+    } catch (err) {
+      console.error('Template launch in chat error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to launch template in chat.');
+      throw err;
+    }
+  }, [addNotification, createAgentFromTemplate, navigateTo, setError]);
 
   const handleLibraryAgentDeploy = useCallback(async (agentData: any) => {
     try {
@@ -1085,6 +1124,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                     <SectionErrorBoundary fallbackMessage="Agent Studio failed to load">
                       <AgentStudioPage
                         onDeployTemplate={handleTemplateDeploy}
+                        onLaunchTemplateChat={handleTemplateLaunchInChat}
                         onDeployLibraryAgent={handleLibraryAgentDeploy}
                         agents={enrichedAgents}
                         onNavigate={navigateTo}

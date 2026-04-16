@@ -22,7 +22,7 @@ import {
 import type { AIAgent } from '../../types';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
-import { loadFromStorage, removeFromStorage } from '../../utils/storage';
+import { loadFromStorage, removeFromStorage, STORAGE_KEYS } from '../../utils/storage';
 import { AGENT_TEMPLATES, type AgentTemplate } from '../../config/agentTemplates';
 
 type ReasoningTrace = {
@@ -93,8 +93,17 @@ type ChatSession = {
   incident_ref: string | null;
 };
 
+type TemplateChatLaunchContext = {
+  agentId: string;
+  templateId: string;
+  prompt?: string;
+  appService?: string | null;
+  mode?: 'operator' | 'employee' | 'external';
+};
+
 const INCIDENT_CONTEXT_STORAGE_KEY = 'synthetic_hr_incident_context';
 const AGENT_WORKSPACE_FOCUS_STORAGE_KEY = 'synthetic_hr_agent_workspace_focus';
+const TEMPLATE_CHAT_CONTEXT_STORAGE_KEY = STORAGE_KEYS.TEMPLATE_CHAT_CONTEXT;
 
 function getAgentName(agents: AIAgent[], agentId?: string | null) {
   return agents.find((agent) => agent.id === agentId)?.name || 'Unknown Agent';
@@ -241,6 +250,7 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
   const [sending, setSending] = useState(false);
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
   const [freshStart, setFreshStart] = useState(false);
+  const [templateLaunchContext, setTemplateLaunchContext] = useState<TemplateChatLaunchContext | null>(null);
 
   const selectedConversation = selectedConversationId ? conversationCache[selectedConversationId] || null : null;
   const selectedTemplate = useMemo(
@@ -266,6 +276,15 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
     () => connectedApps.find((app) => app.service === selectedAppService) || null,
     [connectedApps, selectedAppService],
   );
+
+  const resetComposerForFreshStart = useCallback(() => {
+    setSelectedConversationId(null);
+    setActiveSession(null);
+    setDetailTab('transcript');
+    setTraces([]);
+    setConversationRating(null);
+    setFreshStart(true);
+  }, []);
 
   const loadConnectedApps = useCallback(async () => {
     const response = await api.integrations.getAppsInventory();
@@ -334,7 +353,18 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
   }, [loadConnectedApps, loadConversationList]);
 
   useEffect(() => {
+    const launchContext = loadFromStorage<TemplateChatLaunchContext | null>(TEMPLATE_CHAT_CONTEXT_STORAGE_KEY, null);
+    if (!launchContext) return;
+    setTemplateLaunchContext(launchContext);
+    removeFromStorage(TEMPLATE_CHAT_CONTEXT_STORAGE_KEY);
+  }, []);
+
+  useEffect(() => {
     if (agents.length === 0) return;
+    if (templateLaunchContext?.agentId) {
+      setSelectedAgentId(templateLaunchContext.agentId);
+      return;
+    }
     if (initialAgentId) {
       setSelectedAgentId(initialAgentId);
       return;
@@ -347,13 +377,26 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
     }
 
     setSelectedAgentId((current) => current || agents[0]?.id || '');
-  }, [agents, initialAgentId]);
+  }, [agents, initialAgentId, templateLaunchContext]);
 
   useEffect(() => {
     const context = loadFromStorage<{ incidentId?: string; agentId?: string; incidentType?: string } | null>(INCIDENT_CONTEXT_STORAGE_KEY, null);
     setIncidentContext(context);
     if (context) removeFromStorage(INCIDENT_CONTEXT_STORAGE_KEY);
   }, []);
+
+  useEffect(() => {
+    if (!templateLaunchContext) return;
+
+    setChatMode(templateLaunchContext.mode || 'operator');
+    setSelectedTemplateId(templateLaunchContext.templateId || '');
+    setComposeText(templateLaunchContext.prompt || '');
+    if (templateLaunchContext.appService && connectedApps.some((app) => app.service === templateLaunchContext.appService)) {
+      setSelectedAppService(templateLaunchContext.appService);
+    }
+    resetComposerForFreshStart();
+    setTemplateLaunchContext(null);
+  }, [connectedApps, resetComposerForFreshStart, templateLaunchContext]);
 
   useEffect(() => {
     if (!selectedConversationId && !freshStart && filteredConversations.length > 0) {
@@ -385,13 +428,8 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
   }, [detailTab, selectedConversationId]);
 
   const handleNewConversation = () => {
-    setSelectedConversationId(null);
+    resetComposerForFreshStart();
     setComposeText('');
-    setActiveSession(null);
-    setDetailTab('transcript');
-    setTraces([]);
-    setConversationRating(null);
-    setFreshStart(true);
   };
 
   const pollJobUntilSettled = useCallback(async (jobId: string, conversationId: string) => {

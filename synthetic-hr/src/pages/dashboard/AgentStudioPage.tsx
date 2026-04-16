@@ -4,6 +4,7 @@ import { Zap, Bot, FileText, Wand2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { AIAgent } from '../../types';
 import type { IntegrationPackId } from '../../lib/integration-packs';
+import type { AgentTemplate } from '../../config/agentTemplates';
 
 const AgentTemplatesPage = lazy(() => import('./AgentTemplatesPage'));
 const DomainAgentLibraryPage = lazy(() => import('./DomainAgentLibraryPage'));
@@ -18,7 +19,8 @@ const TABS = [
 type TabId = typeof TABS[number]['id'];
 
 interface AgentStudioPageProps {
-  onDeployTemplate: (template: any) => void;
+  onDeployTemplate: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[] }) => Promise<void>;
+  onLaunchTemplateChat: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[] }) => Promise<void>;
   onDeployLibraryAgent: (agentData: any) => Promise<void>;
   agents: AIAgent[];
   onNavigate?: (page: string) => void;
@@ -37,6 +39,7 @@ function StudioLoading() {
 
 export default function AgentStudioPage({
   onDeployTemplate,
+  onLaunchTemplateChat,
   onDeployLibraryAgent,
   agents,
   onNavigate,
@@ -95,7 +98,7 @@ export default function AgentStudioPage({
       {/* Active tab content */}
       <Suspense fallback={<StudioLoading />}>
         {activeTab === 'templates' && (
-          <AgentTemplatesPage onDeploy={onDeployTemplate} />
+          <AgentTemplatesPage onDeploy={onDeployTemplate} onLaunchInChat={onLaunchTemplateChat} />
         )}
         {activeTab === 'library' && (
           <DomainAgentLibraryPage
