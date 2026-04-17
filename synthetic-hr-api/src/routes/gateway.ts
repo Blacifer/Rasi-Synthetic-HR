@@ -41,19 +41,21 @@ interface GatewayModel {
 }
 
 const ANTHROPIC_MODEL_ALIASES: Record<string, string> = {
-  'claude-3-opus': 'claude-3-5-sonnet',
-  'claude-3-opus-20240229': 'claude-3-5-sonnet',
-  'claude-3-sonnet': 'claude-3-5-sonnet',
-  'claude-3-sonnet-20240229': 'claude-3-5-sonnet',
-  'claude-3-haiku': 'claude-3-haiku',
-  'claude-3-haiku-20240307': 'claude-3-haiku',
-  'claude-3.5-sonnet': 'claude-3-5-sonnet',
-  'claude-3-5-sonnet-20240620': 'claude-3-5-sonnet',
-  'claude-3-5-sonnet-20241022': 'claude-3-5-sonnet',
-  'claude-3.5-haiku': 'claude-3-haiku',
-  'claude-3-5-haiku-20241022': 'claude-3-haiku',
-  'claude-sonnet-4': 'claude-sonnet-4',
-  'claude-sonnet-4-0': 'claude-sonnet-4',
+  // Legacy Claude 3 → current equivalents
+  'claude-3-opus': 'claude-sonnet-4-6',
+  'claude-3-opus-20240229': 'claude-sonnet-4-6',
+  'claude-3-sonnet': 'claude-sonnet-4-6',
+  'claude-3-sonnet-20240229': 'claude-sonnet-4-6',
+  'claude-3-haiku': 'claude-haiku-4-5',
+  'claude-3-haiku-20240307': 'claude-haiku-4-5',
+  'claude-3.5-sonnet': 'claude-sonnet-4-6',
+  'claude-3-5-sonnet-20240620': 'claude-sonnet-4-6',
+  'claude-3-5-sonnet-20241022': 'claude-sonnet-4-6',
+  'claude-3.5-haiku': 'claude-haiku-4-5',
+  'claude-3-5-haiku-20241022': 'claude-haiku-4-5',
+  // Claude 4 aliases
+  'claude-sonnet-4': 'claude-sonnet-4-6',
+  'claude-sonnet-4-0': 'claude-sonnet-4-6',
 };
 
 const GATEWAY_MODELS: GatewayModel[] = [
@@ -67,10 +69,13 @@ const GATEWAY_MODELS: GatewayModel[] = [
   { id: 'openai/text-embedding-3-small', provider: 'openai', upstreamModel: 'text-embedding-3-small', ownedBy: 'openai', capabilities: ['embeddings'] },
   { id: 'openai/text-embedding-3-large', provider: 'openai', upstreamModel: 'text-embedding-3-large', ownedBy: 'openai', capabilities: ['embeddings'] },
   // Anthropic — native direct route; legacy IDs aliased to current supported upstream
-  { id: 'anthropic/claude-sonnet-4', provider: 'anthropic', upstreamModel: 'claude-sonnet-4-0', ownedBy: 'anthropic', contextLength: 200000, pricing: { prompt: '0.000003', completion: '0.000015' }, capabilities: ['vision', 'function_calling'] },
-  { id: 'anthropic/claude-3-5-sonnet', provider: 'anthropic', upstreamModel: 'claude-sonnet-4-0', ownedBy: 'anthropic', contextLength: 200000, pricing: { prompt: '0.000003', completion: '0.000015' }, capabilities: ['vision', 'function_calling'] },
-  { id: 'anthropic/claude-3-sonnet', provider: 'anthropic', upstreamModel: 'claude-sonnet-4-0', ownedBy: 'anthropic', contextLength: 200000, pricing: { prompt: '0.000003', completion: '0.000015' }, capabilities: ['vision', 'function_calling'] },
-  { id: 'anthropic/claude-3-haiku', provider: 'anthropic', upstreamModel: 'claude-3-haiku-20240307', ownedBy: 'anthropic', contextLength: 200000, pricing: { prompt: '0.00000025', completion: '0.00000125' }, capabilities: ['function_calling'] },
+  { id: 'anthropic/claude-sonnet-4-6', provider: 'anthropic', upstreamModel: 'claude-sonnet-4-6', ownedBy: 'anthropic', contextLength: 200000, pricing: { prompt: '0.000003', completion: '0.000015' }, capabilities: ['vision', 'function_calling'] },
+  { id: 'anthropic/claude-haiku-4-5', provider: 'anthropic', upstreamModel: 'claude-haiku-4-5', ownedBy: 'anthropic', contextLength: 200000, pricing: { prompt: '0.0000008', completion: '0.000004' }, capabilities: ['vision', 'function_calling'] },
+  // Legacy IDs kept for backwards compatibility — aliased to current models above
+  { id: 'anthropic/claude-sonnet-4', provider: 'anthropic', upstreamModel: 'claude-sonnet-4-6', ownedBy: 'anthropic', contextLength: 200000, pricing: { prompt: '0.000003', completion: '0.000015' }, capabilities: ['vision', 'function_calling'] },
+  { id: 'anthropic/claude-3-5-sonnet', provider: 'anthropic', upstreamModel: 'claude-sonnet-4-6', ownedBy: 'anthropic', contextLength: 200000, pricing: { prompt: '0.000003', completion: '0.000015' }, capabilities: ['vision', 'function_calling'] },
+  { id: 'anthropic/claude-3-sonnet', provider: 'anthropic', upstreamModel: 'claude-sonnet-4-6', ownedBy: 'anthropic', contextLength: 200000, pricing: { prompt: '0.000003', completion: '0.000015' }, capabilities: ['vision', 'function_calling'] },
+  { id: 'anthropic/claude-3-haiku', provider: 'anthropic', upstreamModel: 'claude-haiku-4-5', ownedBy: 'anthropic', contextLength: 200000, pricing: { prompt: '0.0000008', completion: '0.000004' }, capabilities: ['function_calling'] },
   // Pinned OpenRouter models that should always be present regardless of catalog state
   { id: 'google/gemini-2.0-flash', provider: 'openrouter', upstreamModel: 'google/gemini-2.0-flash', ownedBy: 'google', contextLength: 1048576, pricing: { prompt: '0.0000001', completion: '0.0000004' }, capabilities: ['vision', 'function_calling'] },
   { id: 'meta-llama/llama-3.1-70b-instruct', provider: 'openrouter', upstreamModel: 'meta-llama/llama-3.1-70b-instruct', ownedBy: 'meta-llama', contextLength: 128000, pricing: { prompt: '0.000000059', completion: '0.000000079' }, capabilities: ['function_calling'] },
@@ -525,9 +530,12 @@ const OPENROUTER_PRICING: Record<string, { input: number; output: number }> = {
   'openai/gpt-3.5-turbo': { input: 0.5, output: 1.5 },
   'openai/gpt-5.4': { input: 5, output: 15 }, // approximate — no official price yet
   // Anthropic
+  'anthropic/claude-sonnet-4-6': { input: 3, output: 15 },
+  'anthropic/claude-haiku-4-5': { input: 0.8, output: 4 },
+  // Legacy Anthropic IDs (backwards compat)
   'anthropic/claude-3-5-sonnet': { input: 3, output: 15 },
   'anthropic/claude-3-opus': { input: 15, output: 75 },
-  'anthropic/claude-3-haiku': { input: 0.25, output: 1.25 },
+  'anthropic/claude-3-haiku': { input: 0.8, output: 4 },
   // Google
   'google/gemini-pro': { input: 0.5, output: 1.5 },
   'google/gemini-flash': { input: 0.075, output: 0.3 },

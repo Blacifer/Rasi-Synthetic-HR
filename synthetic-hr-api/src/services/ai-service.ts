@@ -16,13 +16,12 @@ export const OPENAI_PRICING = {
 
 // Anthropic Pricing (per 1M tokens)
 export const ANTHROPIC_PRICING = {
-  'claude-3-opus': { input: 15, output: 75 },
-  'claude-3-sonnet': { input: 3, output: 15 },
-  'claude-3-haiku': { input: 0.25, output: 1.25 },
+  'claude-opus-4-7': { input: 15, output: 75 },
+  'claude-sonnet-4-6': { input: 3, output: 15 },
+  'claude-haiku-4-5': { input: 0.8, output: 4 },
   'claude-3-5-sonnet': { input: 3, output: 15 },
   'claude-sonnet-4-0': { input: 3, output: 15 },
   'claude-sonnet-4-20250514': { input: 3, output: 15 },
-  'claude-3-haiku-20240307': { input: 0.25, output: 1.25 },
 };
 
 export interface AIResponse {
@@ -231,7 +230,7 @@ export class AnthropicService {
 
   async chat(
     messages: { role: string; content: any }[],
-    model: string = 'claude-3-sonnet',
+    model: string = 'claude-sonnet-4-6',
     options: AIChatOptions = {}
   ): Promise<AIResponse> {
     const startTime = Date.now();

@@ -11,3 +11,14 @@ repositoryEventConfig:
   repositoryType: GITHUB
 resourceName: projects/rasisynthetichr/locations/asia-south1/triggers/2abe8e26-07bb-4dae-9ddc-69c5f983c7bb
 serviceAccount: projects/rasisynthetichr/serviceAccounts/cloudbuild-deployer@rasisynthetichr.iam.gserviceaccount.com
+---
+filename: synthetic-hr-runtime/cloudbuild.yaml
+includedFiles:
+- synthetic-hr-runtime/**
+name: deploy-runtime
+repositoryEventConfig:
+  push:
+    branch: ^main$
+  repository: projects/rasisynthetichr/locations/asia-south1/connections/zapheit-github/repositories/Blacifer-Rasi-Synthetic-HR
+  repositoryType: GITHUB
+serviceAccount: projects/rasisynthetichr/serviceAccounts/cloudbuild-deployer@rasisynthetichr.iam.gserviceaccount.com
