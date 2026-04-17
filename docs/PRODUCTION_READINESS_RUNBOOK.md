@@ -42,6 +42,9 @@ Notes:
 
 - `production:gate:full` requires a runnable environment for smoke coverage.
 - `smoke:rest` depends on `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `DEMO_PASSWORD`.
+- frontend smoke can run either locally or against a deployed environment by setting `E2E_BASE_URL`.
+- authenticated chat smoke depends on `E2E_DEMO_EMAIL` or `DEMO_EMAIL`, plus `E2E_DEMO_PASSWORD` or `DEMO_PASSWORD`.
+- optional runtime-profile creation smoke depends on `E2E_CHAT_PROVIDER_KEY` and optionally `E2E_CHAT_PROVIDER`.
 - `smoke:rest` now validates governed entry-path creation for `Chat`, template-backed chat, runtime deployment wiring, and the connector-action approval path. It does not replace a live runtime completion check.
 
 ## 2. Manual Go/No-Go Workflow Checks

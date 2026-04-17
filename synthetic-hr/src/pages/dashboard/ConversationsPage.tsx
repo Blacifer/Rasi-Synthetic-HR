@@ -1237,6 +1237,7 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
               </div>
               <button
                 onClick={() => setGovernedPanelOpen(false)}
+                aria-label="Close Governed Mode"
                 className="rounded-xl border border-slate-800 p-2 text-slate-400 hover:border-slate-700 hover:text-white"
               >
                 <X className="h-4 w-4" />
@@ -1405,6 +1406,7 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
               </div>
               <button
                 onClick={() => setShowCredentialModal(false)}
+                aria-label="Close Manage Chat Keys"
                 className="rounded-xl border border-slate-800 p-2 text-slate-400 hover:border-slate-700 hover:text-white"
               >
                 <X className="h-4 w-4" />

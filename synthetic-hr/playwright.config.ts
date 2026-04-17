@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const remoteBaseUrl = process.env.E2E_BASE_URL;
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -8,14 +10,14 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? 'github' : 'html',
   use: {
-    baseURL: process.env.E2E_BASE_URL || 'http://localhost:5173',
+    baseURL: remoteBaseUrl || 'http://localhost:5173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
-  webServer: {
+  webServer: remoteBaseUrl ? undefined : {
     command: 'node_modules/.bin/vite --port 5173',
     url: 'http://localhost:5173',
     reuseExistingServer: true,
