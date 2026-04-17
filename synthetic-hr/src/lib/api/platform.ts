@@ -193,6 +193,19 @@ export const dashboardApi = {
       method: 'GET',
     });
   },
+
+  async listModels(): Promise<ApiResponse<Array<{
+    id: string;
+    name: string;
+    provider: string;
+    context_length?: number | null;
+    pricing?: { prompt?: string; completion?: string } | null;
+    capabilities?: string[];
+  }>>> {
+    return authenticatedFetch('/models', {
+      method: 'GET',
+    });
+  },
 };
 
 export const apiKeysApi = {

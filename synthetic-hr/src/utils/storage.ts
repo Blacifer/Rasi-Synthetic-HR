@@ -11,6 +11,8 @@ export const STORAGE_KEYS = {
   NOTIFICATIONS: 'synthetic_hr_notifications',
   RETENTION_DAYS: 'synthetic_hr_retention_days',
   TEMPLATE_CHAT_CONTEXT: 'synthetic_hr_template_chat_context',
+  CHAT_RUNTIME_PROFILES: 'synthetic_hr_chat_runtime_profiles',
+  CHAT_PREFERENCES: 'synthetic_hr_chat_preferences',
   // Memorable moment tracking (org-scoped — append `:${orgName}` when using)
   MORNING_BRIEFING_DATE: 'synthetic_hr_morning_briefing_date',
   AGENT_ALIVE_SEEN: 'synthetic_hr_agent_alive_seen',

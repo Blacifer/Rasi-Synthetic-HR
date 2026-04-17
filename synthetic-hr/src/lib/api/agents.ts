@@ -2,6 +2,18 @@ import { authenticatedFetch, getAuthHeaders, API_BASE_URL } from './_helpers';
 import type { ApiResponse } from './_helpers';
 import type { AIAgent, AgentVersion, AgentWorkspaceData } from '../../types';
 
+export type ChatRuntimeProfileRecord = {
+  id: string;
+  kind: 'provider' | 'gateway';
+  provider: 'openai' | 'anthropic' | 'openrouter' | 'zapheit_gateway';
+  label: string;
+  status: 'active' | 'revoked';
+  masked_key: string;
+  last_used_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 /**
  * Agent API methods
  */
@@ -490,6 +502,73 @@ export const conversationApi = {
     });
   },
 
+  async createStandardSession(payload: {
+    mode?: 'operator' | 'employee' | 'external';
+    runtime_source: 'managed' | 'provider_key' | 'gateway_key';
+    runtime_profile_id?: string | null;
+    runtime_profile?: {
+      id: string;
+      kind: 'provider' | 'gateway';
+      provider: 'openai' | 'anthropic' | 'openrouter' | 'zapheit_gateway';
+      label: string;
+      api_key: string;
+    } | null;
+    model: string;
+  }): Promise<ApiResponse<{
+    session_id: string;
+    session_type: 'standard_chat_session';
+    runtime_source: 'managed' | 'provider_key' | 'gateway_key';
+    runtime_profile_id: string | null;
+    runtime_label: string | null;
+    model: string;
+    billing_mode: 'managed' | 'byok_provider' | 'gateway_key';
+    conversation: any;
+  }>> {
+    return authenticatedFetch('/chat/sessions', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async sendStandardMessage(
+    sessionId: string,
+    payload: {
+      prompt: string;
+      mode?: 'operator' | 'employee' | 'external';
+      runtime_source: 'managed' | 'provider_key' | 'gateway_key';
+      runtime_profile_id?: string | null;
+      runtime_profile?: {
+        id: string;
+        kind: 'provider' | 'gateway';
+        provider: 'openai' | 'anthropic' | 'openrouter' | 'zapheit_gateway';
+        label: string;
+        api_key: string;
+      } | null;
+      model: string;
+    },
+  ): Promise<ApiResponse<{
+    session_id: string;
+    session_type: 'standard_chat_session';
+    runtime_source: 'managed' | 'provider_key' | 'gateway_key';
+    runtime_profile_id: string | null;
+    runtime_label: string | null;
+    model: string;
+    billing_mode: 'managed' | 'byok_provider' | 'gateway_key';
+    usage: {
+      input_tokens: number;
+      output_tokens: number;
+      total_tokens: number;
+      cost_usd?: number | null;
+    };
+    message: any;
+    conversation: any;
+  }>> {
+    return authenticatedFetch(`/chat/sessions/${sessionId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
   /**
    * Get reasoning traces for a conversation
    */
@@ -521,5 +600,37 @@ export const conversationApi = {
    */
   async trendingTopics(): Promise<ApiResponse<{ topics: Array<{ word: string; count: number }> }>> {
     return authenticatedFetch('/analytics/trending-topics', { method: 'GET' });
+  },
+};
+
+export const chatProfilesApi = {
+  async list(): Promise<ApiResponse<ChatRuntimeProfileRecord[]>> {
+    return authenticatedFetch('/chat/runtime-profiles', {
+      method: 'GET',
+    });
+  },
+
+  async create(payload: {
+    kind: 'provider' | 'gateway';
+    provider: 'openai' | 'anthropic' | 'openrouter' | 'zapheit_gateway';
+    label: string;
+    api_key: string;
+  }): Promise<ApiResponse<ChatRuntimeProfileRecord>> {
+    return authenticatedFetch('/chat/runtime-profiles', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async remove(id: string): Promise<ApiResponse<{ id: string }>> {
+    return authenticatedFetch(`/chat/runtime-profiles/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async listModels(id: string): Promise<ApiResponse<{ object: string; data: Array<{ id: string }> }>> {
+    return authenticatedFetch(`/chat/runtime-profiles/${id}/models`, {
+      method: 'GET',
+    });
   },
 };

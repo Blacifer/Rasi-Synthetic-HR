@@ -62,6 +62,22 @@ const checks = [
     description: 'Checks chat session creation and governed workflow normalization.',
   },
   {
+    name: 'Standard chat workflow tests',
+    cwd: 'synthetic-hr-api',
+    cmd: 'npm',
+    args: ['test', '--', '--runInBand', 'src/routes/__tests__/chat-standard.test.ts'],
+    required: flags.withRouteTests,
+    description: 'Checks the consumer-first chat session and standard message workflow.',
+  },
+  {
+    name: 'Chat runtime profile tests',
+    cwd: 'synthetic-hr-api',
+    cmd: 'npm',
+    args: ['test', '--', '--runInBand', 'src/routes/__tests__/chat-runtime-profiles.test.ts'],
+    required: flags.withRouteTests,
+    description: 'Checks encrypted backend-managed runtime profile storage and lifecycle.',
+  },
+  {
     name: 'REST smoke suite',
     cwd: 'synthetic-hr-api',
     cmd: 'npm',

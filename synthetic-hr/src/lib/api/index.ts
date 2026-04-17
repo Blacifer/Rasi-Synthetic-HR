@@ -1,5 +1,5 @@
 // Domain API objects
-export { agentApi, conversationApi } from './agents';
+export { agentApi, conversationApi, chatProfilesApi } from './agents';
 export { incidentApi, escalationsApi, alertsApi } from './incidents';
 export { costApi, metricsApi } from './costs';
 export { connectorsApi, integrationsApi, slackApi } from './integrations';
@@ -45,6 +45,7 @@ export {
 
 // Types from domain files
 export type { SlackMessage } from './integrations';
+export type { ChatRuntimeProfileRecord } from './agents';
 export type {
   ApiKeyManagerRecord,
   ApiKeyUsageRecord,
@@ -71,7 +72,7 @@ export type { MarketplaceApp, AppBundle } from './marketplace';
 export type { ApiResponse } from './_helpers';
 
 // Assembled api object
-import { agentApi, conversationApi } from './agents';
+import { agentApi, conversationApi, chatProfilesApi } from './agents';
 import { incidentApi, escalationsApi, alertsApi } from './incidents';
 import { costApi, metricsApi } from './costs';
 import { connectorsApi, integrationsApi, slackApi } from './integrations';
@@ -111,6 +112,7 @@ import {
 export const api = {
   agents: agentApi,
   conversations: conversationApi,
+  chatProfiles: chatProfilesApi,
   incidents: incidentApi,
   costs: costApi,
   apiKeys: apiKeysApi,

@@ -166,6 +166,7 @@ router.post('/conversations/chat', requirePermission('agents.update'), async (re
           started_at: now,
           created_at: now,
           metadata: {
+            session_type: 'governed_chat_session',
             topic: summarizePrompt(data.prompt),
             preview: data.prompt.slice(0, 200),
             last_user_message: data.prompt.slice(0, 200),
@@ -189,6 +190,7 @@ router.post('/conversations/chat', requirePermission('agents.update'), async (re
           status: 'active',
           metadata: {
             ...(conversation.metadata && typeof conversation.metadata === 'object' ? conversation.metadata : {}),
+            session_type: 'governed_chat_session',
             preview: data.prompt.slice(0, 200),
             last_user_message: data.prompt.slice(0, 200),
             mode: data.mode,
