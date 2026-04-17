@@ -8,6 +8,7 @@ export interface AuthUser {
   id: string;
   email: string;
   organizationName: string;
+  role: 'super_admin' | 'admin' | 'manager' | 'viewer';
 }
 
 export interface UserRole {

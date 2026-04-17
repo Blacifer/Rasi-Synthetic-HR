@@ -32,6 +32,18 @@ function LoadingSpinner() {
 }
 
 const TIMEOUT_MS = 15 * 60 * 1000;
+const ADMIN_MFA_ROLES = new Set<AuthUser['role']>(['super_admin', 'admin']);
+
+async function buildAuthUser(authUser: any): Promise<AuthUser> {
+  const { profile } = await authHelpers.getWorkspaceProfile(authUser.id);
+
+  return {
+    id: authUser.id,
+    email: authUser.email || '',
+    organizationName: authUser.user_metadata?.organization_name || 'My Organization',
+    role: profile?.role || 'viewer',
+  };
+}
 
 function App() {
   const navigate = useNavigate();
@@ -122,11 +134,7 @@ function App() {
         const isAcceptInvite = location.pathname.startsWith('/accept-invite');
 
         if (authUser && !error) {
-          const userData: AuthUser = {
-            id: authUser.id,
-            email: authUser.email || '',
-            organizationName: authUser.user_metadata?.organization_name || 'My Organization',
-          };
+          const userData = await buildAuthUser(authUser);
           setUser(userData);
           localStorage.setItem('has_session', 'true');
 
@@ -162,6 +170,7 @@ function App() {
       id: 'demo-' + crypto.randomUUID(),
       email: 'demo@zapheit.com',
       organizationName: 'Demo Organization',
+      role: 'viewer',
     };
     setUser(demoUser);
     setIsDemoMode(true);
@@ -219,11 +228,7 @@ function App() {
           // If AAL check fails, proceed with normal login
         }
 
-        const userData: AuthUser = {
-          id: result.user.id,
-          email: result.user.email || '',
-          organizationName: result.user.user_metadata?.organization_name || 'My Organization',
-        };
+        const userData = await buildAuthUser(result.user);
         setUser(userData);
         localStorage.setItem('has_session', 'true');
         await claimInviteIfPending(result.session?.access_token);
@@ -239,8 +244,7 @@ function App() {
   };
 
   // Called from LoginPage after successful MFA verification
-  const completeMfaLogin = (userId: string, email: string, orgName: string) => {
-    const userData: AuthUser = { id: userId, email, organizationName: orgName || 'My Organization' };
+  const completeMfaLogin = (userData: AuthUser) => {
     setUser(userData);
     localStorage.setItem('has_session', 'true');
     const isAcceptInvite = location.pathname.startsWith('/accept-invite');
@@ -311,7 +315,15 @@ function App() {
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/dashboard/*" element={
             user
-              ? <MfaEnrollmentGate><Dashboard isDemoMode={isDemoMode} onSignUp={isDemoMode ? () => navigate('/signup') : undefined} /></MfaEnrollmentGate>
+              ? (
+                <MfaEnrollmentGate
+                  required={!isDemoMode && ADMIN_MFA_ROLES.has(user.role)}
+                  title="Set Up Admin 2FA"
+                  message="Admin access requires two-factor authentication. Scan the QR code with your authenticator app to continue into the dashboard."
+                >
+                  <Dashboard isDemoMode={isDemoMode} onSignUp={isDemoMode ? () => navigate('/signup') : undefined} />
+                </MfaEnrollmentGate>
+              )
               : <Navigate to="/login" replace />
           } />
           <Route path="*" element={<NotFoundPage onHome={() => navigate('/')} />} />

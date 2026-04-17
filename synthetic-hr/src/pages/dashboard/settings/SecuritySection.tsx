@@ -4,6 +4,7 @@ import { toast } from '../../../lib/toast';
 import type { ActiveSession } from './types';
 
 export function SecuritySection({
+  userRole,
   twoFactorEnabled,
   sessions,
   handleToggle2FA,
@@ -25,6 +26,7 @@ export function SecuritySection({
   setDeleteConfirm,
   handleDeleteOrg,
 }: {
+  userRole?: string | null;
   twoFactorEnabled: boolean;
   sessions: ActiveSession[];
   handleToggle2FA: () => Promise<void>;
@@ -46,6 +48,8 @@ export function SecuritySection({
   setDeleteConfirm: React.Dispatch<React.SetStateAction<string>>;
   handleDeleteOrg: () => Promise<void>;
 }) {
+  const adminMfaRequired = userRole === 'super_admin' || userRole === 'admin';
+
   return (
     <div className="space-y-6">
       <div>
@@ -55,7 +59,7 @@ export function SecuritySection({
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
-          { label: 'MFA', value: twoFactorEnabled ? 'Enabled' : 'Off', note: twoFactorEnabled ? 'Account protection is active' : 'Turn this on for admins' },
+          { label: 'MFA', value: twoFactorEnabled ? 'Enabled' : 'Off', note: twoFactorEnabled ? 'Account protection is active' : adminMfaRequired ? 'Required for admin access' : 'Strongly recommended for your account' },
           { label: 'Active sessions', value: String(sessions.length), note: 'Logged-in browsers and devices' },
           { label: 'Current device', value: sessions.find((session) => session.current)?.device || 'Unknown', note: 'Session in use right now' },
           { label: 'Risk', value: twoFactorEnabled && sessions.length <= 2 ? 'Low' : 'Review', note: 'Based on MFA and session spread' },
@@ -74,7 +78,11 @@ export function SecuritySection({
             <div className="p-2.5 bg-emerald-500/10 rounded-xl"><Smartphone className="w-5 h-5 text-emerald-400" /></div>
             <div>
               <h3 className="text-base font-semibold text-white">Two-Factor Authentication</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Protect your account with an authenticator app (TOTP)</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {adminMfaRequired
+                  ? 'Required for admin operators. Protect your account with an authenticator app (TOTP).'
+                  : 'Recommended for your account. Protect sign-in with an authenticator app (TOTP).'}
+              </p>
             </div>
           </div>
           <button onClick={() => void handleToggle2FA()} disabled={mfaLoading} className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-60 ${twoFactorEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}>

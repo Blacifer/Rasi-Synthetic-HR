@@ -4,6 +4,7 @@ export interface AuthUser {
   id: string;
   email: string;
   organizationName: string;
+  role: 'super_admin' | 'admin' | 'manager' | 'viewer';
 }
 
 export interface AppContextType {
@@ -13,7 +14,7 @@ export interface AppContextType {
   signIn: (email: string, password: string) => Promise<{ error: string | null; requiresMfa?: boolean }>;
   signInWithOAuth: (provider: 'google' | 'azure') => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
-  completeMfaLogin: (userId: string, email: string, orgName: string) => void;
+  completeMfaLogin: (user: AuthUser) => void;
 }
 
 export const AppContext = createContext<AppContextType | null>(null);

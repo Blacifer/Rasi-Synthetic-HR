@@ -5,13 +5,21 @@ import { toast } from '../lib/toast';
 
 interface MfaEnrollmentGateProps {
   children: React.ReactNode;
+  required?: boolean;
+  title?: string;
+  message?: string;
 }
 
 /**
  * Blocks dashboard access until the user has enrolled and verified a TOTP MFA factor.
  * Renders inline enrollment UI when MFA is not yet set up.
  */
-export function MfaEnrollmentGate({ children }: MfaEnrollmentGateProps) {
+export function MfaEnrollmentGate({
+  children,
+  required = true,
+  title = 'Set Up 2FA',
+  message = 'Your organization requires two-factor authentication. Scan the QR code with your authenticator app (Google Authenticator, Authy, etc.) to proceed.',
+}: MfaEnrollmentGateProps) {
   const [checking, setChecking] = useState(true);
   const [enrolled, setEnrolled] = useState(false);
 
@@ -26,6 +34,12 @@ export function MfaEnrollmentGate({ children }: MfaEnrollmentGateProps) {
 
   // Check enrollment on mount
   useEffect(() => {
+    if (!required) {
+      setEnrolled(true);
+      setChecking(false);
+      return;
+    }
+
     let cancelled = false;
     (async () => {
       try {
@@ -40,10 +54,11 @@ export function MfaEnrollmentGate({ children }: MfaEnrollmentGateProps) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [required]);
 
   // Auto-start enrollment once we know they don't have MFA
   useEffect(() => {
+    if (!required) return;
     if (checking || enrolled || enrollId) return;
     let cancelled = false;
     (async () => {
@@ -65,7 +80,7 @@ export function MfaEnrollmentGate({ children }: MfaEnrollmentGateProps) {
       }
     })();
     return () => { cancelled = true; };
-  }, [checking, enrolled, enrollId]);
+  }, [checking, enrolled, enrollId, required]);
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,13 +129,13 @@ export function MfaEnrollmentGate({ children }: MfaEnrollmentGateProps) {
               <ShieldCheck className="w-7 h-7 text-cyan-300" />
             </div>
             <div>
-              <span className="text-xl font-bold text-white">Set Up 2FA</span>
+              <span className="text-xl font-bold text-white">{title}</span>
               <span className="text-xs text-blue-300 block -mt-0.5">Required to continue</span>
             </div>
           </div>
 
           <p className="text-slate-400 text-sm mb-6">
-            Your organization requires two-factor authentication. Scan the QR code with your authenticator app (Google Authenticator, Authy, etc.) to proceed.
+            {message}
           </p>
 
           {error && (

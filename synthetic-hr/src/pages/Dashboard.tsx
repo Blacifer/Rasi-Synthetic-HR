@@ -1041,7 +1041,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
               </button>
             </div>
           )}
-          <MfaNudgeBanner onNavigateToSecurity={() => navigateTo('settings/security')} />
+          <MfaNudgeBanner user={user} onNavigateToSecurity={() => navigateTo('settings/security')} />
           <div className="p-8">
           {loading ? (
             <DashboardSectionLoading />

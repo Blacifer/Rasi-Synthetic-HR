@@ -2,11 +2,18 @@ import { useEffect, useState } from 'react';
 import { Shield, X } from 'lucide-react';
 import { supabase } from '../lib/supabase-client';
 import { loadFromStorage, saveToStorage } from '../utils/storage';
+import type { AuthUser } from '../context/AppContext';
 
 const DISMISS_KEY = 'mfa_nudge_dismissed_at';
 const RESHOW_DAYS = 7;
 
-export function MfaNudgeBanner({ onNavigateToSecurity }: { onNavigateToSecurity: () => void }) {
+export function MfaNudgeBanner({
+  onNavigateToSecurity,
+  user,
+}: {
+  onNavigateToSecurity: () => void;
+  user?: AuthUser | null;
+}) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -17,6 +24,7 @@ export function MfaNudgeBanner({ onNavigateToSecurity }: { onNavigateToSecurity:
         const { data } = await supabase.auth.mfa.listFactors();
         const hasVerified = data?.totp?.some((f) => f.status === 'verified');
         if (hasVerified || cancelled) return;
+        if (user?.role === 'super_admin' || user?.role === 'admin') return;
 
         // Check if dismissed recently
         const dismissedAt = loadFromStorage<number | null>(DISMISS_KEY, null);
@@ -28,7 +36,7 @@ export function MfaNudgeBanner({ onNavigateToSecurity }: { onNavigateToSecurity:
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [user?.role]);
 
   if (!visible) return null;
 
@@ -48,7 +56,7 @@ export function MfaNudgeBanner({ onNavigateToSecurity }: { onNavigateToSecurity:
             Protect your account with two-factor authentication
           </p>
           <p className="text-xs text-slate-500 mt-0.5">
-            Add an extra layer of security to prevent unauthorized access.
+            Add an extra layer of security to prevent unauthorized access. Admin operators are required to enable it.
           </p>
         </div>
       </div>

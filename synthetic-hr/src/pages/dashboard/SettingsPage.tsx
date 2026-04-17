@@ -461,6 +461,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
 
   const renderSecurity = () => (
     <SecuritySection
+      userRole={user?.role}
       twoFactorEnabled={twoFactorEnabled}
       sessions={sessions}
       handleToggle2FA={handleToggle2FA}

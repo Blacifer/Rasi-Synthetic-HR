@@ -11,6 +11,21 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+export type WorkspaceRole = 'super_admin' | 'admin' | 'manager' | 'viewer';
+
+type WorkspaceProfile = {
+  organization_id: string | null;
+  role: WorkspaceRole;
+  name: string | null;
+};
+
+const normalizeWorkspaceRole = (role: unknown): WorkspaceRole => {
+  if (role === 'super_admin' || role === 'admin' || role === 'manager' || role === 'viewer') {
+    return role;
+  }
+  return 'viewer';
+};
+
 const getProvisionUrl = () => {
   const normalized = (config.apiUrl || 'http://localhost:3001/api').replace(/\/+$/, '');
   return normalized.endsWith('/api')
@@ -20,6 +35,34 @@ const getProvisionUrl = () => {
 
 // Auth helper functions
 export const authHelpers = {
+  getWorkspaceProfile: async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('organization_id, role, name')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) {
+        return { profile: null, error };
+      }
+
+      if (!data) {
+        return { profile: null, error: null };
+      }
+
+      const profile: WorkspaceProfile = {
+        organization_id: data.organization_id ?? null,
+        role: normalizeWorkspaceRole(data.role),
+        name: data.name ?? null,
+      };
+
+      return { profile, error: null };
+    } catch (err: any) {
+      return { profile: null, error: err };
+    }
+  },
+
   // Get current authenticated user
   getCurrentUser: async () => {
     try {
@@ -137,13 +180,8 @@ export const authHelpers = {
       // Ensure the user has a provisioned workspace profile.
       if (data.user && data.session?.access_token) {
         try {
-          const profileLookup = await supabase
-            .from('users')
-            .select('organization_id')
-            .eq('id', data.user.id)
-            .maybeSingle();
-
-          const orgId = profileLookup.data?.organization_id || null;
+          const { profile } = await authHelpers.getWorkspaceProfile(data.user.id);
+          const orgId = profile?.organization_id || null;
           if (!orgId) {
             const orgName = (data.user.user_metadata as any)?.organization_name || (data.user.email ? `${data.user.email.split('@')[0]}'s Workspace` : 'Workspace');
             const slug = String(orgName)

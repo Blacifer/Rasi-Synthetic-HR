@@ -16,13 +16,9 @@ export default function AuthCallbackPage() {
         subscription.unsubscribe();
 
         // Check if this user already has a provisioned workspace
-        const profileLookup = await supabase
-          .from('users')
-          .select('organization_id')
-          .eq('id', session.user.id)
-          .maybeSingle();
+        const { profile } = await authHelpers.getWorkspaceProfile(session.user.id);
 
-        if (!profileLookup.data?.organization_id) {
+        if (!profile?.organization_id) {
           setStatus('Setting up your workspace...');
 
           const config = getFrontendConfig();

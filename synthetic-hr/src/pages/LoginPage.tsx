@@ -147,9 +147,15 @@ export default function LoginPage({ onSignUp, onBack }: LoginPageProps) {
         setMfaLoading(false);
         return;
       }
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        completeMfaLogin(user.id, user.email || '', user.user_metadata?.organization_name || 'My Organization');
+      const result = await authHelpers.getCurrentUser();
+      if (result.user) {
+        const { profile } = await authHelpers.getWorkspaceProfile(result.user.id);
+        completeMfaLogin({
+          id: result.user.id,
+          email: result.user.email || '',
+          organizationName: result.user.user_metadata?.organization_name || 'My Organization',
+          role: profile?.role || 'viewer',
+        });
       }
     } catch (err: any) {
       setMfaError('Verification failed. Please try again.');
