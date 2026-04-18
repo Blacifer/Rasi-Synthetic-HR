@@ -14,6 +14,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
+import { RequestIntegrationModal } from '../components/RequestIntegrationModal';
 import { cn } from '../../../../lib/utils';
 import { api } from '../../../../lib/api-client';
 import type { AIAgent } from '../../../../types';
@@ -55,12 +56,15 @@ export function ConnectWizard({ app, agents, onConnect, onClose, onOpenWorkspace
   const [step, setStep] = useState<Step>(initialStep ?? 'preview');
   const [creds, setCreds] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [finishError, setFinishError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
   const [testError, setTestError] = useState<string | null>(null);
   const [linkedAgents, setLinkedAgents] = useState<Set<string>>(new Set());
   const [policies, setPolicies] = useState<CapabilityPolicy[]>(
     () => (app.capabilityPolicies || []).map((p) => ({ ...p })),
   );
+  const [oauthNotConfigured, setOauthNotConfigured] = useState(false);
+  const [showRequestModal, setShowRequestModal] = useState(false);
 
   const stepIdx = STEPS.indexOf(step);
 
@@ -77,11 +81,43 @@ export function ConnectWizard({ app, agents, onConnect, onClose, onOpenWorkspace
   /* -- Auth submit ------------------------------------------------- */
   const handleAuth = async () => {
     setBusy(true);
+    setOauthNotConfigured(false);
     try {
       await onConnect(app, creds);
       goNext();
     } catch (err: any) {
-      setTestError(err?.message || 'Authentication failed');
+      if (err?.code === 'OAUTH_NOT_CONFIGURED' || err?.message?.includes('OAUTH_NOT_CONFIGURED')) {
+        setOauthNotConfigured(true);
+      } else {
+        setTestError(err?.message || 'Authentication failed');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /* -- Finish: persist policies + agent links ----------------------- */
+  const handleFinish = async () => {
+    setBusy(true);
+    setFinishError(null);
+    try {
+      const serviceId = getAppServiceId(app);
+      await Promise.all([
+        policies.length > 0
+          ? api.integrations.upsertActions(
+              policies.map((p) => ({ service: serviceId, action: p.capability, enabled: p.enabled })),
+            )
+          : Promise.resolve(),
+        ...Array.from(linkedAgents).map((agentId) => {
+          const agent = agents.find((a) => a.id === agentId);
+          const existing = agent?.integrationIds ?? [];
+          const merged = Array.from(new Set([...existing, app.appId]));
+          return api.unifiedConnectors.updateAgentConnectors(agentId, merged);
+        }),
+      ]);
+      goNext();
+    } catch (err: any) {
+      setFinishError(err?.message || 'Failed to save configuration. Please retry.');
     } finally {
       setBusy(false);
     }
@@ -154,8 +190,23 @@ export function ConnectWizard({ app, agents, onConnect, onClose, onOpenWorkspace
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-5">
           {step === 'preview' && <PreviewStep app={app} />}
-          {step === 'auth' && (
+          {step === 'auth' && !oauthNotConfigured && (
             <AuthStep app={app} creds={creds} setCreds={setCreds} busy={busy} />
+          )}
+          {step === 'auth' && oauthNotConfigured && (
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 space-y-3">
+              <p className="text-sm font-semibold text-amber-200">OAuth not available yet</p>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                The OAuth connection for <strong className="text-white">{app.name}</strong> isn't configured yet.
+                Request it and we'll prioritise it for you.
+              </p>
+              <button
+                onClick={() => setShowRequestModal(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-amber-500/20 border border-amber-500/30 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/30 transition-colors"
+              >
+                Request this integration
+              </button>
+            </div>
           )}
           {step === 'configure' && (
             <ConfigureStep policies={policies} setPolicies={setPolicies} />
@@ -223,12 +274,19 @@ export function ConnectWizard({ app, agents, onConnect, onClose, onOpenWorkspace
           )}
 
           {step === 'test' && testResult === 'success' && (
-            <button
-              onClick={goNext}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-semibold transition-all"
-            >
-              Finish <CheckCircle2 className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex flex-col items-end gap-1.5">
+              {finishError && (
+                <p className="text-[11px] text-rose-400 text-right">{finishError}</p>
+              )}
+              <button
+                onClick={() => void handleFinish()}
+                disabled={busy}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-semibold transition-all disabled:opacity-50"
+              >
+                {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                {busy ? 'Saving…' : 'Finish'}
+              </button>
+            </div>
           )}
 
           {step === 'done' && (
@@ -251,6 +309,14 @@ export function ConnectWizard({ app, agents, onConnect, onClose, onOpenWorkspace
           )}
         </div>
       </div>
+
+      {showRequestModal && (
+        <RequestIntegrationModal
+          appId={app.appId}
+          appName={app.name}
+          onClose={() => setShowRequestModal(false)}
+        />
+      )}
     </div>
   );
 }

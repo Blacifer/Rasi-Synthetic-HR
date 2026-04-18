@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getFrontendConfig } from '../lib/config';
+import { LightMarkdown } from '../components/markdown/LightMarkdown';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,60 +35,6 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-// ─── Inline markdown renderer (reused from Share.tsx) ─────────────────────────
-
-function renderInline(text: string): (string | JSX.Element)[] {
-  const parts: (string | JSX.Element)[] = [];
-  const re = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  let key = 0;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) parts.push(text.slice(last, m.index));
-    if (m[2]) parts.push(<strong key={key++} className="font-semibold">{m[2]}</strong>);
-    else if (m[3]) parts.push(<em key={key++} className="italic">{m[3]}</em>);
-    else if (m[4]) parts.push(<code key={key++} className="bg-slate-100 px-1 rounded text-[11px] font-mono text-blue-700">{m[4]}</code>);
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) parts.push(text.slice(last));
-  return parts;
-}
-
-function renderMarkdown(text: string): JSX.Element {
-  const lines = text.split('\n');
-  const elements: JSX.Element[] = [];
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    if (line.startsWith('### ')) {
-      elements.push(<h3 key={i} className="text-sm font-semibold text-slate-800 mt-3 mb-1">{renderInline(line.slice(4))}</h3>);
-    } else if (line.startsWith('## ')) {
-      elements.push(<h2 key={i} className="text-base font-bold text-slate-900 mt-4 mb-1">{renderInline(line.slice(3))}</h2>);
-    } else if (line.startsWith('- ') || line.startsWith('* ')) {
-      const items: JSX.Element[] = [];
-      while (i < lines.length && (lines[i].startsWith('- ') || lines[i].startsWith('* '))) {
-        items.push(<li key={i} className="ml-4">{renderInline(lines[i].slice(2))}</li>);
-        i++;
-      }
-      elements.push(<ul key={`ul-${i}`} className="list-disc list-inside space-y-0.5 my-1.5 text-slate-700">{items}</ul>);
-      continue;
-    } else if (/^\d+\.\s/.test(line)) {
-      const items: JSX.Element[] = [];
-      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
-        items.push(<li key={i} className="ml-4">{renderInline(lines[i].replace(/^\d+\.\s/, ''))}</li>);
-        i++;
-      }
-      elements.push(<ol key={`ol-${i}`} className="list-decimal list-inside space-y-0.5 my-1.5 text-slate-700">{items}</ol>);
-      continue;
-    } else if (line.trim() === '') {
-      if (elements.length > 0) elements.push(<div key={i} className="h-1.5" />);
-    } else {
-      elements.push(<p key={i} className="leading-relaxed text-slate-700">{renderInline(line)}</p>);
-    }
-    i++;
-  }
-  return <div className="space-y-0.5 text-sm">{elements}</div>;
-}
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -287,7 +234,9 @@ export default function PublicChatPage() {
               {/* Avatar */}
               {msg.role === 'assistant' && (
                 <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shrink-0 mt-0.5">
-                  <span className="text-white text-[10px] font-bold">R</span>
+                  <span className="text-white text-[10px] font-bold">
+                    {agentInfo?.name?.trim().charAt(0).toUpperCase() || 'A'}
+                  </span>
                 </div>
               )}
 
@@ -306,7 +255,7 @@ export default function PublicChatPage() {
                   <span className="inline-block w-2 h-4 bg-cyan-400 animate-pulse rounded-sm" />
                 ) : (
                   <>
-                    {renderMarkdown(msg.content)}
+                    <LightMarkdown text={msg.content} tone="light" />
                     {streaming && msg.id === messages[messages.length - 1]?.id && (
                       <span className="inline-block w-1.5 h-3.5 bg-cyan-400 animate-pulse rounded-sm ml-0.5 align-middle" />
                     )}

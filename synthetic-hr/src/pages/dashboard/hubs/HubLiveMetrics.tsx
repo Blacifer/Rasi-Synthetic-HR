@@ -69,10 +69,10 @@ export function HubLiveMetrics({ configs, title, subtitle }: { configs: Integrat
     let cancelled = false;
     (async () => {
       try {
-        const res = await api.marketplace.getInstalled();
+        const res = await api.unifiedConnectors.getCatalog();
         if (cancelled) return;
         const installedIds = new Set(
-          (res.success && Array.isArray(res.data) ? res.data : []).map((app: any) => app.connectorId || app.id),
+          (res.success && Array.isArray(res.data) ? res.data.filter((app) => app.installed) : []).map((app) => app.id),
         );
         const connected = configs.filter(c => installedIds.has(c.connectorId));
         if (connected.length > 0) {

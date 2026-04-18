@@ -1,18 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   ArrowUpRight,
-  Bot,
   Brain,
   ChevronRight,
-  Clock,
   Cpu,
   Globe,
   KeyRound,
   Loader2,
   MessageSquare,
-  Mic,
-  Paperclip,
   PanelRight,
   Plus,
   Search,
@@ -20,12 +16,15 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
+  Square,
+  Trash2,
   Wand2,
   X,
 } from 'lucide-react';
 import type { AIAgent } from '../../types';
 import { api } from '../../lib/api-client';
 import { toast } from '../../lib/toast';
+import { LightMarkdown } from '../../components/markdown/LightMarkdown';
 import { AGENT_TEMPLATES, type AgentTemplate } from '../../config/agentTemplates';
 import { loadFromStorage, removeFromStorage, saveToStorage, STORAGE_KEYS } from '../../utils/storage';
 
@@ -317,6 +316,11 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
   const [composeText, setComposeText] = useState('');
   const [chatMode, setChatMode] = useState<'operator' | 'employee' | 'external'>('operator');
   const [sending, setSending] = useState(false);
+  const [streaming, setStreaming] = useState(false);
+  const [streamAbortController, setStreamAbortController] = useState<AbortController | null>(null);
+  const [userScrolledUp, setUserScrolledUp] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const scrollBottomRef = useRef<HTMLDivElement>(null);
   const [freshStart, setFreshStart] = useState(false);
   const [governedPanelOpen, setGovernedPanelOpen] = useState(false);
   const [governedEnabled, setGovernedEnabled] = useState(false);
@@ -338,6 +342,8 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
   const [newProfileLabel, setNewProfileLabel] = useState('');
   const [newProfileApiKey, setNewProfileApiKey] = useState('');
   const [templateLaunchContext, setTemplateLaunchContext] = useState<TemplateChatLaunchContext | null>(null);
+  const [governedPollAttempt, setGovernedPollAttempt] = useState(0);
+  const [governedPollAbort, setGovernedPollAbort] = useState<AbortController | null>(null);
 
   const selectedTemplate = useMemo(
     () => AGENT_TEMPLATES.find((template) => template.id === selectedTemplateId) || null,
@@ -673,8 +679,15 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
   };
 
   const pollGovernedJobUntilSettled = useCallback(async (jobId: string, conversationId: string) => {
+    const controller = new AbortController();
+    setGovernedPollAbort(controller);
+    setGovernedPollAttempt(0);
+
     for (let attempt = 0; attempt < 25; attempt += 1) {
       await sleep(1500);
+      if (controller.signal.aborted) return;
+
+      setGovernedPollAttempt(attempt + 1);
       const response = await api.jobs.get(jobId);
       if (!response.success || !response.data?.job) continue;
       const job = response.data.job;
@@ -691,6 +704,8 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
       } : current);
       if (!isTerminalJobStatus(job.status)) continue;
 
+      setGovernedPollAbort(null);
+      setGovernedPollAttempt(0);
       await refreshConversation(conversationId);
       if (String(job.status).toLowerCase() === 'failed') {
         toast.error(job.error || 'Governed chat run failed');
@@ -700,7 +715,40 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
       }
       return;
     }
+
+    // Exhausted all attempts without a terminal status
+    setGovernedPollAbort(null);
+    setGovernedPollAttempt(-1); // sentinel: timed out
   }, [refreshConversation]);
+
+  // Auto-scroll: jump to bottom when messages arrive unless user has scrolled up.
+  const messageCount = selectedConversation?.messages?.length ?? 0;
+  const lastMessageContent = selectedConversation?.messages?.slice(-1)[0]?.content ?? '';
+  useEffect(() => {
+    if (userScrolledUp) return;
+    scrollBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messageCount, lastMessageContent, userScrolledUp]);
+
+  // Reset scroll-up flag when conversation changes.
+  useEffect(() => {
+    setUserScrolledUp(false);
+  }, [selectedConversationId]);
+
+  const handleScrollContainer = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setUserScrolledUp(distanceFromBottom > 80);
+  }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey && !streaming && !sending) {
+      e.preventDefault();
+      void handleSend();
+    }
+  // handleSend is stable enough for this dep array — recreating on every render is fine
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streaming, sending]);
 
   const handleSend = async () => {
     const prompt = composeText.trim();
@@ -805,42 +853,85 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
       standardSessionId = sessionRes.data.session_id;
     }
 
-    const response = await api.conversations.sendStandardMessage(standardSessionId, {
-      prompt,
-      mode: chatMode,
-      runtime_source: runtimeSource,
-      runtime_profile_id: selectedRuntimeProfile?.id || null,
-      model: selectedModelId,
+    const sessionId = standardSessionId;
+    const optimisticUserMsgId = `opt-user-${Date.now()}`;
+    const optimisticAsstMsgId = `opt-asst-${Date.now()}`;
+
+    // Optimistically add user + empty assistant bubble
+    setConversationCache((current) => {
+      const existing = current[sessionId];
+      const messages = [
+        ...(existing?.messages || []),
+        { id: optimisticUserMsgId, role: 'user', content: prompt, created_at: new Date().toISOString() },
+        { id: optimisticAsstMsgId, role: 'assistant', content: '', created_at: new Date().toISOString() },
+      ];
+      return { ...current, [sessionId]: { ...(existing || {}), id: sessionId, messages } as any };
     });
-    setSending(false);
-
-    if (!response.success || !response.data?.conversation) {
-      toast.error(response.error || 'Failed to send message');
-      return;
-    }
-
-    const detail = normalizeConversationDetail(response.data.conversation, agents);
+    setSelectedConversationId(sessionId);
     setFreshStart(false);
     setComposeText('');
-    setConversationCache((current) => ({ ...current, [detail.id]: detail }));
-    setConversationList((current) => {
-      const next = current.some((conversation) => conversation.id === detail.id)
-        ? current.map((conversation) => conversation.id === detail.id ? detail : conversation)
-        : [detail, ...current];
-      return next.sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
-    });
-    setSelectedConversationId(detail.id);
-    setActiveSession({
-      session_id: response.data.session_id,
-      session_type: 'standard_chat_session',
-      mode: chatMode,
-      runtime_source: response.data.runtime_source,
-      runtime_profile_id: response.data.runtime_profile_id,
-      runtime_label: response.data.runtime_label,
-      model: response.data.model,
-      billing_mode: response.data.billing_mode,
-      usage: response.data.usage,
-    });
+    setSending(false);
+    setStreaming(true);
+
+    const controller = new AbortController();
+    setStreamAbortController(controller);
+
+    await api.conversations.streamStandardMessage(
+      sessionId,
+      { prompt, mode: chatMode, runtime_source: runtimeSource, runtime_profile_id: selectedRuntimeProfile?.id || null, model: selectedModelId },
+      {
+        signal: controller.signal,
+        onDelta: (text) => {
+          setConversationCache((current) => {
+            const conv = current[sessionId];
+            if (!conv) return current;
+            const messages = (conv.messages || []).map((m: any) =>
+              m.id === optimisticAsstMsgId ? { ...m, content: m.content + text } : m,
+            );
+            return { ...current, [sessionId]: { ...conv, messages } };
+          });
+        },
+        onDone: (serverMessage, usage) => {
+          setConversationCache((current) => {
+            const conv = current[sessionId];
+            if (!conv) return current;
+            const messages = (conv.messages || []).map((m: any) =>
+              m.id === optimisticAsstMsgId
+                ? (serverMessage ? { ...serverMessage } : { ...m, content: m.content || 'No response returned.' })
+                : m,
+            );
+            return { ...current, [sessionId]: { ...conv, messages } };
+          });
+          setActiveSession((prev) => prev ? { ...prev, usage } : prev);
+          setStreaming(false);
+          setStreamAbortController(null);
+        },
+        onError: (error) => {
+          toast.error(error || 'Streaming failed');
+          setConversationCache((current) => {
+            const conv = current[sessionId];
+            if (!conv) return current;
+            const messages = (conv.messages || []).filter((m: any) => m.id !== optimisticAsstMsgId);
+            return { ...current, [sessionId]: { ...conv, messages } };
+          });
+          setStreaming(false);
+          setStreamAbortController(null);
+        },
+      },
+    );
+  };
+
+  const handleDeleteConversation = async (conversationId: string) => {
+    if (!window.confirm('Delete this conversation? This cannot be undone.')) return;
+    const res = await api.conversations.remove(conversationId);
+    if (!res.success) {
+      toast.error((res as any).error || 'Failed to delete conversation');
+      return;
+    }
+    setConversationList((prev) => prev.filter((c) => c.id !== conversationId));
+    setConversationCache((prev) => { const next = { ...prev }; delete next[conversationId]; return next; });
+    if (selectedConversationId === conversationId) setSelectedConversationId(null);
+    toast.success('Conversation deleted');
   };
 
   const exportCurrentConversation = () => {
@@ -992,31 +1083,39 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
                 <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/50 px-4 py-6 text-center text-sm text-slate-500">No chats yet</div>
               ) : (
                 filteredConversations.map((conversation) => (
-                  <button
-                    key={conversation.id}
-                    onClick={() => setSelectedConversationId(conversation.id)}
-                    className={`w-full rounded-2xl border px-3 py-3 text-left transition-colors ${
-                      selectedConversationId === conversation.id
-                        ? 'border-cyan-500/30 bg-cyan-500/10'
-                        : 'border-slate-800 bg-slate-900/60 hover:border-slate-700 hover:bg-slate-900'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-semibold text-white">{conversation.topic}</p>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] ${
-                        conversation.sessionType === 'standard'
-                          ? 'bg-slate-800 text-slate-300'
-                          : 'bg-cyan-500/10 text-cyan-200'
-                      }`}>
-                        {conversation.sessionType}
-                      </span>
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-xs text-slate-400">{conversation.preview}</p>
-                    <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
-                      <span>{conversation.runtimeLabel || conversation.agentName || 'Chat'}</span>
-                      <span>{formatRelativeDate(conversation.timestamp)}</span>
-                    </div>
-                  </button>
+                  <div key={conversation.id} className="group relative">
+                    <button
+                      onClick={() => setSelectedConversationId(conversation.id)}
+                      className={`w-full rounded-2xl border px-3 py-3 text-left transition-colors ${
+                        selectedConversationId === conversation.id
+                          ? 'border-cyan-500/30 bg-cyan-500/10'
+                          : 'border-slate-800 bg-slate-900/60 hover:border-slate-700 hover:bg-slate-900'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 pr-5">
+                        <p className="truncate text-sm font-semibold text-white">{conversation.topic}</p>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] ${
+                          conversation.sessionType === 'standard'
+                            ? 'bg-slate-800 text-slate-300'
+                            : 'bg-cyan-500/10 text-cyan-200'
+                        }`}>
+                          {conversation.sessionType}
+                        </span>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-xs text-slate-400">{conversation.preview}</p>
+                      <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
+                        <span>{conversation.runtimeLabel || conversation.agentName || 'Chat'}</span>
+                        <span>{formatRelativeDate(conversation.timestamp)}</span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); void handleDeleteConversation(conversation.id); }}
+                      className="absolute right-2 top-2 hidden rounded-lg p-1 text-slate-500 hover:bg-rose-500/15 hover:text-rose-400 group-hover:flex"
+                      aria-label="Delete conversation"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 ))
               )}
             </div>
@@ -1103,27 +1202,46 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto px-5 py-5">
+          <div ref={scrollContainerRef} onScroll={handleScrollContainer} className="relative flex-1 overflow-y-auto px-5 py-5">
+            {userScrolledUp && streaming && (
+              <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
+                <button
+                  onClick={() => { scrollBottomRef.current?.scrollIntoView({ behavior: 'smooth' }); setUserScrolledUp(false); }}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-slate-900/90 px-3 py-1.5 text-xs font-semibold text-cyan-300 shadow-lg backdrop-blur-sm hover:bg-slate-800"
+                >
+                  ↓ New message
+                </button>
+              </div>
+            )}
             {selectedConversation && selectedConversation.messages?.length ? (
               detailTab === 'transcript' ? (
-                <div className="space-y-4">
+                <div className="space-y-5">
                   {selectedConversation.messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`max-w-3xl rounded-3xl border px-4 py-3 ${
-                        message.role === 'user'
-                          ? 'ml-auto border-cyan-500/20 bg-cyan-500/10'
-                          : 'border-slate-800 bg-slate-900'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-slate-500">
-                        {message.role === 'user' ? <Sparkles className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
-                        {message.role}
+                    message.role === 'user' ? (
+                      <div key={message.id} className="flex justify-end">
+                        <div className="max-w-[75%] rounded-2xl rounded-br-sm bg-cyan-500/15 border border-cyan-500/20 px-4 py-3">
+                          <p className="text-sm leading-relaxed text-slate-100 whitespace-pre-wrap">{message.content}</p>
+                          <p className="mt-1.5 text-[10px] text-slate-500 text-right">{formatDateTime(message.createdAt)}</p>
+                        </div>
                       </div>
-                      <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-100">{message.content}</p>
-                      <p className="mt-3 text-[11px] text-slate-500">{formatDateTime(message.createdAt)}</p>
-                    </div>
+                    ) : (
+                      <div key={message.id} className="flex items-start gap-3">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-xs font-semibold text-cyan-300">
+                          {selectedConversation.agentName?.trim().charAt(0).toUpperCase() || 'A'}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="rounded-2xl rounded-tl-sm border border-slate-800 bg-slate-900/80 px-4 py-3">
+                            {message.content
+                              ? <LightMarkdown text={message.content} tone="dark" />
+                              : <span className="inline-flex gap-1 text-slate-500"><span className="animate-bounce [animation-delay:0ms]">·</span><span className="animate-bounce [animation-delay:150ms]">·</span><span className="animate-bounce [animation-delay:300ms]">·</span></span>
+                            }
+                          </div>
+                          <p className="mt-1 pl-1 text-[10px] text-slate-600">{formatDateTime(message.createdAt)}</p>
+                        </div>
+                      </div>
+                    )
                   ))}
+                  <div ref={scrollBottomRef} />
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -1149,7 +1267,53 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
                   )}
                 </div>
               )
-            ) : (
+            ) : null}
+
+            {/* Governed polling progress */}
+            {governedPollAbort !== null && (
+              <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 px-5 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-cyan-200">Running governed job…</p>
+                    <p className="mt-0.5 text-xs text-slate-400">Poll {governedPollAttempt} / 25</p>
+                    <progress
+                      value={governedPollAttempt}
+                      max={25}
+                      className="mt-2 h-1.5 w-full rounded-full accent-cyan-400"
+                    />
+                  </div>
+                  <button
+                    onClick={() => {
+                      governedPollAbort?.abort();
+                      setGovernedPollAbort(null);
+                      setGovernedPollAttempt(0);
+                      toast.info('Cancelled — the job may continue in the background.');
+                    }}
+                    className="shrink-0 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 hover:border-slate-600 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Governed job timed out */}
+            {governedPollAttempt === -1 && (
+              <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-5 py-4">
+                <p className="text-sm font-semibold text-amber-200">Still running</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  This job is taking longer than expected.{' '}
+                  <button
+                    onClick={() => { setGovernedPollAttempt(0); onNavigate?.('jobs'); }}
+                    className="underline hover:text-white"
+                  >
+                    Check Jobs for status →
+                  </button>
+                </p>
+              </div>
+            )}
+
+            {!selectedConversation && governedPollAbort === null && governedPollAttempt === 0 && (
               <div className="flex h-full flex-col items-center justify-center">
                 <div className="grid max-w-4xl gap-4 md:grid-cols-2">
                   {[
@@ -1195,31 +1359,43 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
             <div className="rounded-3xl border border-slate-800 bg-slate-900 p-3">
               <textarea
                 value={composeText}
-                onChange={(event) => setComposeText(event.target.value)}
-                placeholder={governedEnabled ? 'Describe the governed task you want to run...' : 'Start a new message...'}
-                rows={4}
-                className="w-full resize-none bg-transparent text-sm text-white placeholder-slate-500 outline-none"
+                onChange={(event) => {
+                  setComposeText(event.target.value);
+                  const el = event.target;
+                  el.style.height = 'auto';
+                  el.style.height = `${Math.min(el.scrollHeight, 144)}px`;
+                }}
+                onKeyDown={handleKeyDown}
+                disabled={streaming || sending}
+                placeholder={governedEnabled ? 'Describe the governed task you want to run...' : 'Start a new message…'}
+                rows={2}
+                style={{ minHeight: '2.5rem', maxHeight: '9rem' }}
+                className="w-full resize-none bg-transparent text-sm text-white placeholder-slate-500 outline-none disabled:opacity-60"
               />
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-slate-400">
-                  <button className="rounded-xl border border-slate-800 px-2.5 py-2 hover:border-slate-700 hover:text-white">
-                    <Paperclip className="h-4 w-4" />
-                  </button>
-                  <button className="rounded-xl border border-slate-800 px-2.5 py-2 hover:border-slate-700 hover:text-white">
-                    <Mic className="h-4 w-4" />
-                  </button>
-                  <div className="rounded-xl border border-slate-800 px-3 py-2 text-xs text-slate-400">
-                    {runtimeSourceLabel(runtimeSource)}{selectedRuntimeProfile ? ` · ${selectedRuntimeProfile.label}` : ''}{selectedModelId ? ` · ${selectedModelId}` : ''}
-                  </div>
+                <div className="rounded-xl border border-slate-800 px-3 py-2 text-xs text-slate-400">
+                  {runtimeSourceLabel(runtimeSource)}{selectedRuntimeProfile ? ` · ${selectedRuntimeProfile.label}` : ''}{selectedModelId ? ` · ${selectedModelId}` : ''}
                 </div>
-                <button
-                  onClick={() => void handleSend()}
-                  disabled={sending || !composeText.trim()}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  {governedEnabled ? 'Run Governed' : 'Send'}
-                </button>
+                <div className="flex items-center gap-2">
+                  {streaming && (
+                    <button
+                      onClick={() => { streamAbortController?.abort(); setStreaming(false); setStreamAbortController(null); }}
+                      className="inline-flex items-center gap-2 rounded-2xl bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-400"
+                    >
+                      <Square className="h-4 w-4 fill-current" /> Stop
+                    </button>
+                  )}
+                  {!streaming && (
+                    <button
+                      onClick={() => void handleSend()}
+                      disabled={sending || !composeText.trim()}
+                      className="inline-flex items-center gap-2 rounded-2xl bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      {governedEnabled ? 'Run Governed' : 'Send'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

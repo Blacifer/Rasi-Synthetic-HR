@@ -29,6 +29,10 @@ jest.mock('../../services/ai-service', () => ({
   })),
 }));
 
+jest.mock('../../lib/chat-instrumentation', () => ({
+  fireChatInstrumentation: jest.fn().mockResolvedValue(undefined),
+}));
+
 import chatRouter from '../chat';
 
 describe('Chat Routes - standard sessions', () => {
@@ -219,6 +223,7 @@ describe('Chat Routes - standard sessions', () => {
 
     expect(mockOpenAIChat).toHaveBeenCalledWith(
       [
+        { role: 'system', content: 'You are an AI assistant for an enterprise operator. Be concise and professional.' },
         { role: 'assistant', content: 'Previous answer.' },
         { role: 'user', content: 'What changed this week?' },
         { role: 'user', content: 'What changed this week?' },

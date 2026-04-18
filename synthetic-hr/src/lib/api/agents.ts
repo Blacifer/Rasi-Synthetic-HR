@@ -472,6 +472,10 @@ export const conversationApi = {
     });
   },
 
+  async remove(id: string): Promise<ApiResponse<void>> {
+    return authenticatedFetch<void>(`/conversations/${id}`, { method: 'DELETE' });
+  },
+
   async send(payload: {
     agent_id: string;
     prompt: string;
@@ -528,6 +532,68 @@ export const conversationApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  },
+
+  /**
+   * Stream a standard chat message over SSE.
+   * Falls back: pass ?stream=false on the URL to use the non-streaming endpoint instead.
+   */
+  streamStandardMessage(
+    sessionId: string,
+    payload: {
+      prompt: string;
+      mode?: 'operator' | 'employee' | 'external';
+      runtime_source: 'managed' | 'provider_key' | 'gateway_key';
+      runtime_profile_id?: string | null;
+      model: string;
+    },
+    callbacks: {
+      onDelta: (text: string) => void;
+      onDone: (message: any, usage: any) => void;
+      onError: (error: string) => void;
+      signal?: AbortSignal;
+    },
+  ): Promise<void> {
+    return (async () => {
+      const headers = await getAuthHeaders();
+      const response = await fetch(
+        `${API_BASE_URL}/chat/sessions/${encodeURIComponent(sessionId)}/messages/stream`,
+        {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: callbacks.signal,
+        },
+      );
+
+      if (!response.ok || !response.body) {
+        const body = await response.json().catch(() => ({}));
+        callbacks.onError(body?.error || `Server error ${response.status}`);
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split('\n');
+        buf = parts.pop() ?? '';
+
+        for (const line of parts) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+            if (event.type === 'delta') callbacks.onDelta(event.content ?? '');
+            else if (event.type === 'done') callbacks.onDone(event.message, event.usage);
+            else if (event.type === 'error') callbacks.onError(event.error ?? 'Unknown error');
+          } catch { /* malformed SSE line — skip */ }
+        }
+      }
+    })();
   },
 
   async sendStandardMessage(

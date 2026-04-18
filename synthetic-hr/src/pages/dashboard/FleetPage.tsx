@@ -415,7 +415,7 @@ export default function FleetPage({
     if (!workspaceAgentId) return;
     const agent = agents.find((a) => a.id === workspaceAgentId);
     if (!agent) return;
-    api.marketplace.getAll().then((res) => {
+    api.unifiedConnectors.getCatalog().then((res) => {
       if (!res.success || !res.data) return;
       const pack = agent.primaryPack || '';
       const packToCategory: Record<string, string[]> = {
@@ -428,7 +428,7 @@ export default function FleetPage({
       };
       const cats = packToCategory[pack] || [];
       const uninstalled = (res.data as any[]).filter(
-        (app) => !app.connectionStatus && (cats.length === 0 || cats.includes(app.category))
+        (app) => !app.installed && (cats.length === 0 || cats.includes(app.category))
       );
       setSuggestedApps(uninstalled.slice(0, 3));
     }).catch(() => {});

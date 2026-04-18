@@ -478,6 +478,51 @@ router.get('/conversations/:id/trace', requirePermission('dashboard.read'), asyn
   }
 });
 
+// Delete a conversation (cascades to messages via FK; reasoning_traces set to NULL)
+router.delete('/conversations/:id', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    const jwt = getUserJwt(req);
+    const userId = getUserId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+
+    const { id } = req.params;
+
+    // Verify conversation belongs to this org
+    const checkQ = new URLSearchParams();
+    checkQ.set('id', eq(id));
+    checkQ.set('organization_id', eq(orgId));
+    checkQ.set('select', 'id');
+    const existing = await supabaseRestAsUser(jwt, 'conversations', checkQ);
+    if (!existing?.length) return res.status(404).json({ success: false, error: 'Conversation not found' });
+
+    // Delete — messages cascade automatically (FK ON DELETE CASCADE)
+    const deleteQ = new URLSearchParams();
+    deleteQ.set('id', eq(id));
+    deleteQ.set('organization_id', eq(orgId));
+    await supabaseRestAsUser(jwt, 'conversations', deleteQ, { method: 'DELETE' });
+
+    // Fire-and-forget audit log
+    void supabaseRestAsUser(jwt, 'audit_logs', '', {
+      method: 'POST',
+      body: {
+        organization_id: orgId,
+        user_id: userId,
+        action: 'conversation.deleted',
+        resource_type: 'conversation',
+        resource_id: id,
+        metadata: { conversation_id: id },
+        created_at: new Date().toISOString(),
+      },
+    }).catch(() => {});
+
+    logger.info('Conversation deleted', { conversation_id: id, org_id: orgId });
+    res.json({ success: true });
+  } catch (error: any) {
+    errorResponse(res, error);
+  }
+});
+
 // Rate a conversation (thumbs up / thumbs down)
 router.post('/conversations/:id/rate', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
   try {

@@ -81,4 +81,11 @@ export const marketplaceApi = {
       method: 'POST',
     });
   },
+
+  async requestIntegration(payload: { app_id?: string; app_name: string; use_case?: string }): Promise<ApiResponse<{ message: string }>> {
+    return authenticatedFetch('/marketplace/requests', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
 };

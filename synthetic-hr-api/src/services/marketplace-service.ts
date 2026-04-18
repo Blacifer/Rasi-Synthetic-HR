@@ -20,7 +20,7 @@ import {
 export type InstallResult =
   | { type: 'oauth'; authUrl: string; state: string; appName: string }
   | { type: 'direct'; integrationId: string; appName: string }
-  | { type: 'error'; status: 400 | 401 | 404 | 500; error: string };
+  | { type: 'error'; status: 400 | 401 | 404 | 500; error: string; code?: string };
 
 export interface UninstallResult {
   ok: boolean;
@@ -54,7 +54,8 @@ export async function installApp(
       return {
         type: 'error',
         status: 400,
-        error: `OAuth for ${app.name} is not yet configured. Contact your administrator to set up the required credentials.`,
+        code: 'OAUTH_NOT_CONFIGURED',
+        error: `OAuth for ${app.name} is not yet configured.`,
       };
     }
 

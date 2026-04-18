@@ -14,6 +14,7 @@ import { CategorySidebar } from './components/CategorySidebar';
 import { ConnectedAppRow } from './components/ConnectedAppRow';
 import { ConnectWizard } from './connect-wizard/ConnectWizard';
 import { BrowseView } from './components/BrowseView';
+import { RequestIntegrationModal } from './components/RequestIntegrationModal';
 import { MobileBottomSheet } from './components/MobileBottomSheet';
 import { DetailDrawer } from './drawer/DetailDrawer';
 import { PageHero } from '../../../components/dashboard/PageHero';
@@ -62,6 +63,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   // Health summary: maps appId → 'ok' | 'error' | null
   const [healthMap, setHealthMap] = useState<Map<string, 'ok' | 'error'>>(new Map());
   const [testingAll, setTestingAll] = useState(false);
+  const [showRequestModal, setShowRequestModal] = useState(false);
 
   const loadHealthSummary = useCallback(async () => {
     const res = await api.integrations.getHealthSummary();
@@ -357,6 +359,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
               initialCategory={selectedCat}
               onConnect={(app) => setConnectTarget(app)}
               onManage={(app) => setDrawerApp(app)}
+              onRequestIntegration={() => setShowRequestModal(true)}
             />
           )}
         </div>
@@ -449,6 +452,10 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
             onDisconnect={async (app) => { await handleDisconnect(app); setDrawerApp(null); clearDeepLinkParams(); }}
           />
         </MobileBottomSheet>
+      )}
+
+      {showRequestModal && (
+        <RequestIntegrationModal onClose={() => setShowRequestModal(false)} />
       )}
     </div>
   );

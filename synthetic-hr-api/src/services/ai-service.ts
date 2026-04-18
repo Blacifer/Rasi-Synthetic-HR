@@ -140,6 +140,38 @@ export class OpenAIService {
       ...(toolCalls.length > 0 ? { toolCalls } : {}),
     };
   }
+
+  async *chatStream(
+    messages: { role: string; content: any }[],
+    model: string = 'gpt-4o',
+    options: AIChatOptions = {}
+  ): AsyncGenerator<{ delta: string } | { done: true; inputTokens: number; outputTokens: number; costUSD: number }> {
+    const stream = await this.client.chat.completions.create({
+      model,
+      messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
+      temperature: options.temperature ?? 0.7,
+      ...(typeof options.maxTokens === 'number' ? { max_tokens: options.maxTokens } : {}),
+      stream: true,
+      stream_options: { include_usage: true },
+    });
+
+    let inputTokens = 0;
+    let outputTokens = 0;
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content;
+      if (delta) yield { delta };
+
+      if (chunk.usage) {
+        inputTokens = chunk.usage.prompt_tokens ?? 0;
+        outputTokens = chunk.usage.completion_tokens ?? 0;
+      }
+    }
+
+    const pricing = OPENAI_PRICING[model as keyof typeof OPENAI_PRICING] || OPENAI_PRICING['gpt-4o'];
+    const costUSD = ((inputTokens * pricing.input) + (outputTokens * pricing.output)) / 1000000;
+    yield { done: true, inputTokens, outputTokens, costUSD };
+  }
 }
 
 // Anthropic Service
@@ -287,6 +319,36 @@ export class AnthropicService {
       latency,
       ...(toolCalls.length > 0 ? { toolCalls } : {}),
     };
+  }
+
+  async *chatStream(
+    messages: { role: string; content: any }[],
+    model: string = 'claude-sonnet-4-6',
+    options: AIChatOptions = {}
+  ): AsyncGenerator<{ delta: string } | { done: true; inputTokens: number; outputTokens: number; costUSD: number }> {
+    const anthropicMessages = AnthropicService.toAnthropicMessages(messages);
+    const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
+
+    const stream = this.client.messages.stream({
+      model,
+      ...(systemPrompt ? { system: systemPrompt } : {}),
+      messages: anthropicMessages,
+      max_tokens: options.maxTokens ?? 4096,
+      temperature: options.temperature ?? 0.7,
+    });
+
+    for await (const event of stream) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        yield { delta: event.delta.text };
+      }
+    }
+
+    const finalMessage = await stream.finalMessage();
+    const inputTokens = finalMessage.usage.input_tokens;
+    const outputTokens = finalMessage.usage.output_tokens;
+    const pricing = ANTHROPIC_PRICING[model as keyof typeof ANTHROPIC_PRICING] || ANTHROPIC_PRICING['claude-sonnet-4-6'];
+    const costUSD = ((inputTokens * pricing.input) + (outputTokens * pricing.output)) / 1000000;
+    yield { done: true, inputTokens, outputTokens, costUSD };
   }
 }
 

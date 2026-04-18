@@ -269,6 +269,14 @@ export default function WhatsAppWorkspace() {
         </button>
       </div>
 
+      {/* Demo data banner — shown when not live-connected */}
+      {!connected && (
+        <div className="mx-4 mt-3 rounded-xl border border-amber-500/25 bg-amber-500/8 px-4 py-2.5 flex items-center gap-2.5">
+          <span className="text-amber-400 text-sm">⚠</span>
+          <p className="text-xs text-amber-200 font-medium">Demo data — live connection coming soon. Connect your Meta Cloud API key to go live.</p>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-0.5 px-4 pt-2 border-b border-slate-800 bg-slate-900/40">
         {TABS.map(({ key, label, icon: Icon }) => (

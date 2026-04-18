@@ -7,6 +7,13 @@ import { errorResponse, getOrgId, getUserJwt } from '../lib/route-helpers';
 import { logger } from '../lib/logger';
 import { auditLog } from '../lib/audit-logger';
 import { decryptSecret, encryptSecret } from '../lib/integrations/encryption';
+import { fireChatInstrumentation } from '../lib/chat-instrumentation';
+
+const SYSTEM_PROMPTS: Record<'operator' | 'employee' | 'external', string> = {
+  operator: 'You are an AI assistant for an enterprise operator. Be concise and professional.',
+  employee: 'You are an AI assistant helping an employee. For questions about payroll, personal data, or legal matters, refer employees to HR or the relevant team.',
+  external: 'You are an AI assistant representing the company. Be helpful, accurate, and do not share internal information.',
+};
 
 const router = express.Router();
 
@@ -349,6 +356,7 @@ async function runStandardChatCompletion(req: Request, input: {
   runtimeSource: RuntimeSource;
   runtimeProfile?: z.infer<typeof runtimeProfileSchema> | null;
   model: string;
+  mode: 'operator' | 'employee' | 'external';
   messages: Array<{ role: string; content: string }>;
 }) {
   const provider = input.runtimeSource === 'provider_key'
@@ -357,9 +365,16 @@ async function runStandardChatCompletion(req: Request, input: {
       : (input.runtimeProfile?.provider || inferProviderFromModel(input.model))
     : inferProviderFromModel(input.model);
 
+  const messagesWithSystemPrompt = [
+    { role: 'system', content: SYSTEM_PROMPTS[input.mode] },
+    ...input.messages,
+  ];
+
   if (input.runtimeSource === 'gateway_key') {
     if (!input.runtimeProfile?.api_key) throw new Error('Gateway key profile is missing a usable key.');
-    return callGatewayCompletion(req, input.runtimeProfile.api_key, input.model, input.messages);
+    const t0 = Date.now();
+    const result = await callGatewayCompletion(req, input.runtimeProfile.api_key, input.model, messagesWithSystemPrompt);
+    return { ...result, latency_ms: Date.now() - t0, provider: 'gateway' };
   }
 
   if (provider === 'openai') {
@@ -368,9 +383,12 @@ async function runStandardChatCompletion(req: Request, input: {
       : (process.env.RASI_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '');
     if (!apiKey) throw new Error('OpenAI provider key missing.');
     const service = new OpenAIService(apiKey);
-    const result = await service.chat(input.messages, upstreamModel(input.model), { temperature: 0.7 });
+    const t0 = Date.now();
+    const result = await service.chat(messagesWithSystemPrompt, upstreamModel(input.model), { temperature: 0.7 });
     return {
       content: result.content,
+      latency_ms: Date.now() - t0,
+      provider: 'openai',
       usage: {
         input_tokens: result.tokenCount.input,
         output_tokens: result.tokenCount.output,
@@ -386,9 +404,12 @@ async function runStandardChatCompletion(req: Request, input: {
       : (process.env.RASI_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY || '');
     if (!apiKey) throw new Error('Anthropic provider key missing.');
     const service = new AnthropicService(apiKey);
-    const result = await service.chat(input.messages, upstreamModel(input.model), { temperature: 0.7 });
+    const t0 = Date.now();
+    const result = await service.chat(messagesWithSystemPrompt, upstreamModel(input.model), { temperature: 0.7 });
     return {
       content: result.content,
+      latency_ms: Date.now() - t0,
+      provider: 'anthropic',
       usage: {
         input_tokens: result.tokenCount.input,
         output_tokens: result.tokenCount.output,
@@ -402,7 +423,9 @@ async function runStandardChatCompletion(req: Request, input: {
     ? input.runtimeProfile?.api_key
     : (process.env.RASI_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY || '');
   if (!openRouterKey) throw new Error('OpenRouter provider key missing.');
-  return callOpenRouter(input.model, openRouterKey, input.messages);
+  const t0 = Date.now();
+  const result = await callOpenRouter(input.model, openRouterKey, messagesWithSystemPrompt);
+  return { ...result, latency_ms: Date.now() - t0, provider: 'openrouter' };
 }
 
 router.get('/chat/runtime-profiles', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
@@ -692,6 +715,7 @@ router.post('/chat/sessions/:id/messages', requirePermission('dashboard.read'), 
         api_key: runtimeProfile.api_key,
       } : null,
       model: parsed.data.model,
+      mode: parsed.data.mode,
       messages: llmMessages,
     });
 
@@ -716,6 +740,21 @@ router.post('/chat/sessions/:id/messages', requirePermission('dashboard.read'), 
       },
       headers: { Prefer: 'return=representation' },
     }) as any[];
+
+    void fireChatInstrumentation({
+      orgId,
+      conversationId: conversation.id,
+      agentId: conversation.agent_id || null,
+      model: parsed.data.model,
+      provider: completion.provider || inferProviderFromModel(parsed.data.model),
+      inputTokens: completion.usage.input_tokens,
+      outputTokens: completion.usage.output_tokens,
+      costUSD: completion.usage.cost_usd || 0,
+      latencyMs: completion.latency_ms || 0,
+      messages: llmMessages,
+      assistantContent,
+      requestId: req.headers['x-request-id'] as string || conversation.id,
+    });
 
     const topic = summarizePrompt(prompt);
     const updatedConversation = await supabaseRestAsUser(jwt, 'conversations', new URLSearchParams([
@@ -766,6 +805,212 @@ router.post('/chat/sessions/:id/messages', requirePermission('dashboard.read'), 
   } catch (error: any) {
     logger.error('Standard chat send failed', { error: error?.message || String(error) });
     errorResponse(res, error);
+  }
+});
+
+// POST /chat/sessions/:id/messages/stream — SSE streaming variant of standard chat.
+// Set Cloud Run --timeout=3600 so long completions are not killed at the default 60s.
+// Falls back: clients may add ?stream=false to use the non-streaming endpoint instead.
+router.post('/chat/sessions/:id/messages/stream', requirePermission('dashboard.read'), async (req: Request, res: Response) => {
+  const sseWrite = (data: object) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+  try {
+    const parsed = sendMessageSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, errors: parsed.error.errors.map((e) => e.message) });
+    }
+
+    const orgId = getOrgId(req);
+    const userId = req.user?.id;
+    const jwt = getUserJwt(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization not found' });
+    if (!userId) return res.status(401).json({ success: false, error: 'Authentication required' });
+
+    let runtimeProfile: ResolvedRuntimeProfile | null = null;
+    try {
+      runtimeProfile = await resolveRuntimeProfile(
+        jwt, orgId,
+        parsed.data.runtime_source,
+        parsed.data.runtime_profile_id || null,
+        parsed.data.runtime_profile || null,
+      );
+    } catch (error: any) {
+      const status = String(error?.message || '').includes('not found') ? 404 : 400;
+      return res.status(status).json({ success: false, error: error.message });
+    }
+
+    const conversation = await fetchConversation(jwt, orgId, req.params.id);
+    if (!conversation) return res.status(404).json({ success: false, error: 'Chat session not found' });
+    if (conversation.metadata?.session_type && conversation.metadata.session_type !== 'standard_chat_session') {
+      return res.status(409).json({ success: false, error: 'This session is not a standard chat session' });
+    }
+
+    const messagesQuery = new URLSearchParams();
+    messagesQuery.set('conversation_id', eq(conversation.id));
+    messagesQuery.set('order', 'created_at.asc');
+    const historyRows = await supabaseRestAsUser(jwt, 'messages', messagesQuery) as any[];
+
+    const prompt = parsed.data.prompt.trim();
+
+    await supabaseRestAsUser(jwt, 'messages', '', {
+      method: 'POST',
+      body: { conversation_id: conversation.id, role: 'user', content: prompt, token_count: 0, created_at: nowIso() },
+      headers: { Prefer: 'return=representation' },
+    });
+
+    const llmMessages = [
+      ...((historyRows || []).map((m: any) => ({ role: String(m.role || 'user'), content: String(m.content || '') }))),
+      { role: 'user', content: prompt },
+    ];
+
+    const messagesWithSystem = [
+      { role: 'system', content: SYSTEM_PROMPTS[parsed.data.mode] },
+      ...llmMessages,
+    ];
+
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    if (typeof (res as any).flushHeaders === 'function') (res as any).flushHeaders();
+
+    let aborted = false;
+    req.on('close', () => { aborted = true; });
+
+    const provider = parsed.data.runtime_source === 'provider_key'
+      ? (runtimeProfile?.provider === 'zapheit_gateway' ? 'openrouter' : (runtimeProfile?.provider || inferProviderFromModel(parsed.data.model)))
+      : inferProviderFromModel(parsed.data.model);
+
+    let accumulated = '';
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let costUSD = 0;
+    const t0 = Date.now();
+
+    try {
+      // gateway_key falls back to non-streaming since callGatewayCompletion does not yet stream
+      if (parsed.data.runtime_source === 'gateway_key') {
+        if (!runtimeProfile?.api_key) throw new Error('Gateway key profile is missing a usable key.');
+        const result = await callGatewayCompletion(req, runtimeProfile.api_key, parsed.data.model, messagesWithSystem);
+        accumulated = result.content || '';
+        inputTokens = result.usage?.input_tokens || 0;
+        outputTokens = result.usage?.output_tokens || 0;
+        costUSD = result.usage?.cost_usd || 0;
+        sseWrite({ type: 'delta', content: accumulated });
+      } else if (provider === 'openai') {
+        const apiKey = parsed.data.runtime_source === 'provider_key'
+          ? runtimeProfile?.api_key
+          : (process.env.RASI_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '');
+        if (!apiKey) throw new Error('OpenAI provider key missing.');
+        const service = new OpenAIService(apiKey);
+        for await (const chunk of service.chatStream(messagesWithSystem, upstreamModel(parsed.data.model), { temperature: 0.7 })) {
+          if (aborted) break;
+          if ('delta' in chunk) {
+            accumulated += chunk.delta;
+            sseWrite({ type: 'delta', content: chunk.delta });
+          } else {
+            inputTokens = chunk.inputTokens;
+            outputTokens = chunk.outputTokens;
+            costUSD = chunk.costUSD;
+          }
+        }
+      } else if (provider === 'anthropic') {
+        const apiKey = parsed.data.runtime_source === 'provider_key'
+          ? runtimeProfile?.api_key
+          : (process.env.RASI_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY || '');
+        if (!apiKey) throw new Error('Anthropic provider key missing.');
+        const service = new AnthropicService(apiKey);
+        for await (const chunk of service.chatStream(messagesWithSystem, upstreamModel(parsed.data.model), { temperature: 0.7 })) {
+          if (aborted) break;
+          if ('delta' in chunk) {
+            accumulated += chunk.delta;
+            sseWrite({ type: 'delta', content: chunk.delta });
+          } else {
+            inputTokens = chunk.inputTokens;
+            outputTokens = chunk.outputTokens;
+            costUSD = chunk.costUSD;
+          }
+        }
+      } else {
+        const openRouterKey = parsed.data.runtime_source === 'provider_key'
+          ? runtimeProfile?.api_key
+          : (process.env.RASI_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY || '');
+        if (!openRouterKey) throw new Error('OpenRouter provider key missing.');
+        const result = await callOpenRouter(parsed.data.model, openRouterKey, messagesWithSystem);
+        accumulated = result.content || '';
+        inputTokens = result.usage?.input_tokens || 0;
+        outputTokens = result.usage?.output_tokens || 0;
+        costUSD = result.usage?.cost_usd || 0;
+        sseWrite({ type: 'delta', content: accumulated });
+      }
+    } catch (streamErr: any) {
+      sseWrite({ type: 'error', error: streamErr?.message || 'Stream error' });
+      res.end();
+      return;
+    }
+
+    if (aborted) {
+      res.end();
+      return;
+    }
+
+    const assistantContent = accumulated || 'No response returned.';
+    const latencyMs = Date.now() - t0;
+
+    const createdAssistantMessage = await supabaseRestAsUser(jwt, 'messages', '', {
+      method: 'POST',
+      body: {
+        conversation_id: conversation.id,
+        role: 'assistant',
+        content: assistantContent,
+        token_count: inputTokens + outputTokens,
+        cost_usd: costUSD,
+        metadata: {
+          runtime_source: parsed.data.runtime_source,
+          runtime_profile_id: runtimeProfile?.id || null,
+          runtime_label: runtimeProfile?.label || (parsed.data.runtime_source === 'managed' ? 'Zapheit Managed' : null),
+          billing_mode: billingModeForRuntimeSource(parsed.data.runtime_source),
+          model: parsed.data.model,
+          usage: { input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: inputTokens + outputTokens, cost_usd: costUSD },
+        },
+        created_at: nowIso(),
+      },
+      headers: { Prefer: 'return=representation' },
+    }) as any[];
+
+    void fireChatInstrumentation({
+      orgId,
+      conversationId: conversation.id,
+      agentId: conversation.agent_id || null,
+      model: parsed.data.model,
+      provider: String(provider),
+      inputTokens,
+      outputTokens,
+      costUSD,
+      latencyMs,
+      messages: llmMessages,
+      assistantContent,
+      requestId: req.headers['x-request-id'] as string || conversation.id,
+    });
+
+    if (runtimeProfile?.id) {
+      await touchRuntimeProfile(jwt, orgId, runtimeProfile.id);
+    }
+
+    sseWrite({
+      type: 'done',
+      message: createdAssistantMessage?.[0] || null,
+      usage: { input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: inputTokens + outputTokens, cost_usd: costUSD },
+    });
+    res.end();
+  } catch (error: any) {
+    logger.error('Standard chat stream failed', { error: error?.message || String(error) });
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    } else {
+      try { sseWrite({ type: 'error', error: 'Internal server error' }); res.end(); } catch { /* already closed */ }
+    }
   }
 });
 

@@ -128,8 +128,8 @@ export default function GettingStartedPage(props: {
     if (props.agents.length > 0) {
       setSelectedAgentId(props.agents[0].id);
     }
-    api.marketplace.getInstalled().then((res) => {
-      if (res.success && Array.isArray(res.data)) setInstalledAppCount(res.data.length);
+    api.unifiedConnectors.getCatalog().then((res) => {
+      if (res.success && Array.isArray(res.data)) setInstalledAppCount(res.data.filter((app) => app.installed).length);
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

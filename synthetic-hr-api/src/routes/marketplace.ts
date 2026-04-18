@@ -2746,7 +2746,11 @@ router.post('/apps/:id/install', async (req: Request, res: Response) => {
     );
 
     if (result.type === 'error') {
-      return res.status(result.status).json({ success: false, error: result.error });
+      return res.status(result.status).json({
+        success: false,
+        error: result.error,
+        ...(result.code ? { code: result.code, request_integration: true } : {}),
+      });
     }
     if (result.type === 'oauth') {
       return res.json({
@@ -2964,6 +2968,49 @@ router.post('/apps/:id/notify', async (req: Request, res: Response) => {
     return res.json({ success: true, message: `You'll be notified when ${app.name} is available.` });
   } catch (error: any) {
     logger.error('Failed to join waitlist', { error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /marketplace/requests — submit a request for an unsupported integration
+router.post('/requests', async (req: Request, res: Response) => {
+  try {
+    const orgId = req.user?.organization_id;
+    const userId = (req.user as any)?.id ?? null;
+    if (!orgId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const { app_id, app_name, use_case } = req.body;
+    if (!app_name || typeof app_name !== 'string') {
+      return res.status(400).json({ success: false, error: 'app_name is required' });
+    }
+
+    const now = new Date().toISOString();
+    await supabaseRestAsService('marketplace_integration_requests', '', {
+      method: 'POST',
+      body: {
+        organization_id: orgId,
+        user_id: userId,
+        app_id: app_id || null,
+        app_name: app_name.trim(),
+        use_case: typeof use_case === 'string' ? use_case.trim() : null,
+        status: 'pending',
+        created_at: now,
+      },
+    });
+
+    // Fire-and-forget Slack ping if webhook configured
+    if (process.env.PRODUCT_SLACK_WEBHOOK) {
+      void fetch(process.env.PRODUCT_SLACK_WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: `🔌 Integration request: *${app_name}* — use case: ${use_case || 'not specified'} (org: ${orgId})` }),
+      }).catch(() => {});
+    }
+
+    logger.info('Marketplace integration request submitted', { app_id, app_name, org_id: orgId });
+    return res.json({ success: true, message: `Your request for ${app_name} has been submitted.` });
+  } catch (error: any) {
+    logger.error('Failed to submit integration request', { error: error.message });
     return res.status(500).json({ success: false, error: error.message });
   }
 });

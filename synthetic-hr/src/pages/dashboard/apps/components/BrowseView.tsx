@@ -15,6 +15,7 @@ interface BrowseViewProps {
   initialCategory?: string | null;
   onConnect: (app: UnifiedApp) => void;
   onManage: (app: UnifiedApp) => void;
+  onRequestIntegration?: () => void;
 }
 
 function BrowseCard({ app, popLabel, onConnect, onManage }: {
@@ -79,7 +80,7 @@ function BrowseCard({ app, popLabel, onConnect, onManage }: {
   );
 }
 
-export function BrowseView({ apps, agents, featured: featuredProp, initialCategory, onConnect, onManage }: BrowseViewProps) {
+export function BrowseView({ apps, agents, featured: featuredProp, initialCategory, onConnect, onManage, onRequestIntegration }: BrowseViewProps) {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<string>('popular');
   const [filterType, setFilterType] = useState<'all' | 'oauth2' | 'api_key'>('all');
@@ -343,7 +344,10 @@ export function BrowseView({ apps, agents, featured: featuredProp, initialCatego
         <div className="text-center py-8 border-t border-white/5">
           <MessageSquarePlus className="w-5 h-5 text-slate-500 mx-auto mb-2" />
           <p className="text-sm text-slate-400 mb-1">Don't see an app you need?</p>
-          <button className="text-sm text-cyan-400 hover:text-cyan-300 font-medium transition-colors">
+          <button
+            onClick={onRequestIntegration}
+            className="text-sm text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
+          >
             Request an integration →
           </button>
         </div>

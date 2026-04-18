@@ -61,9 +61,9 @@ export function CommandPalette({ onNavigate, agents = [] }: CommandPaletteProps)
   useEffect(() => {
     (async () => {
       try {
-        const res = await api.marketplace.getInstalled();
+        const res = await api.unifiedConnectors.getCatalog();
         installedRef.current = new Set(
-          (res.success && Array.isArray(res.data) ? res.data : []).map((app: any) => app.connectorId || app.id),
+          (res.success && Array.isArray(res.data) ? res.data.filter((app) => app.installed) : []).map((app) => app.id),
         );
       } catch {
         installedRef.current = new Set();

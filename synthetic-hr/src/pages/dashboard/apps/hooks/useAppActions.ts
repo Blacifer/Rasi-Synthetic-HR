@@ -19,7 +19,12 @@ export function useAppActions({ reload, markConnected, markDisconnected, onPostC
         const res = await api.marketplace.install(app.appId, creds);
         const data = res as any;
         if (!res.success) {
-          toast.error((res as any).error || 'Connection failed');
+          if (data?.code === 'OAUTH_NOT_CONFIGURED') {
+            const err: any = new Error(data.error || 'OAuth not configured');
+            err.code = 'OAUTH_NOT_CONFIGURED';
+            throw err;
+          }
+          toast.error(data.error || 'Connection failed');
           return;
         }
         if (data?.authUrl) {
@@ -63,42 +68,6 @@ export function useAppActions({ reload, markConnected, markDisconnected, onPostC
       toast.error(e.message || 'Disconnect failed');
     }
   }, [markDisconnected, reload]);
-
-  const handleConfigure = useCallback(async (app: UnifiedApp, creds: Record<string, string>) => {
-    const serviceId = getAppServiceId(app);
-    try {
-      if (app.source === 'marketplace') {
-        if (app.authType === 'oauth2') {
-          const res = await api.marketplace.install(app.appId, creds);
-          const data = res as any;
-          if (res.success && data?.authUrl) {
-            window.location.href = data.authUrl;
-            return;
-          }
-          throw new Error((res as any).error || 'Reauthorization failed');
-        }
-        const res = await api.marketplace.updateCredentials(app.appId, creds);
-        if (!res.success) throw new Error((res as any).error);
-        toast.success(`${app.name} credentials updated`);
-        void reload();
-        return;
-      }
-      if (app.authType === 'oauth2') {
-        const res = await api.integrations.initOAuth(serviceId, '/dashboard/apps', creds, false);
-        if (res.success && (res as any)?.url) {
-          window.location.href = (res as any).url;
-          return;
-        }
-        throw new Error((res as any).error || 'Reauthorization failed');
-      }
-      const res = await api.integrations.configure(serviceId, creds);
-      if (!res.success) throw new Error((res as any).error);
-      toast.success(`${app.name} credentials updated`);
-      void reload();
-    } catch (e: any) {
-      toast.error(e.message || 'Configuration failed');
-    }
-  }, [reload]);
 
   const handleTest = useCallback(async (app: UnifiedApp) => {
     const serviceId = getAppServiceId(app);
@@ -157,7 +126,6 @@ export function useAppActions({ reload, markConnected, markDisconnected, onPostC
   return {
     handleConnect,
     handleDisconnect,
-    handleConfigure,
     handleTest,
     handleRefresh,
     handleInitOAuth,
