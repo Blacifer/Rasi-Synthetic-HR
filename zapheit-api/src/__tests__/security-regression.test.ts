@@ -12,6 +12,8 @@ const ALLOW_SERVICE_REST_FILES = new Set([
   path.join(ROUTES_DIR, 'integrations.ts'),
   // Gateway is API-key based and is not user-JWT scoped.
   path.join(ROUTES_DIR, 'gateway.ts'),
+  // MCP gateway is API-key based (same justification as gateway.ts) — no user JWT in the SSE/tool-call path.
+  path.join(ROUTES_DIR, 'mcp.ts'),
   // Runtime enrollment + runtime-auth endpoints are server-to-server (no user session).
   path.join(ROUTES_DIR, 'runtimes.ts'),
   // Public invite endpoints still require server-side writes (expiry/reject/claim).
