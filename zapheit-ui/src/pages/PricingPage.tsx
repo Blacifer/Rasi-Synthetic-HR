@@ -1,7 +1,7 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, ArrowLeft, Zap, Shield, Building2, MessageCircle, AlertTriangle, TrendingDown, Eye, Lock } from 'lucide-react';
+import { Check, ArrowLeft, MessageCircle, ChevronDown } from 'lucide-react';
 
-// Replace with your WhatsApp number (country code + number, no + or spaces)
 const CONTACT_WA = '919433116259';
 
 function openWhatsApp(planName: string, note?: string) {
@@ -16,9 +16,7 @@ const PLANS = [
     price: '₹25,000',
     cadence: 'one-time',
     bestFor: 'Teams validating a first AI rollout',
-    icon: Zap,
-    accent: 'border-slate-700/60 bg-slate-900/60',
-    iconBg: 'from-violet-500 to-purple-600',
+    popular: false,
     features: [
       'AI Workforce Health Scan',
       'Risk score and leakage report',
@@ -28,7 +26,7 @@ const PLANS = [
     ],
     cta: 'Book an Audit',
     waText: "Hi, I'd like to book an AI Governance Audit with Zapheit. Can we connect?",
-    ctaStyle: 'bg-slate-700 hover:bg-slate-600 text-white',
+    ctaClass: 'bg-slate-800 hover:bg-slate-700 text-white',
   },
   {
     name: 'The Retainer',
@@ -36,10 +34,7 @@ const PLANS = [
     price: '₹40k–₹60k',
     cadence: '/month',
     bestFor: 'Operating teams with active agent fleets',
-    icon: Shield,
-    accent: 'border-cyan-500/40 bg-[linear-gradient(180deg,rgba(34,211,238,0.10),rgba(8,47,73,0.28))]',
-    iconBg: 'from-cyan-500 to-blue-600',
-    badge: 'Most popular',
+    popular: true,
     features: [
       'Everything in The Audit',
       '200,000 gateway requests/month',
@@ -53,22 +48,19 @@ const PLANS = [
     ],
     cta: 'Talk to us',
     waText: "Hi, I'm interested in The Retainer plan by Zapheit for continuous AI governance. Can we connect?",
-    ctaStyle: 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/20',
+    ctaClass: 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/20',
   },
   {
     name: 'Enterprise',
     subtitle: 'Governance partnership',
     price: 'Custom',
-    cadence: 'engagement',
+    cadence: '',
     bestFor: 'Regulated orgs running business-critical AI',
-    icon: Building2,
-    accent: 'border-emerald-500/30 bg-[linear-gradient(180deg,rgba(16,185,129,0.08),rgba(6,78,59,0.18))]',
-    iconBg: 'from-emerald-500 to-teal-600',
+    popular: false,
     features: [
       'Everything in The Retainer',
       'Unlimited gateway requests',
       'VPC / on-prem runtime workers',
-      'Policy enforcement planning',
       'DPDPA & NIST AI RMF mapping',
       'Custom compliance report generation',
       'Dedicated governance manager',
@@ -78,7 +70,7 @@ const PLANS = [
     ],
     cta: 'Contact Sales',
     waText: "Hi, I'd like to discuss Enterprise pricing with Zapheit. We're a regulated org and need a governance partnership.",
-    ctaStyle: 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-lg shadow-emerald-500/20',
+    ctaClass: 'bg-emerald-900/40 border border-emerald-500/30 hover:bg-emerald-900/60 text-emerald-300',
   },
 ];
 
@@ -95,134 +87,172 @@ const COMPARISON = [
   { feature: 'VPC / on-prem runtime', audit: false, retainer: false, enterprise: true },
   { feature: 'DPDPA / NIST AI RMF mapping', audit: false, retainer: false, enterprise: true },
   { feature: 'Dedicated governance manager', audit: false, retainer: false, enterprise: true },
-  { feature: 'SLA guarantees', audit: false, retainer: 'Standard', enterprise: 'Custom' },
+  { feature: 'SLA guarantees', audit: '—', retainer: 'Standard', enterprise: 'Custom' },
+];
+
+const FAQS = [
+  {
+    q: 'What counts as a gateway request?',
+    a: 'Each call to the Zapheit LLM gateway counts as one request — regardless of model, token count, or provider. Streaming responses count as one request.',
+  },
+  {
+    q: 'Can I use Zapheit without routing traffic through the gateway?',
+    a: 'Yes. The Audit plan and standalone governance features (fleet management, audit logs, policy editor) work without the gateway. The gateway is required for real-time incident detection and cost tracking.',
+  },
+  {
+    q: 'Which LLM providers does Zapheit support?',
+    a: 'OpenAI (GPT-4o family), Anthropic (Claude 3.5/3 Haiku), and 300+ models via OpenRouter including Gemini, Llama, and Mistral.',
+  },
+  {
+    q: 'Can I self-host or run Zapheit in my VPC?',
+    a: 'Yes — the Runtime Worker can be deployed inside your private network. The agent jobs are pulled from the queue securely without inbound firewall rules. Enterprise plan includes VPC deployment support.',
+  },
+  {
+    q: 'How does the Audit-to-Retainer upgrade work?',
+    a: 'After an Audit, your governance action plan maps directly to Retainer setup tasks. We can usually complete onboarding in under a week. The Audit fee is credited toward the first Retainer month.',
+  },
+];
+
+const INDIA_TAGS = ['Aadhaar detection', 'PAN card protection', 'UPI ID masking', 'DPDPA compliance', 'INR billing'];
+
+const NEXT_STEPS = [
+  { num: '01', title: 'You message us', body: 'Tell us how many agents you run and what you need to govern.' },
+  { num: '02', title: 'We review your setup', body: 'Within one business day we map your AI footprint and recommend a plan.' },
+  { num: '03', title: 'Onboarding in 5 days', body: 'Agents connected, policies live, first incident report delivered.' },
 ];
 
 function CellValue({ val }: { val: boolean | string }) {
   if (val === true) return <Check className="w-4 h-4 text-emerald-400 mx-auto" />;
-  if (val === false) return <span className="text-slate-600 mx-auto block text-center">—</span>;
+  if (val === false) return <span className="text-slate-700 mx-auto block text-center">—</span>;
   return <span className="text-slate-300 text-sm text-center block">{val}</span>;
 }
 
 export default function PricingPage() {
   const navigate = useNavigate();
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   return (
     <div className="min-h-screen bg-[#020617] text-white">
+
       {/* Nav */}
-      <nav className="border-b border-white/8 px-6 py-4 flex items-center justify-between max-w-7xl mx-auto">
-        <button
-          onClick={() => navigate('/')}
-          className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Zapheit
-        </button>
-        <div className="flex items-center gap-3">
+      <nav className="border-b border-white/[0.06] px-6 py-4">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
           <button
-            onClick={() => navigate('/login')}
-            className="text-sm text-slate-400 hover:text-white transition-colors px-4 py-2"
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm"
           >
-            Log in
+            <ArrowLeft className="w-4 h-4" />
+            Back to Zapheit
           </button>
-          <button
-            onClick={() => openWhatsApp('Zapheit', "Hi, I'd like to learn more about Zapheit AI governance. Can we connect?")}
-            className="text-sm px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold hover:from-cyan-400 hover:to-blue-500 transition-all flex items-center gap-1.5"
-          >
-            <MessageCircle className="w-3.5 h-3.5" />
-            Talk to us
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/login')}
+              className="text-sm text-slate-400 hover:text-white transition-colors px-4 py-2"
+            >
+              Log in
+            </button>
+            <button
+              onClick={() => openWhatsApp('Zapheit', "Hi, I'd like to learn more about Zapheit AI governance. Can we connect?")}
+              className="text-sm px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold hover:from-cyan-400 hover:to-blue-500 transition-all flex items-center gap-1.5"
+            >
+              <MessageCircle className="w-3.5 h-3.5" />
+              Talk to us
+            </button>
+          </div>
         </div>
       </nav>
 
-      <div className="max-w-7xl mx-auto px-6 py-16 space-y-20">
+      <div className="max-w-5xl mx-auto px-6 py-20 space-y-24">
+
         {/* Header */}
-        <div className="text-center space-y-4 max-w-2xl mx-auto">
+        <div className="text-center space-y-5 max-w-2xl mx-auto">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">Pricing</p>
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
+          <h1 className="text-5xl font-bold tracking-tight leading-tight">
             Govern your AI agents.{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
               From day one.
             </span>
           </h1>
           <p className="text-slate-400 text-lg leading-relaxed">
-            Start with a health scan. Scale to continuous governance across your agents and connected apps. Every plan includes India-native PII detection, INR billing, and no per-seat surprises.
+            Start with a health scan. Scale to continuous governance across your agents and connected apps. INR billing, no per-seat surprises.
           </p>
         </div>
 
-        {/* Positioning bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px rounded-2xl overflow-hidden border border-slate-800/50">
-          {[
-            { value: 'INR', label: 'India-first billing' },
-            { value: 'Pilot', label: 'Start with one governed workflow' },
-            { value: 'Audit', label: 'Evidence and export oriented' },
-            { value: 'Control', label: 'Approvals and kill switch workflows' },
-          ].map(({ value, label }) => (
-            <div key={label} className="bg-slate-900/60 px-6 py-5 text-center space-y-1">
-              <p className="text-2xl font-bold font-mono text-white">{value}</p>
-              <p className="text-xs text-slate-500">{label}</p>
+        {/* Plan cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+          {PLANS.map((plan) => (
+            <div
+              key={plan.name}
+              className={[
+                'relative rounded-3xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm p-8 flex flex-col gap-6',
+                plan.popular ? 'ring-2 ring-cyan-500/50 ring-offset-2 ring-offset-[#020617]' : '',
+              ].join(' ')}
+            >
+              {plan.popular && (
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500 text-white shadow-lg shadow-cyan-500/30 whitespace-nowrap">
+                    Most popular
+                  </span>
+                </div>
+              )}
+
+              {/* Plan identity */}
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold text-white">{plan.name}</h2>
+                <p className="text-sm text-slate-500">{plan.subtitle}</p>
+              </div>
+
+              {/* Price */}
+              <div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-4xl font-bold font-mono text-white">{plan.price}</span>
+                  {plan.cadence && (
+                    <span className="text-slate-500 text-sm">{plan.cadence}</span>
+                  )}
+                </div>
+                <p className="text-sm text-slate-500 italic mt-1">{plan.bestFor}</p>
+              </div>
+
+              <div className="border-t border-slate-800/60" />
+
+              {/* Features */}
+              <ul className="space-y-2.5 flex-1">
+                {plan.features.map((f) => (
+                  <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
+                    <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+
+              {/* CTA */}
+              <button
+                onClick={() => openWhatsApp(plan.name, plan.waText)}
+                className={`w-full py-3 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${plan.ctaClass}`}
+              >
+                <MessageCircle className="w-4 h-4" />
+                {plan.cta}
+              </button>
             </div>
           ))}
         </div>
 
-        {/* Plan cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {PLANS.map((plan) => {
-            const Icon = plan.icon;
-            return (
-              <div
-                key={plan.name}
-                className={`relative rounded-3xl border p-8 flex flex-col gap-6 backdrop-blur-sm ${plan.accent}`}
-              >
-                {plan.badge && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500 text-white shadow-lg shadow-cyan-500/30">
-                      {plan.badge}
-                    </span>
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${plan.iconBg} flex items-center justify-center`}>
-                    <Icon className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-white">{plan.name}</h2>
-                    <p className="text-sm text-slate-400">{plan.subtitle}</p>
-                  </div>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-3xl font-bold font-mono text-white">{plan.price}</span>
-                    {plan.cadence !== 'engagement' && (
-                      <span className="text-slate-500 text-sm">{plan.cadence}</span>
-                    )}
-                  </div>
-                  <p className="text-sm text-slate-400">{plan.bestFor}</p>
-                </div>
-
-                <ul className="space-y-2.5 flex-1">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
-                      <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-
-                <button
-                  onClick={() => openWhatsApp(plan.name, plan.waText)}
-                  className={`w-full py-3 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${plan.ctaStyle}`}
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  {plan.cta}
-                </button>
-              </div>
-            );
-          })}
+        {/* India trust tags */}
+        <div className="flex flex-wrap justify-center gap-2">
+          <span className="text-xs text-slate-600 flex items-center pr-1">🇮🇳 Built for India —</span>
+          {INDIA_TAGS.map((tag) => (
+            <span
+              key={tag}
+              className="px-3 py-1 rounded-full border border-slate-800 bg-slate-900/60 text-slate-400 text-xs"
+            >
+              {tag}
+            </span>
+          ))}
         </div>
 
         {/* Feature comparison table */}
         <div className="space-y-6">
-          <h2 className="text-2xl font-bold text-center">Full feature comparison</h2>
+          <h2 className="text-2xl font-bold text-center tracking-tight">Full feature comparison</h2>
           <div className="rounded-2xl border border-slate-800/60 overflow-hidden">
             <table className="w-full text-sm">
               <thead>
@@ -250,210 +280,80 @@ export default function PricingPage() {
           </div>
         </div>
 
-        {/* What's at risk */}
-        <div className="rounded-3xl border border-rose-500/20 bg-rose-950/20 p-10 space-y-8">
-          <div className="text-center space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-400">The cost of doing nothing</p>
-            <h2 className="text-2xl font-bold">What an undetected incident looks like</h2>
-            <p className="text-slate-400 text-sm max-w-xl mx-auto">One rogue agent leaking PII can cost more than a year of governance. These are real consequences — not hypothetical.</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              {
-                icon: AlertTriangle,
-                color: 'text-rose-400',
-                bg: 'bg-rose-500/10 border-rose-500/20',
-                title: 'DPDPA violation',
-                body: 'Up to ₹2.5 Cr fine per breach. Aadhaar or PAN leakage via an agent chat counts as a personal data breach.',
-              },
-              {
-                icon: TrendingDown,
-                color: 'text-orange-400',
-                bg: 'bg-orange-500/10 border-orange-500/20',
-                title: 'Runaway spend',
-                body: 'Without cost controls, a single misconfigured agent can exhaust a monthly LLM budget overnight.',
-              },
-              {
-                icon: Eye,
-                color: 'text-amber-400',
-                bg: 'bg-amber-500/10 border-amber-500/20',
-                title: 'Shadow AI',
-                body: 'Teams deploy agents without IT knowing. No visibility means no accountability when something goes wrong.',
-              },
-              {
-                icon: Lock,
-                color: 'text-purple-400',
-                bg: 'bg-purple-500/10 border-purple-500/20',
-                title: 'Compliance gap',
-                body: 'Auditors are starting to ask for AI risk registers. Most orgs have nothing to show. Zapheit generates the evidence trail.',
-              },
-            ].map(({ icon: Icon, color, bg, title, body }) => (
-              <div key={title} className={`rounded-2xl border p-5 space-y-3 ${bg}`}>
-                <Icon className={`w-5 h-5 ${color}`} />
-                <p className="font-semibold text-white text-sm">{title}</p>
-                <p className="text-xs text-slate-400 leading-relaxed">{body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* India callout */}
-        <div className="rounded-3xl border border-slate-700/50 bg-slate-900/50 p-10 text-center space-y-4 max-w-3xl mx-auto">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">Built for India</p>
-          <h3 className="text-2xl font-bold">No USD conversion surprises.</h3>
-          <p className="text-slate-400 leading-relaxed">
-            All plans billed in INR. Aadhaar, PAN, and UPI ID detection built-in. DPDPA compliance mapping included in Enterprise. Servers can run in your VPC.
-          </p>
-          <div className="flex flex-wrap justify-center gap-3 pt-2">
-            {['Aadhaar detection', 'PAN card protection', 'UPI ID masking', 'DPDPA compliance', 'INR billing'].map((tag) => (
-              <span key={tag} className="px-3 py-1.5 rounded-full text-xs font-medium border border-slate-700/50 bg-slate-800/50 text-slate-300">
-                {tag}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Why Zapheit is different */}
-        <div className="space-y-6">
-          <div className="text-center space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">Why Zapheit</p>
-            <h2 className="text-2xl font-bold">Built different. For Indian teams.</h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              {
-                num: '01',
-                title: 'No per-seat pricing',
-                body: 'Pay for governance coverage, not headcount. Add 10 engineers to a project — your bill stays flat.',
-                accent: 'border-cyan-500/20',
-              },
-              {
-                num: '02',
-                title: 'India-native PII detection',
-                body: 'Aadhaar, PAN, UPI, IFSC — built-in and tuned for Indian data patterns. Not an afterthought.',
-                accent: 'border-blue-500/20',
-              },
-              {
-                num: '03',
-                title: 'Connects in minutes',
-                body: 'One API key. Point your LLM calls at the Zapheit gateway and governance starts immediately.',
-                accent: 'border-violet-500/20',
-              },
-              {
-                num: '04',
-                title: 'No automated billing',
-                body: 'We invoice you. No card-on-file, no surprise charges. You stay in control of the relationship.',
-                accent: 'border-emerald-500/20',
-              },
-            ].map(({ num, title, body, accent }) => (
-              <div key={num} className={`rounded-2xl border bg-slate-900/40 p-6 space-y-3 ${accent}`}>
-                <p className="text-xs font-mono font-bold text-slate-600">{num}</p>
-                <p className="font-semibold text-white text-sm">{title}</p>
-                <p className="text-xs text-slate-400 leading-relaxed">{body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* FAQ */}
+        {/* FAQ — accordion */}
         <div className="max-w-2xl mx-auto space-y-6">
-          <h2 className="text-2xl font-bold text-center">Common questions</h2>
-          <div className="space-y-4">
-            {[
-              {
-                q: 'What counts as a gateway request?',
-                a: 'Each call to the Zapheit LLM gateway counts as one request — regardless of model, token count, or provider. Streaming responses count as one request.',
-              },
-              {
-                q: 'Can I use Zapheit without routing traffic through the gateway?',
-                a: 'Yes. The Audit plan and standalone governance features (fleet management, audit logs, policy editor) work without the gateway. The gateway is required for real-time incident detection and cost tracking.',
-              },
-              {
-                q: 'Which LLM providers does Zapheit support?',
-                a: 'OpenAI (GPT-4o family), Anthropic (Claude 3.5/3 Haiku), and 300+ models via OpenRouter including Gemini, Llama, and Mistral.',
-              },
-              {
-                q: 'Can I self-host or run Zapheit in my VPC?',
-                a: 'Yes — the Runtime Worker can be deployed inside your private network. The agent jobs are pulled from the queue securely without inbound firewall rules. Enterprise plan includes VPC deployment support.',
-              },
-              {
-                q: 'How does the Audit-to-Retainer upgrade work?',
-                a: 'After an Audit, your governance action plan maps directly to Retainer setup tasks. We can usually complete onboarding in under a week. Audit fee is credited toward the first Retainer month.',
-              },
-            ].map(({ q, a }) => (
-              <div key={q} className="rounded-2xl border border-slate-800/50 bg-slate-900/40 p-6 space-y-2">
-                <p className="font-semibold text-white">{q}</p>
-                <p className="text-sm text-slate-400 leading-relaxed">{a}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* What happens next */}
-        <div className="max-w-3xl mx-auto space-y-6">
-          <div className="text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">After you reach out</p>
-            <h2 className="text-2xl font-bold mt-2">What happens next</h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[
-              {
-                step: '01',
-                title: 'You message us',
-                body: "Send us a WhatsApp or email. Tell us how many agents you run and what you're trying to govern.",
-                color: 'border-cyan-500/20 bg-cyan-500/5',
-                num: 'text-cyan-400',
-              },
-              {
-                step: '02',
-                title: 'We review your setup',
-                body: 'Within one business day we map your AI footprint and send you a recommended plan with a clear scope.',
-                color: 'border-blue-500/20 bg-blue-500/5',
-                num: 'text-blue-400',
-              },
-              {
-                step: '03',
-                title: 'Onboarding in 5 days',
-                body: "Agents connected, policies live, first incident report delivered. You're governed from day one.",
-                color: 'border-emerald-500/20 bg-emerald-500/5',
-                num: 'text-emerald-400',
-              },
-            ].map(({ step, title, body, color, num }) => (
-              <div key={step} className={`rounded-2xl border p-6 space-y-3 ${color}`}>
-                <p className={`text-3xl font-black font-mono ${num}`}>{step}</p>
-                <p className="font-semibold text-white text-sm">{title}</p>
-                <p className="text-xs text-slate-400 leading-relaxed">{body}</p>
+          <h2 className="text-2xl font-bold text-center tracking-tight">Common questions</h2>
+          <div className="space-y-2">
+            {FAQS.map(({ q, a }, idx) => (
+              <div
+                key={q}
+                className="rounded-2xl border border-slate-800/50 bg-slate-900/40 overflow-hidden"
+              >
+                <button
+                  className="w-full flex items-center justify-between px-6 py-5 text-left gap-4"
+                  onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
+                >
+                  <span className="font-semibold text-white text-sm">{q}</span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-slate-500 flex-shrink-0 transition-transform duration-200 ${openFaq === idx ? 'rotate-180' : ''}`}
+                  />
+                </button>
+                {openFaq === idx && (
+                  <div className="px-6 pb-5">
+                    <p className="text-sm text-slate-400 leading-relaxed">{a}</p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
 
         {/* CTA footer */}
-        <div className="text-center space-y-4 pb-8">
-          <h2 className="text-2xl font-bold">Not sure where to start?</h2>
-          <p className="text-slate-400">Book a 30-minute governance review. We'll map your current AI footprint and recommend the right plan.</p>
+        <div className="text-center space-y-6 pb-8">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold tracking-tight">Not sure where to start?</h2>
+            <p className="text-slate-400 text-sm">Book a 30-minute governance review. We'll map your AI footprint and recommend the right plan.</p>
+          </div>
+
           <div className="flex items-center justify-center gap-4 flex-wrap">
             <button
               onClick={() => openWhatsApp('Zapheit', "Hi, I'd like to book a 30-minute AI governance review with Zapheit. Can we find a time?")}
-              className="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold hover:from-cyan-400 hover:to-blue-500 transition-all shadow-lg shadow-cyan-500/20 flex items-center gap-2"
+              className="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold hover:from-cyan-400 hover:to-blue-500 transition-all shadow-lg shadow-cyan-500/20 flex items-center gap-2 text-sm"
             >
               <MessageCircle className="w-4 h-4" />
               Talk to us on WhatsApp
             </button>
             <button
               onClick={() => navigate('/login')}
-              className="px-8 py-3 rounded-xl border border-slate-700 text-slate-300 font-semibold hover:border-slate-600 hover:text-white transition-all"
+              className="px-8 py-3 rounded-xl border border-slate-700 text-slate-300 font-semibold hover:border-slate-600 hover:text-white transition-all text-sm"
             >
               Log in
             </button>
           </div>
+
+          {/* Inline next steps */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-0 pt-4 max-w-2xl mx-auto">
+            {NEXT_STEPS.map((step, i) => (
+              <div key={step.num} className="flex items-center gap-0">
+                <div className="px-6 py-4 text-center space-y-1 flex-1">
+                  <p className="text-xs font-mono font-bold text-cyan-500">{step.num}</p>
+                  <p className="text-xs font-semibold text-white">{step.title}</p>
+                  <p className="text-xs text-slate-500 leading-relaxed max-w-[160px] mx-auto">{step.body}</p>
+                </div>
+                {i < NEXT_STEPS.length - 1 && (
+                  <div className="hidden sm:block h-px w-8 bg-slate-800 flex-shrink-0" />
+                )}
+              </div>
+            ))}
+          </div>
         </div>
+
       </div>
 
       {/* Floating WhatsApp button */}
       <button
         onClick={() => openWhatsApp('Zapheit', "Hi, I'd like to learn more about Zapheit AI governance. Can we connect?")}
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold shadow-xl shadow-emerald-900/50 transition-all hover:scale-105"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold shadow-xl shadow-emerald-900/50 transition-all hover:scale-105"
       >
         <MessageCircle className="w-4 h-4" />
         Chat with us
