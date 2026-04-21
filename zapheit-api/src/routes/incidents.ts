@@ -11,6 +11,7 @@ import { notifySlackIncident } from '../lib/slack-notify';
 import { notifyAlertChannels } from '../lib/alert-channels';
 import { buildFrontendUrl } from '../lib/frontend-url';
 import { incidentDetection } from '../services/incident-detection';
+import { attemptSelfHeal, revertSelfHeal, type SelfHealIncidentType } from '../services/self-healing';
 import { errorResponse, getOrgId, getUserJwt, safeLimit } from '../lib/route-helpers';
 import { parseCursorParams, buildCursorResponse, buildCursorFilter } from '../lib/pagination';
 
@@ -207,6 +208,18 @@ router.post('/incidents', requirePermission('incidents.create'), async (req: Req
     });
 
     res.status(201).json({ success: true, data });
+
+    // Self-healing: attempt automatic remediation for supported incident types.
+    const incidentId = data?.[0]?.id;
+    const SELF_HEAL_TYPES: SelfHealIncidentType[] = ['pii_leak', 'cost_spike', 'policy_breach', 'latency_breach', 'hallucination'];
+    if (incidentId && agent_id && SELF_HEAL_TYPES.includes(incident_type as SelfHealIncidentType)) {
+      void (async () => {
+        const result = await attemptSelfHeal(incidentId, agent_id, orgId, incident_type as SelfHealIncidentType);
+        if (result.healed) {
+          logger.info('self-heal: incident auto-resolved', { incidentId, stepsApplied: result.stepsApplied });
+        }
+      })();
+    }
   } catch (error: any) {
     errorResponse(res, error);
   }
@@ -512,6 +525,41 @@ router.get('/incidents/stream', requirePermission('incidents.read'), (req: Reque
     sseClients.get(orgId)?.delete(client);
     if (sseClients.get(orgId)?.size === 0) sseClients.delete(orgId);
   });
+});
+
+/**
+ * POST /incidents/:id/revert-self-heal
+ * Human override: undo automatic remediation within the grace period.
+ */
+router.post('/incidents/:id/revert-self-heal', requirePermission('incidents.resolve'), async (req: Request, res: Response) => {
+  const orgId = getOrgId(req);
+  const userId = req.user?.id;
+  const incidentId = req.params.id;
+
+  if (!orgId || !userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+  // Look up which agent this incident belongs to
+  const incidentRows = await (async () => {
+    try {
+      return await supabaseRestAsUser(getUserJwt(req), 'incidents', new URLSearchParams({
+        select: 'agent_id',
+        id: `eq.${incidentId}`,
+        organization_id: `eq.${orgId}`,
+        limit: '1',
+      })) as any[];
+    } catch {
+      return [];
+    }
+  })();
+
+  const agentId = Array.isArray(incidentRows) ? incidentRows[0]?.agent_id : null;
+  if (!agentId) return res.status(404).json({ success: false, error: 'Incident not found or no agent attached' });
+
+  const reverted = await revertSelfHeal(agentId, orgId, userId);
+  if (!reverted) {
+    return res.status(400).json({ success: false, error: 'No self-heal snapshot found or revert failed' });
+  }
+  return res.json({ success: true, message: 'Agent restored to pre-self-heal state' });
 });
 
 export default router;

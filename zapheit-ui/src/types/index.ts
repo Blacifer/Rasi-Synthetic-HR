@@ -184,7 +184,7 @@ export interface AgentWorkspaceData {
 
 // ==================== INCIDENT TYPES ====================
 export type IncidentSeverity = 'low' | 'medium' | 'high' | 'critical';
-export type IncidentStatus = 'open' | 'investigating' | 'resolved' | 'false_positive';
+export type IncidentStatus = 'open' | 'investigating' | 'resolved' | 'false_positive' | 'auto_resolved';
 export type IncidentType =
   | 'pii_leak'
   | 'hallucination'

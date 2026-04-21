@@ -70,6 +70,7 @@ const STATUS_STYLES: Record<Incident['status'], string> = {
   investigating: 'border-amber-500/20 bg-amber-500/10 text-amber-200',
   resolved: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200',
   false_positive: 'border-slate-600 bg-slate-800/80 text-slate-300',
+  auto_resolved: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200',
 };
 
 const PRIORITY_STYLES: Record<IncidentPriority, string> = {
@@ -1187,6 +1188,27 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                   <button onClick={() => { void updateIncidentStatus(selectedIncident.id, 'investigating'); }} className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-200 transition hover:bg-amber-500/15">Mark investigating</button>
                   <button onClick={() => { void updateIncidentStatus(selectedIncident.id, 'false_positive'); }} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300 transition hover:border-slate-500">False positive</button>
                   <button onClick={() => { void updateIncidentStatus(selectedIncident.id, 'resolved'); }} className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200 transition hover:bg-emerald-500/15">Resolve</button>
+                  {selectedIncident.status === 'auto_resolved' && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const { supabase } = await import('../../lib/supabase-client');
+                          const { data: { session } } = await supabase.auth.getSession();
+                          const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001';
+                          const res = await fetch(`${apiBase}/api/incidents/${selectedIncident.id}/revert-self-heal`, {
+                            method: 'POST',
+                            headers: { Authorization: `Bearer ${session?.access_token}` },
+                          });
+                          if (res.ok) {
+                            void updateIncidentStatus(selectedIncident.id, 'open');
+                          }
+                        } catch {}
+                      }}
+                      className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-200 transition hover:bg-rose-500/15"
+                    >
+                      Undo self-heal
+                    </button>
+                  )}
                 </div>
               </div>
 
