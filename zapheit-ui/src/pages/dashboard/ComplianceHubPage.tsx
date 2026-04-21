@@ -9,6 +9,7 @@ import { toast } from '../../lib/toast';
 import type { HubDeadline, HubEvidence } from '../../types';
 import type { ConsentRecord, DataPrincipalRequest, DpdpDashboard } from '../../lib/api/dpdp';
 import { filingsApi } from '../../lib/api/filings';
+import { complianceApi } from '../../lib/api/governance';
 import type { FilingDeadline, FilingSubmission, FilingAlert, FilingDashboard } from '../../lib/api/filings';
 
 type TabId = 'calendar' | 'posture' | 'evidence' | 'dpdp' | 'filings';
@@ -66,6 +67,8 @@ export default function ComplianceHubPage() {
   const [dprRequests, setDprRequests] = useState<DataPrincipalRequest[]>([]);
   const [dpdpDash, setDpdpDash] = useState<DpdpDashboard | null>(null);
   const [dpdpSubTab, setDpdpSubTab] = useState<'overview' | 'consents' | 'requests' | 'scorecard'>('overview');
+  const [exportingDpdp, setExportingDpdp] = useState(false);
+  const [exportDone, setExportDone] = useState<{ id: string; url: string } | null>(null);
 
   // Filings state
   const [filingDeadlines, setFilingDeadlines] = useState<FilingDeadline[]>([]);
@@ -493,6 +496,49 @@ export default function ComplianceHubPage() {
           {/* DPDP Overview */}
           {dpdpSubTab === 'overview' && dpdpDash && (
             <div className="space-y-6">
+              {/* One-click DPDP export */}
+              <div className="flex items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/30 px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">DPDP Compliance Export</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Download your audit-ready DPDP compliance report — timestamped, auto-populated from activity history.</p>
+                </div>
+                {exportDone ? (
+                  <a
+                    href={exportDone.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 transition-colors"
+                  >
+                    <FileOutput className="w-3.5 h-3.5" /> Download
+                  </a>
+                ) : (
+                  <button
+                    disabled={exportingDpdp}
+                    onClick={async () => {
+                      setExportingDpdp(true);
+                      try {
+                        const res = await complianceApi.requestExport({ export_type: 'dpdp' });
+                        const id = (res as any)?.id || (res as any)?.data?.id;
+                        if (id) {
+                          setExportDone({ id, url: `/api/compliance/exports/${id}/download` });
+                          toast.success('DPDP report ready — click Download');
+                        } else {
+                          toast.error('Export failed. Try again.');
+                        }
+                      } catch {
+                        toast.error('Export failed. Try again.');
+                      } finally {
+                        setExportingDpdp(false);
+                      }
+                    }}
+                    className="shrink-0 flex items-center gap-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 transition-colors disabled:opacity-60"
+                  >
+                    {exportingDpdp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileOutput className="w-3.5 h-3.5" />}
+                    {exportingDpdp ? 'Generating…' : 'Export PDF'}
+                  </button>
+                )}
+              </div>
+
               {/* Compliance Score */}
               <div className="flex justify-center">
                 <div className={cx('w-36 h-36 rounded-full ring-4 flex flex-col items-center justify-center',
