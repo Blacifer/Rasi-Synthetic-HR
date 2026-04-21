@@ -61,6 +61,7 @@ import { startRetryWorker } from './lib/retry-worker';
 import { startRedTeamScheduler } from './lib/redteam-scheduler';
 import { startDpdpRetentionWorker } from './lib/dpdp-retention-worker';
 import { startFilingScheduler } from './lib/filing-scheduler';
+import { startWeeklyEmailScheduler } from './lib/weekly-email-scheduler';
 import { runSchemaCompatibilityCheck } from './lib/schema-compat';
 import { supabaseRestAsService, eq } from './lib/supabase-rest';
 
@@ -576,6 +577,7 @@ async function startServer() {
   startRedTeamScheduler();
   startDpdpRetentionWorker();
   startFilingScheduler();
+  startWeeklyEmailScheduler();
 
   // Job reaper: every 2 minutes, return stale claimed jobs to the queue so
   // another runtime can pick them up if the original runtime crashed.

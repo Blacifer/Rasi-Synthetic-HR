@@ -4,10 +4,11 @@ import {
   CheckSquare, Clock, RefreshCw, CheckCircle2, XCircle,
   AlertCircle, Ban, ChevronDown, ChevronUp, Loader2,
   MessageSquare, BellOff, TrendingUp, Shield, ListTodo, Tag,
-  Square, CheckSquare2, UserCheck,
+  Square, CheckSquare2, UserCheck, Bot, ShieldAlert, ShieldCheck,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import type { ApprovalRequest } from '../../lib/api-client';
+import { HelpTip, HELP_TIPS } from '../../components/HelpTip';
 import { toast } from '../../lib/toast';
 import { cn } from '../../lib/utils';
 import { ReasonCallout } from '../../components/dashboard/ReasonCallout';
@@ -85,16 +86,55 @@ function StatusBadge({ status }: { status: ApprovalRequest['status'] }) {
   );
 }
 
-function RiskBadge({ score }: { score?: number | null }) {
-  if (score == null) return null;
-  const pct = Math.round(score * 100);
-  const color = score >= 0.7 ? 'text-rose-400 bg-rose-500/10 border-rose-500/20'
-    : score >= 0.4 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+// Plain-English action templates
+const ACTION_LABELS: Record<string, string> = {
+  send_message: 'send a message',
+  send_email: 'send an email',
+  create_record: 'create a record',
+  update_record: 'update a record',
+  delete_record: 'delete a record',
+  create_issue: 'create an issue',
+  update_issue: 'update an issue',
+  close_issue: 'close an issue',
+  create_task: 'create a task',
+  update_task: 'update a task',
+  post_comment: 'post a comment',
+  list_records: 'read some records',
+  search: 'run a search',
+  execute: 'run a command',
+  webhook: 'trigger a webhook',
+  api_call: 'make an API call',
+};
+
+function friendlyAction(action: string): string {
+  const normalized = action.toLowerCase().replace(/[-\s]/g, '_');
+  return ACTION_LABELS[normalized] ?? action.replace(/_/g, ' ').toLowerCase();
+}
+
+function computeRiskScore(request: ApprovalRequest): number {
+  // If API already computed a 0-1 float score, convert
+  if (request.risk_score != null) {
+    return request.risk_score <= 1 ? Math.round(request.risk_score * 100) : Math.round(request.risk_score);
+  }
+  let score = 30;
+  const action = (request.action || '').toLowerCase();
+  if (action.includes('delete') || action.includes('remove') || action.includes('destroy')) score += 30;
+  if (action.includes('send') || action.includes('email') || action.includes('message')) score += 15;
+  if (action.includes('execute') || action.includes('webhook') || action.includes('api_call')) score += 20;
+  const payloadStr = JSON.stringify(request.action_payload || '').toLowerCase();
+  if (/\b(aadhaar|pan|passport|password|secret|token|key)\b/.test(payloadStr)) score += 20;
+  return Math.min(100, score);
+}
+
+function RiskBadge({ score }: { score: number }) {
+  const Icon = score >= 70 ? ShieldAlert : score >= 40 ? TrendingUp : ShieldCheck;
+  const color = score >= 70 ? 'text-rose-400 bg-rose-500/10 border-rose-500/20'
+    : score >= 40 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
     : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
   return (
-    <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border', color)}>
-      <TrendingUp className="w-3 h-3" />
-      Risk {pct}%
+    <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border', color)}>
+      <Icon className="w-3 h-3" />
+      Risk {score}/100
     </span>
   );
 }
@@ -202,34 +242,36 @@ function PendingCard({
       {/* Header row */}
       <div className="flex items-start gap-3">
         {/* Selection checkbox */}
-        <button onClick={() => onSelect(request.id)} className="mt-0.5 shrink-0 text-slate-500 hover:text-cyan-400 transition-colors">
+        <button onClick={() => onSelect(request.id)} className="mt-1 shrink-0 text-slate-500 hover:text-cyan-400 transition-colors">
           {selected ? <CheckSquare2 className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4" />}
         </button>
+        {/* Agent avatar */}
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-slate-800">
+          <Bot className="h-5 w-5 text-slate-400" />
+        </div>
         <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2 mb-1">
-            <span className="text-xs font-mono px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20">
-              {request.service}
-            </span>
-            <span className="text-xs text-slate-500">/</span>
-            <span className="text-sm font-medium text-white truncate">{request.action}</span>
-            <RiskBadge score={request.risk_score} />
-          </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-            <span>From: <span className="text-slate-300">{request.requested_by}</span></span>
-            {request.agent_id && <span>Agent: <span className="text-slate-400 font-mono text-[10px]">{request.agent_id.slice(0, 8)}…</span></span>}
-            <span>Needs: <span className="text-amber-300">{ROLE_LABELS[request.required_role] || request.required_role}</span></span>
-            {request.source ? <span>Entry: <span className="text-slate-300 capitalize">{request.source}</span></span> : null}
-            {request.job_id ? <span>Run: <span className="text-slate-400 font-mono text-[10px]">{request.job_id.slice(0, 8)}…</span></span> : null}
-            {request.approval_source ? <span>Type: <span className="text-slate-300">{request.approval_source === 'job_approval' ? 'Governed job' : 'Connector approval'}</span></span> : null}
-            <SlaCountdown createdAt={request.created_at} slaHours={request.sla_hours} escalatedAt={request.escalated_at} />
-            {request.delegate_to_user_id && (
+          {/* Plain-English "wants to" headline */}
+          <p className="text-base font-semibold text-white leading-tight">
+            Your AI wants to{' '}
+            <span className="text-cyan-300">{friendlyAction(request.action)}</span>
+            {request.service ? <span className="text-slate-400 font-normal text-sm"> via {request.service}</span> : null}
+          </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <RiskBadge score={computeRiskScore(request)} />
+            <SlaCountdown createdAt={request.created_at} slaHours={(request as any).sla_hours} escalatedAt={(request as any).escalated_at} />
+            {(request as any).delegate_to_user_id && (
               <span className="inline-flex items-center gap-1 text-xs text-violet-400"><UserCheck className="w-3 h-3" />Delegated</span>
             )}
           </div>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1.5">
+            <span>Requested by: <span className="text-slate-300">{request.requested_by}</span></span>
+            <span>Needs: <span className="text-amber-300">{ROLE_LABELS[request.required_role] || request.required_role}</span></span>
+            {request.source ? <span>Via: <span className="text-slate-300 capitalize">{request.source}</span></span> : null}
+          </div>
           {/* Tags */}
-          {request.tags && request.tags.length > 0 && (
+          {(request as any).tags && (request as any).tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5">
-              {request.tags.map(tag => (
+              {(request as any).tags.map((tag: string) => (
                 <span key={tag} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-slate-700 text-slate-300 border border-slate-600">
                   <Tag className="w-2.5 h-2.5" />{tag}
                 </span>
@@ -369,32 +411,33 @@ function PendingCard({
               </div>
             </div>
           )}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 flex-wrap">
             <button
               onClick={handleApprove}
               disabled={review.submitting}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-emerald-600/80 hover:bg-emerald-600 text-white text-sm font-medium transition-colors disabled:opacity-50"
+              className="flex min-h-[44px] items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600/80 hover:bg-emerald-600 text-white text-sm font-semibold transition-colors disabled:opacity-50"
             >
-              {review.submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-              Approve
+              {review.submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              Allow
             </button>
             <button
               onClick={handleDeny}
               disabled={review.submitting}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-red-600/70 hover:bg-red-600 text-white text-sm font-medium transition-colors disabled:opacity-50"
+              className="flex min-h-[44px] items-center gap-2 px-6 py-2.5 rounded-xl bg-rose-600/70 hover:bg-rose-600 text-white text-sm font-semibold transition-colors disabled:opacity-50"
             >
-              {review.submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
-              Deny
+              {review.submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+              Block
             </button>
             <button
               onClick={() => onCancel(request.id)}
               disabled={review.submitting}
-              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] text-xs transition-colors disabled:opacity-50"
+              className="ml-auto flex min-h-[44px] items-center gap-1.5 px-4 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.06] text-xs transition-colors disabled:opacity-50"
             >
               <Ban className="w-3.5 h-3.5" />
               Cancel
             </button>
           </div>
+          <p className="text-[11px] text-slate-600">Auto-blocked after 24hrs if no response</p>
         </div>
       )}
     </div>
@@ -591,7 +634,10 @@ export default function ApprovalsPage() {
             <CheckSquare className="w-5 h-5 text-amber-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Action Inbox</h1>
+            <h1 className="inline-flex items-center text-2xl font-bold text-white">
+              Action Inbox
+              <HelpTip text={HELP_TIPS.humanReview} />
+            </h1>
             <p className="text-sm text-slate-400">Sensitive requests requiring your review.</p>
           </div>
         </div>

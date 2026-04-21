@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import type { AIAgent } from '../../types';
 import { api } from '../../lib/api-client';
+import { API_BASE_URL, getAuthHeaders } from '../../lib/api/_helpers';
 import { toast } from '../../lib/toast';
 import { LightMarkdown } from '../../components/markdown/LightMarkdown';
 import { AGENT_TEMPLATES, type AgentTemplate } from '../../config/agentTemplates';
@@ -505,6 +506,42 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
     void loadManagedModels();
     void loadRuntimeProfiles();
   }, [loadConnectedApps, loadConversations, loadManagedModels, loadRuntimeProfiles]);
+
+  // SSE — refresh conversation list when a new session is created elsewhere
+  useEffect(() => {
+    const controller = new AbortController();
+    let buffer = '';
+    (async () => {
+      try {
+        const headers = await getAuthHeaders();
+        const response = await fetch(`${API_BASE_URL}/chat/sessions/stream`, {
+          headers,
+          signal: controller.signal,
+        });
+        if (!response.ok || !response.body) return;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop() ?? '';
+          for (const block of parts) {
+            let eventName = '';
+            for (const line of block.split('\n')) {
+              if (line.startsWith('event:')) eventName = line.slice(6).trim();
+            }
+            if (eventName === 'conversation.new') void loadConversations();
+          }
+        }
+      } catch {
+        // aborted or network error — silent fallback
+      }
+    })();
+    return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     removeFromStorage(RUNTIME_PROFILES_STORAGE_KEY);
@@ -1080,7 +1117,17 @@ export default function ConversationsPage({ agents, onNavigate, initialAgentId }
               {loading ? (
                 <div className="rounded-2xl border border-slate-800 bg-slate-900 px-4 py-6 text-center text-sm text-slate-400">Loading...</div>
               ) : filteredConversations.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/50 px-4 py-6 text-center text-sm text-slate-500">No chats yet</div>
+                <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/50 px-4 py-8 text-center">
+                  <MessageSquare className="mx-auto mb-3 h-8 w-8 text-slate-600" />
+                  <p className="text-sm font-medium text-white">No chats yet</p>
+                  <p className="mt-1 text-xs text-slate-500">Start a new conversation with any of your AI assistants.</p>
+                  <button
+                    onClick={() => setSelectedConversationId(null)}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> New chat
+                  </button>
+                </div>
               ) : (
                 filteredConversations.map((conversation) => (
                   <div key={conversation.id} className="group relative">

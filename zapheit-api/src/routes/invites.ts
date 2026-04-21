@@ -3,9 +3,11 @@ import crypto from 'crypto';
 import { z } from 'zod';
 import { supabaseRestAsService, supabaseRestAsUser, eq } from '../lib/supabase-rest';
 import { requirePermission } from '../middleware/rbac';
+import { planGate } from '../middleware/planGate';
 import { logger } from '../lib/logger';
 import { auditLog } from '../lib/audit-logger';
 import { sendTransactionalEmail } from '../lib/email';
+import { inviteSentEmail, inviteAcceptedEmail } from '../lib/email-templates';
 
 const router = express.Router();
 
@@ -46,34 +48,16 @@ const buildInviteLink = (token: string): string => {
   return `${safeBase}/accept-invite?token=${encodeURIComponent(token)}`;
 };
 
-const sendInviteEmail = async (to: string, inviteLink: string, role: string, message?: string) => {
-  const subject = 'You are invited to Zapheit';
-  const html = `
-    <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;">
-      <h2 style="margin-bottom: 8px;">You have been invited to Zapheit</h2>
-      <p style="margin: 0 0 12px 0;">Role: <strong>${role}</strong></p>
-      ${message ? `<p style="margin: 0 0 12px 0;">Message: ${message}</p>` : ''}
-      <p style="margin: 0 0 16px 0;">This invite expires in 7 days.</p>
-      <a href="${inviteLink}" style="display:inline-block;padding:10px 14px;background:#0891b2;color:#fff;text-decoration:none;border-radius:6px;">
-        Accept Invitation
-      </a>
-      <p style="margin-top: 16px; color: #6b7280; font-size: 12px;">If the button does not work, copy this link: ${inviteLink}</p>
-    </div>
-  `;
-
-  await sendTransactionalEmail({
-    to,
-    subject,
-    html,
-    text: `You have been invited to Zapheit as ${role}. Accept: ${inviteLink}`,
-  });
+const sendInviteEmail = async (to: string, inviteLink: string, role: string, message?: string, orgName = 'your team') => {
+  const template = inviteSentEmail({ inviteLink, role, orgName, message });
+  await sendTransactionalEmail({ to, subject: template.subject, html: template.html, text: template.text });
 };
 
 /**
  * POST /api/invites
  * Create and send a team invitation
  */
-router.post('/invites', requirePermission('team.invite'), async (req: Request, res: Response) => {
+router.post('/invites', requirePermission('team.invite'), planGate('members.invite'), async (req: Request, res: Response) => {
   try {
     const result = createInviteSchema.safeParse(req.body);
     if (!result.success) {
@@ -146,7 +130,8 @@ router.post('/invites', requirePermission('team.invite'), async (req: Request, r
     // Send invitation email. If it fails, rollback invite record to avoid unsent pending invites.
     try {
       const inviteLink = buildInviteLink(token);
-      await sendInviteEmail(email, inviteLink, role, message);
+      const orgName = (req as any).user?.organizationName || 'your team';
+      await sendInviteEmail(email, inviteLink, role, message, orgName);
     } catch (emailError: any) {
       await supabaseRestAsUser(getUserJwt(req), 'invites', `id=${eq(invites[0].id)}`, {
         method: 'DELETE',

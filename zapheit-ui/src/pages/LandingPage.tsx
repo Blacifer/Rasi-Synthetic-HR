@@ -617,7 +617,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
               </div>
               <div>
                 <span className="text-xl font-bold gradient-text">Zapheit</span>
-                <span className="text-xs text-slate-500 block -mt-1">AI Agent Governance</span>
+                <span className="text-xs text-slate-500 block -mt-1">AI Workforce Manager</span>
               </div>
             </div>
 
@@ -699,19 +699,19 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
           <div className="mx-auto max-w-5xl text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full border border-cyan-500/20 bg-cyan-500/[0.06] backdrop-blur-md shadow-[0_0_20px_rgba(34,211,238,0.08)]">
             <Sparkles className="w-4 h-4 text-blue-300" />
-            <span className="text-sm text-slate-200">AI control plane for teams running live agents in production</span>
+            <span className="text-sm text-slate-200">Your AI assistants are making decisions right now. Do you know what they're doing?</span>
           </div>
 
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black text-white mb-6 leading-tight">
-            Your AI agents are already working.
+            See everything your AI does.
             <br />
-            <span className="gradient-text">Give your team one place to watch, protect, and control them.</span>
+            <span className="gradient-text">Stop problems before they reach your customers.</span>
           </h1>
 
           <p className="text-sm sm:text-base md:text-lg lg:text-xl text-slate-300 mb-12 max-w-3xl mx-auto leading-relaxed">
-            Zapheit gives your team one place to <span className="text-slate-100 font-semibold">see live activity, catch risky behavior, and stay in control</span> without slowing down delivery —
+            Zapheit is <span className="text-slate-100 font-semibold">HR for your AI workforce</span> — monitor performance, enforce rules, and review decisions before they cause damage.
             <br className="hidden md:block" />
-            whether the agents run across connected apps, your support stack, or your internal workflows.
+            One dashboard for every AI assistant across your support, ops, HR, and sales teams.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 sm:mb-12 md:mb-16">
@@ -722,15 +722,13 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
               Start Free
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
-            {onDemo ? (
-              <button
-                onClick={onDemo}
-                className="btn-secondary group w-full sm:w-auto"
-              >
-                <Play className="w-5 h-5" />
-                Try Demo
-              </button>
-            ) : null}
+            <button
+              onClick={onDemo}
+              className="btn-secondary group w-full sm:w-auto"
+            >
+              <Play className="w-5 h-5" />
+              See it in action — no sign-up
+            </button>
           </div>
 
           {/* Floating stats */}
@@ -783,7 +781,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
           <div className="mb-12 grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-end md:mb-16 lg:mb-20">
             <div>
               <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Live Preview</span>
-              <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">See what a calmer control plane feels like</h2>
+              <h2 className="text-4xl sm:text-5xl font-bold text-white mt-4">See what it looks like when nothing goes wrong</h2>
               <p className="text-slate-400 mt-4 text-lg max-w-2xl">
                 Browse the product the way an operator would: what is running, what needs attention, and what to do next.
               </p>
@@ -983,12 +981,12 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
 
           <div className="grid md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
             {[
-              { icon: Lock, title: 'Agent-Agnostic', desc: 'Governs ANY agent — OpenAI, Anthropic, LangChain, Haptik, Yellow.ai, or custom-built. Zapheit doesn\'t replace your agents, it governs them.' },
-              { icon: Gauge, title: 'LLM Gateway Proxy', desc: 'OpenAI-compatible endpoint. One line of code to route any agent through Zapheit. Incident detection + cost tracking starts immediately.' },
-              { icon: Shield, title: 'India-Specific PII', desc: 'Detects Aadhaar numbers, PAN cards, UPI IDs, and Indian bank accounts in real-time — not just generic SSN/credit card patterns.' },
-              { icon: Target, title: 'DPDPA Compliance', desc: 'Mapping to India\'s Digital Personal Data Protection Act 2023. Built-in breach notification, data principal rights, and audit evidence.' },
-              { icon: TrendingUp, title: 'INR Pricing', desc: 'Pilot, retainer, and enterprise pricing in INR. No per-seat surprises and no USD conversion for Indian teams.' },
-              { icon: Award, title: 'VPC-Ready Runtime', desc: 'Run governance workers inside your own VPC. Secure outbound-only polling — no inbound ports, no data leaving your network.' },
+              { icon: Lock, title: 'Works With Any AI', desc: 'Monitors any AI assistant — OpenAI, Anthropic, LangChain, Haptik, Yellow.ai, or custom-built. Zapheit doesn\'t replace your AI, it watches over it.' },
+              { icon: Gauge, title: 'AI Message Hub', desc: 'One line of code to route any AI assistant through Zapheit. Safety alerts + usage tracking start immediately.' },
+              { icon: Shield, title: 'India-Specific Privacy', desc: 'Detects Aadhaar numbers, PAN cards, UPI IDs, and Indian bank accounts in real-time — not just generic patterns.' },
+              { icon: Target, title: 'Privacy Settings (DPDPA)', desc: 'Built for India\'s Digital Personal Data Protection Act 2023. Breach notifications, data rights management, and audit evidence — automated.' },
+              { icon: TrendingUp, title: 'INR Pricing', desc: 'Plans in INR. No per-seat surprises and no USD conversion for Indian teams.' },
+              { icon: Award, title: 'Runs In Your Network', desc: 'Run AI workers inside your own VPC. No inbound ports, no data leaving your network.' },
             ].map((item, i) => (
               <div
                 key={i}
@@ -1011,9 +1009,9 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
           <div className="mb-12 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div className="max-w-3xl">
               <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Pricing Calculator</span>
-              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mt-4">Estimate governance cost like an operating model</h2>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mt-4">Find the right plan for your team</h2>
               <p className="text-slate-400 mt-4 text-lg">
-                Inspired by model pricing directories, but built around Zapheit: active agents, governance intensity, and the operational load your AI workforce creates.
+                Tell us how many AI assistants you run and how actively you want to monitor them — we'll recommend the right plan.
               </p>
             </div>
             <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-5 py-4 backdrop-blur-xl">

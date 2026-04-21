@@ -49,6 +49,11 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
   const totalTokens = filteredCostData.reduce((sum, d) => sum + d.tokens, 0);
   const totalRequests = filteredCostData.reduce((sum, d) => sum + d.requests, 0);
   const costPerRequest = totalRequests > 0 ? totalCost / totalRequests : 0;
+  const TOKENS_PER_MESSAGE = 800;
+  const estimatedMessages = Math.round(totalTokens / TOKENS_PER_MESSAGE);
+  const messagesDisplay = estimatedMessages >= 1000
+    ? `${(estimatedMessages / 1000).toFixed(1)}k`
+    : estimatedMessages.toLocaleString();
 
   // Build chart data — ALWAYS show a baseline even if data is empty
   const chartData = useMemo(() => {
@@ -174,9 +179,9 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-700/60 pb-5">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-            <DollarSign className="w-8 h-8 text-emerald-400" /> Observed Runtime Spend
+            <DollarSign className="w-8 h-8 text-emerald-400" /> Usage & Spending
           </h1>
-          <p className="text-slate-400 mt-1.5">Organization-scoped provider spend observed through Zapheit. This page does not represent your provider invoice for traffic outside the Zapheit gateway or registered integrations.</p>
+          <p className="text-slate-400 mt-1.5">AI spending tracked through Zapheit. Does not include traffic outside the Zapheit gateway or registered integrations.</p>
         </div>
         <div className="flex items-center gap-3">
           <select
@@ -204,6 +209,23 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
             <span className="sm:hidden">Log</span>
           </button>
         </div>
+      </div>
+
+      {/* Plain-language summary */}
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-4 text-sm text-white">
+        <span className="font-bold text-2xl text-white">{messagesDisplay}</span>
+        <span className="text-slate-400">messages sent</span>
+        <span className="text-slate-600 mx-1">·</span>
+        <span className="font-bold text-2xl text-emerald-300">{formatInr(totalCost)}</span>
+        <span className="text-slate-400">this period</span>
+        {totalRequests > 0 && (
+          <>
+            <span className="text-slate-600 mx-1">·</span>
+            <span className="text-slate-400">{totalRequests.toLocaleString()} AI requests</span>
+          </>
+        )}
+        {dateRange === '30d' && <span className="ml-auto text-xs text-slate-500">Last 30 days</span>}
+        {dateRange === '7d' && <span className="ml-auto text-xs text-slate-500">Last 7 days</span>}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr_0.8fr]">
@@ -242,25 +264,25 @@ export default function CostsPage({ agents, incidents, onNavigate }: CostsPagePr
             glow: 'group-hover:bg-emerald-500/5',
           },
           {
-            label: 'Total Tokens',
-            value: totalTokens.toLocaleString(),
-            sub: totalTokens === 0 ? 'No tokens logged' : `~₹${(totalCost / Math.max(totalTokens, 1) * 1000).toFixed(3)} per 1K`,
+            label: 'Messages sent',
+            value: messagesDisplay,
+            sub: estimatedMessages === 0 ? 'No messages tracked yet' : `≈ ${totalRequests.toLocaleString()} AI requests · ${(totalTokens / 1000).toFixed(0)}k tokens`,
             icon: <Cpu className="w-5 h-5 text-blue-400" />,
             bg: 'bg-blue-500/10',
             glow: 'group-hover:bg-blue-500/5',
           },
           {
-            label: 'API Requests',
+            label: 'AI requests',
             value: totalRequests.toLocaleString(),
-            sub: totalRequests === 0 ? 'No Zapheit-tracked requests yet' : `Avg ${(totalTokens / Math.max(totalRequests, 1)).toFixed(0)} tokens/req`,
+            sub: totalRequests === 0 ? 'No Zapheit-tracked requests yet' : `~${Math.round(totalTokens / Math.max(totalRequests, 1))} tokens per request`,
             icon: <Activity className="w-5 h-5 text-purple-400" />,
             bg: 'bg-purple-500/10',
             glow: 'group-hover:bg-purple-500/5',
           },
           {
-            label: 'Cost per Request',
-            value: `₹${costPerRequest.toFixed(4)}`,
-            sub: costPerRequest === 0 ? 'Baseline: no observed activity' : costPerRequest < 0.01 ? 'Excellent efficiency' : costPerRequest < 0.05 ? 'Good efficiency' : 'Consider optimization',
+            label: 'Cost per message',
+            value: estimatedMessages > 0 ? `₹${(totalCost / estimatedMessages).toFixed(2)}` : '₹0.00',
+            sub: costPerRequest === 0 ? 'No activity yet' : costPerRequest < 0.01 ? 'Very efficient' : costPerRequest < 0.05 ? 'Good efficiency' : 'Consider optimization',
             icon: <Zap className="w-5 h-5 text-amber-400" />,
             bg: 'bg-amber-500/10',
             glow: 'group-hover:bg-amber-500/5',

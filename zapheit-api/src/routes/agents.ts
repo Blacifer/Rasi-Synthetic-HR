@@ -8,12 +8,14 @@ import { incidentDetection } from '../services/incident-detection';
 import { logger } from '../lib/logger';
 import { validateRequestBody, agentSchemas } from '../schemas/validation';
 import { requirePermission } from '../middleware/rbac';
+import { planGate } from '../middleware/planGate';
 import { auditLog } from '../lib/audit-logger';
 import { supabaseRestAsUser, eq, gte, in_ } from '../lib/supabase-rest';
 import { getOrgId, getUserJwt, errorResponse, buildDaySeries, toIsoDay } from '../lib/route-helpers';
 import { parseCursorParams, buildCursorResponse, buildCursorFilter } from '../lib/pagination';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
 import { transitionLifecycle, getLifecycleHistory, LifecycleTransitionError, type LifecycleState } from '../lib/agent-lifecycle';
+import { computeAgentHealth } from '../services/agent-health';
 
 const pdfUpload = multer({
   storage: multer.memoryStorage(),
@@ -801,6 +803,19 @@ router.get('/agents/:id/trust-score', requirePermission('agents.read'), async (r
   }
 });
 
+// GET /agents/:id/health-score — standardised 0-100 score across 4 dimensions
+router.get('/agents/:id/health-score', requirePermission('agents.read'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+    const score = await computeAgentHealth(id, orgId);
+    return res.json({ success: true, data: score });
+  } catch (error: any) {
+    return errorResponse(res, error);
+  }
+});
+
 router.get('/agents/:id/workspace', requirePermission('agents.read'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -917,7 +932,7 @@ const PLAN_AGENT_LIMITS: Record<string, number> = {
  *       400:
  *         description: Validation error
  */
-router.post('/agents', requirePermission('agents.create'), async (req: Request, res: Response) => {
+router.post('/agents', requirePermission('agents.create'), planGate('agents.create'), async (req: Request, res: Response) => {
   try {
     const orgId = getOrgId(req);
     if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);

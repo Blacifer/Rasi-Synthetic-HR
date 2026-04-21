@@ -9,6 +9,8 @@ import {
   Clock,
   DollarSign,
   Layers3,
+  Pause,
+  Play,
   RefreshCw,
   ShieldAlert,
   ShoppingBag,
@@ -42,6 +44,7 @@ const HeatTooltip = RechartsTooltip as any;
 const HeatCell = RechartsCell as any;
 import type { AIAgent, Incident, CostData } from '../../types';
 import type { AuditLogEntry } from '../../lib/api/governance';
+import type { ApprovalRequest } from '../../lib/api/approvals';
 import { USD_TO_INR } from '../../lib/currency';
 import { api } from '../../lib/api-client';
 import { authenticatedFetch } from '../../lib/api/_helpers';
@@ -254,6 +257,27 @@ export default function DashboardOverview({
   const [refreshing, setRefreshing] = useState(false);
   const AUTO_REFRESH_INTERVAL = 30; // seconds
 
+  // Kill switch — org-wide pause/resume all active agents
+  const allPaused = agents.length > 0 && agents.every((a) => a.status !== 'active');
+  const [killSwitchLoading, setKillSwitchLoading] = useState(false);
+  const handleKillSwitch = useCallback(async () => {
+    if (killSwitchLoading) return;
+    setKillSwitchLoading(true);
+    try {
+      const activeIds = agents.filter((a) => a.status === 'active').map((a) => a.id);
+      const pausedIds = agents.filter((a) => a.status === 'paused').map((a) => a.id);
+      if (!allPaused && activeIds.length > 0) {
+        await Promise.all(activeIds.map((id) => authenticatedFetch(`/agents/${id}/pause`, { method: 'POST', body: JSON.stringify({ reason: 'Org-wide kill switch activated from dashboard' }) })));
+      } else if (allPaused && pausedIds.length > 0) {
+        await Promise.all(pausedIds.map((id) => authenticatedFetch(`/agents/${id}/resume`, { method: 'POST', body: JSON.stringify({ reason: 'Org-wide kill switch released from dashboard' }) })));
+      }
+    } catch {
+      // best effort — page reload will reflect actual state
+    } finally {
+      setKillSwitchLoading(false);
+    }
+  }, [agents, allPaused, killSwitchLoading]);
+
   // Morning Briefing — show once per calendar day per org
   const orgScope = user?.organizationName || 'workspace';
   const onboardingCompletedKey = `synthetic_hr_onboarding_completed:${orgScope}`;
@@ -319,6 +343,7 @@ export default function DashboardOverview({
   const [automationRulesTotal, setAutomationRulesTotal] = useState<number>(0);
   const [csatData, setCsatData] = useState<{ total_rated: number; thumbs_up: number; thumbs_down: number; satisfaction_pct: number | null } | null>(null);
   const [trendingTopics, setTrendingTopics] = useState<Array<{ word: string; count: number }>>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<ApprovalRequest[]>([]);
   const [quickDeployState, setQuickDeployState] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
   const [quickDeployError, setQuickDeployError] = useState<string | null>(null);
 
@@ -347,6 +372,10 @@ export default function DashboardOverview({
 
     api.conversations.trendingTopics().then((res) => {
       if (res.success && res.data?.topics) setTrendingTopics(res.data.topics);
+    }).catch(() => {});
+
+    api.approvals.list({ status: 'pending', limit: 20 }).then((res) => {
+      if (res.success && Array.isArray(res.data)) setPendingApprovals(res.data);
     }).catch(() => {});
   }, []);
 
@@ -576,6 +605,16 @@ const hasData = agents.length > 0;
       openIncidents.length > 0 ? 'warn' :
         'good';
 
+  // P2-C: stale approvals (pending >1hr) + plain-English metrics
+  const staleApprovals = pendingApprovals.filter(
+    (a) => Date.now() - new Date(a.created_at).getTime() > 60 * 60 * 1000,
+  );
+  const statusBannerProblems = severeIncidents.length + staleApprovals.length;
+  const weekMessages = requestTrend.reduce((s, v) => s + v, 0);
+  const weekMessagesDisplay = weekMessages >= 1000
+    ? `${(weekMessages / 1000).toFixed(1)}k`
+    : weekMessages.toLocaleString();
+
   // Widget 2 — time saved heuristic: 5 min per detected intervention
   const timeSavedMinutes = automationRulesTotal * 5;
   const timeSavedDisplay = timeSavedMinutes < 60
@@ -619,9 +658,9 @@ const hasData = agents.length > 0;
       tone: 'text-slate-100',
     },
     {
-      label: 'Month spend',
+      label: 'Spend this month',
       value: formatCurrency(totalCost),
-      note: latestCostAt ? `Last cost signal ${formatRelative(latestCostAt)}` : 'No cost signal yet',
+      note: totalConversations > 0 ? `≈ ${Math.round(totalConversations / 800).toLocaleString()} messages estimated` : latestCostAt ? `Last signal ${formatRelative(latestCostAt)}` : 'No cost signal yet',
       tone: 'text-emerald-300',
     },
     {
@@ -742,6 +781,37 @@ const hasData = agents.length > 0;
 
   return (
     <div className="space-y-8">
+      {/* Kill switch — org-wide pause/resume */}
+      {agents.length > 0 && (
+        <div className={`flex items-center justify-between gap-4 rounded-2xl border px-5 py-4 ${allPaused ? 'border-amber-500/30 bg-amber-500/[0.08]' : 'border-white/[0.08] bg-white/[0.03]'}`}>
+          <div className="flex items-center gap-3 min-w-0">
+            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${allPaused ? 'bg-amber-500/20' : 'bg-emerald-500/15'}`}>
+              {allPaused
+                ? <Pause className="h-4 w-4 text-amber-400" />
+                : <Play className="h-4 w-4 text-emerald-400" />}
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white">
+                {allPaused ? 'All AI assistants are paused' : `${agents.filter((a) => a.status === 'active').length} AI assistant${agents.filter((a) => a.status === 'active').length !== 1 ? 's' : ''} running`}
+              </p>
+              <p className="text-xs text-slate-400 mt-0.5 truncate">
+                {allPaused ? 'Your AI workforce is offline — no requests will be processed.' : 'Use the kill switch to pause all assistants instantly.'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleKillSwitch}
+            disabled={killSwitchLoading}
+            className={`shrink-0 flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all disabled:opacity-60 ${allPaused ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 border border-rose-500/25'}`}
+          >
+            {killSwitchLoading
+              ? <RefreshCw className="h-4 w-4 animate-spin" />
+              : allPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+            {allPaused ? 'Resume all' : 'Pause all'}
+          </button>
+        </div>
+      )}
+
       {primaryAction && (
         <section className="rounded-2xl border border-white/[0.10] bg-white/[0.05] p-6" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', boxShadow: '0 8px 32px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -889,77 +959,76 @@ const hasData = agents.length > 0;
         </div>
       )}
 
-      {/* Today's Focus — only show when there is something to act on */}
+      {/* P2-C: Needs your attention — unified pending approvals + open alerts */}
       {(() => {
-        const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
-        const todayMs = todayMidnight.getTime();
-        const todayNewIncidents = incidents.filter((i) => new Date(i.created_at).getTime() >= todayMs);
-        const todayOpen = incidents.filter((i) => ['open', 'investigating'].includes((i.status || '').toLowerCase()));
-        const todayCritical = todayOpen.filter((i) => ['high', 'critical'].includes((i.severity || '').toLowerCase()));
-        const todayNearBudget = agents.filter((a) => {
-          const limit = Number(a.budget_limit || 0); const spend = Number(a.current_spend || 0);
-          return limit > 0 && spend / limit >= 0.75;
-        });
-
-        const focusItems = [
-          todayCritical.length > 0 && {
-            id: 'critical',
-            icon: <ShieldAlert className="h-4 w-4 text-rose-400" />,
-            label: `${todayCritical.length} critical incident${todayCritical.length !== 1 ? 's' : ''} need attention`,
-            sub: todayCritical[0]?.title || 'Review now',
-            tone: 'rose' as const,
-            action: () => onNavigate?.('incidents'),
-            cta: 'Investigate →',
-          },
-          todayNewIncidents.length > 0 && todayCritical.length === 0 && {
-            id: 'new-incidents',
-            icon: <Siren className="h-4 w-4 text-amber-400" />,
-            label: `${todayNewIncidents.length} new incident${todayNewIncidents.length !== 1 ? 's' : ''} today`,
-            sub: `${todayOpen.length} still open`,
-            tone: 'amber' as const,
-            action: () => onNavigate?.('incidents'),
-            cta: 'Review →',
-          },
-          todayNearBudget.length > 0 && {
-            id: 'budget',
-            icon: <Zap className="h-4 w-4 text-amber-400" />,
-            label: `${todayNearBudget.length} agent${todayNearBudget.length !== 1 ? 's' : ''} near budget limit`,
-            sub: todayNearBudget[0]?.name || '',
-            tone: 'amber' as const,
-            action: () => onNavigate?.('agents'),
-            cta: 'Adjust →',
-          },
-        ].filter(Boolean) as Array<{ id: string; icon: ReactNode; label: string; sub: string; tone: 'rose' | 'amber' | 'emerald'; action: (() => void) | null; cta: string | null }>;
-
-        const toneMap = {
-          rose: 'border-rose-500/20 bg-rose-500/[0.06]',
-          amber: 'border-amber-500/20 bg-amber-500/[0.06]',
-          emerald: 'border-emerald-500/20 bg-emerald-500/[0.06]',
+        type AttentionItem = {
+          id: string;
+          icon: ReactNode;
+          label: string;
+          sub: string;
+          tone: 'rose' | 'amber';
+          action: () => void;
+          cta: string;
+          at: string;
         };
 
-        if (focusItems.length === 0) return null;
+        const items: AttentionItem[] = [
+          ...severeIncidents.slice(0, 3).map((inc): AttentionItem => ({
+            id: `inc-${inc.id}`,
+            icon: <ShieldAlert className="h-4 w-4 text-rose-400 shrink-0" />,
+            label: inc.title || 'Safety alert detected',
+            sub: `${inc.agent_name || 'Unknown assistant'} · ${inc.severity}`,
+            tone: 'rose',
+            action: () => onNavigate?.('incidents'),
+            cta: 'Review',
+            at: inc.created_at,
+          })),
+          ...openIncidents.filter((i) => !['high', 'critical'].includes((i.severity || '').toLowerCase())).slice(0, 2).map((inc): AttentionItem => ({
+            id: `inc-warn-${inc.id}`,
+            icon: <Siren className="h-4 w-4 text-amber-400 shrink-0" />,
+            label: inc.title || 'Alert open',
+            sub: `${inc.agent_name || 'Unknown assistant'} · ${inc.severity}`,
+            tone: 'amber',
+            action: () => onNavigate?.('incidents'),
+            cta: 'Review',
+            at: inc.created_at,
+          })),
+          ...pendingApprovals.slice(0, 5).map((appr): AttentionItem => ({
+            id: `appr-${appr.id}`,
+            icon: <UserCheck className="h-4 w-4 text-amber-400 shrink-0" />,
+            label: `Your AI wants to: ${appr.action.replace(/_/g, ' ')}`,
+            sub: `${appr.service} · waiting ${formatRelative(appr.created_at)}`,
+            tone: 'amber',
+            action: () => onNavigate?.('approvals'),
+            cta: 'Decide',
+            at: appr.created_at,
+          })),
+        ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 6);
+
+        if (items.length === 0) return null;
 
         return (
           <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Today&apos;s Focus · {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Needs your attention · {items.length} item{items.length !== 1 ? 's' : ''}
             </p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {focusItems.slice(0, 3).map((item) => (
-                <div key={item.id} className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${toneMap[item.tone]}`}>
+            <div className="space-y-2">
+              {items.map((item) => (
+                <div
+                  key={item.id}
+                  className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${item.tone === 'rose' ? 'border-rose-500/20 bg-rose-500/[0.06]' : 'border-amber-500/20 bg-amber-500/[0.06]'}`}
+                >
                   {item.icon}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-200 leading-tight">{item.label}</p>
-                    {item.sub && <p className="text-xs text-slate-500 truncate mt-0.5">{item.sub}</p>}
+                    <p className="text-sm font-semibold text-slate-200 leading-tight truncate">{item.label}</p>
+                    <p className="text-xs text-slate-500 mt-0.5 truncate">{item.sub}</p>
                   </div>
-                  {item.action && item.cta && (
-                    <button
-                      onClick={item.action}
-                      className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-200 border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-colors whitespace-nowrap"
-                    >
-                      {item.cta}
-                    </button>
-                  )}
+                  <button
+                    onClick={item.action}
+                    className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-200 border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-colors whitespace-nowrap"
+                  >
+                    {item.cta}
+                  </button>
                 </div>
               ))}
             </div>
@@ -967,23 +1036,31 @@ const hasData = agents.length > 0;
         );
       })()}
 
-      {/* System Health Banner */}
-      <div className={`flex items-center justify-between rounded-xl border px-4 py-2 text-xs ${healthClasses}`}>
-        <div className="flex items-center gap-2.5">
-          <span className={`w-1.5 h-1.5 rounded-full ${dotClasses}`} />
-          <span className="font-mono tracking-wider text-[11px]">{healthLabel}</span>
-          <span className="opacity-30">·</span>
-          <span className="font-normal opacity-60">{agents.length} agent{agents.length !== 1 ? 's' : ''} governed</span>
-          {openIncidents.length > 0 && (
-            <>
-              <span className="opacity-40">·</span>
-              <span className="font-normal opacity-70">{openIncidents.length} open incident{openIncidents.length !== 1 ? 's' : ''}</span>
-            </>
-          )}
+      {/* P2-C Status Banner */}
+      <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border px-5 py-4 ${statusBannerProblems > 0 ? 'border-rose-500/30 bg-rose-500/[0.07]' : 'border-emerald-500/30 bg-emerald-500/[0.07]'}`}>
+        <div className="flex items-center gap-3 min-w-0">
+          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${statusBannerProblems > 0 ? 'bg-rose-500/15' : 'bg-emerald-500/15'}`}>
+            <span className={`h-3 w-3 rounded-full ${statusBannerProblems > 0 ? 'bg-rose-400 animate-pulse' : 'bg-emerald-400'}`} />
+          </span>
+          <div className="min-w-0">
+            <p className={`text-sm font-semibold ${statusBannerProblems > 0 ? 'text-rose-200' : 'text-emerald-200'}`}>
+              {statusBannerProblems > 0
+                ? `${statusBannerProblems} problem${statusBannerProblems !== 1 ? 's' : ''} need${statusBannerProblems === 1 ? 's' : ''} attention`
+                : 'Everything running smoothly'}
+            </p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {weekMessagesDisplay} messages this week&nbsp;·&nbsp;{pendingApprovals.length} approval{pendingApprovals.length !== 1 ? 's' : ''} waiting&nbsp;·&nbsp;{formatCompactCurrency(totalCost)} this month
+            </p>
+          </div>
         </div>
-        <span className="font-mono text-[10px] opacity-50 hidden sm:block">
-          {telemetry?.generatedAt ? `refreshed ${formatRelative(telemetry.generatedAt)}` : 'live'}
-        </span>
+        {statusBannerProblems > 0 && (
+          <button
+            onClick={() => onNavigate?.('incidents')}
+            className="shrink-0 rounded-xl border border-rose-500/30 bg-rose-500/15 px-4 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/25 transition-colors"
+          >
+            Review now
+          </button>
+        )}
       </div>
 
       <section className="rounded-2xl border border-white/[0.10] bg-white/[0.05] p-6" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', boxShadow: '0 8px 32px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.08)' }}>

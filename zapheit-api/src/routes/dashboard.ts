@@ -322,24 +322,40 @@ router.get('/models', async (req: Request, res: Response) => {
 });
 
 const PLAN_QUOTAS: Record<string, number> = {
-  free: 10_000,
+  free: 1_000,
+  pro: 50_000,
+  business: 250_000,
+  enterprise: -1,
+  // Legacy plan keys (kept for backwards compat)
   audit: 50_000,
   retainer: 200_000,
-  enterprise: -1,
 };
 
 const PLAN_AGENT_LIMITS: Record<string, number> = {
-  free: 3,
+  free: 1,
+  pro: 10,
+  business: 50,
+  enterprise: -1,
   audit: 5,
   retainer: 50,
+};
+
+const PLAN_MEMBER_LIMITS: Record<string, number> = {
+  free: 1,
+  pro: 10,
+  business: -1,
   enterprise: -1,
+  audit: 10,
+  retainer: -1,
 };
 
 const PLAN_DISPLAY: Record<string, string> = {
   free: 'Free',
-  audit: 'The Audit',
-  retainer: 'The Retainer',
+  pro: 'Pro',
+  business: 'Business',
   enterprise: 'Enterprise',
+  audit: 'Pro',
+  retainer: 'Business',
 };
 
 // GET /api/usage — current plan + gateway usage for this month
@@ -380,19 +396,30 @@ router.get('/usage', requirePermission('dashboard.read'), async (req: Request, r
     agentCountParams.set('status', 'neq.terminated');
     agentCountParams.set('select', 'id');
 
-    const [costUsageRows, agentRows] = await Promise.all([
+    const memberCountParams = new URLSearchParams();
+    memberCountParams.set('organization_id', eq(orgId));
+    memberCountParams.set('select', 'id');
+
+    const nextMonthDate = new Date(`${month}-01`);
+    nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
+    const resetDate = nextMonthDate.toISOString().slice(0, 10);
+
+    const [costUsageRows, agentRows, memberRows] = await Promise.all([
       supabaseRestAsUser(jwt, 'cost_tracking', costUsageParams),
       supabaseRestAsUser(jwt, 'ai_agents', agentCountParams),
+      supabaseRestAsUser(jwt, 'users', memberCountParams),
     ]);
     const used: number = Array.isArray(costUsageRows)
       ? costUsageRows.reduce((sum: number, r: any) => sum + (r.request_count ?? 0), 0)
       : 0;
     const agentCount: number = Array.isArray(agentRows) ? agentRows.length : 0;
     const agentLimit: number = PLAN_AGENT_LIMITS[planKey] ?? PLAN_AGENT_LIMITS.free;
+    const memberCount: number = Array.isArray(memberRows) ? memberRows.length : 0;
+    const memberLimit: number = PLAN_MEMBER_LIMITS[planKey] ?? PLAN_MEMBER_LIMITS.free;
 
     return res.json({
       success: true,
-      data: { used, quota, plan: planName, planKey, month, agentCount, agentLimit },
+      data: { used, quota, plan: planName, planKey, month, agentCount, agentLimit, memberCount, memberLimit, resetDate },
     });
   } catch (error: any) {
     errorResponse(res, error);

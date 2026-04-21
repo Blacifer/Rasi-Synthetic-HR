@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Activity, ChevronDown, ChevronRight, Filter, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Zap, DollarSign, Clock, Cpu } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { HelpTip, HELP_TIPS } from '../../components/HelpTip';
 import type { AIAgent } from '../../types';
 import { toast } from '../../lib/toast';
 
@@ -123,8 +124,11 @@ export default function ReasoningTracesPage({ agents }: { agents: AIAgent[] }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Reasoning Traces</h1>
-          <p className="mt-1 text-sm text-slate-400">Every LLM call through the gateway — tokens, latency, cost, tool calls, risk.</p>
+          <h1 className="inline-flex items-center text-2xl font-bold text-white">
+            How It Decided
+            <HelpTip text={HELP_TIPS.howItDecided} />
+          </h1>
+          <p className="mt-1 text-sm text-slate-400">Every AI call through the gateway — tokens, latency, cost, tool calls, risk.</p>
         </div>
         <button
           onClick={() => load(true)}

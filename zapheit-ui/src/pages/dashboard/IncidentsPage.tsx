@@ -8,6 +8,7 @@ import { api } from '../../lib/api-client';
 import { API_BASE_URL, getAuthHeaders } from '../../lib/api/_helpers';
 import { SkeletonIncidentRow } from '../../components/Skeleton';
 import { PageHero } from '../../components/dashboard/PageHero';
+import { HelpTip, HELP_TIPS } from '../../components/HelpTip';
 
 type IncidentsPageProps = {
   incidents: Incident[];
@@ -130,6 +131,41 @@ function detectIncident(content: string): { detected: boolean; incidentType: Inc
   }
 
   return { detected: false, incidentType: 'hallucination', severity: 'low', details: 'No incident detected.' };
+}
+
+const INCIDENT_WHAT_WE_DID: Record<string, string> = {
+  pii_leak: 'Zapheit detected and flagged private data in the AI response before it could reach users.',
+  data_extraction_attempt: 'Zapheit blocked a prompt injection attempt and raised this safety alert.',
+  prompt_injection: 'Zapheit blocked a prompt injection attempt and raised this safety alert.',
+  refund_abuse: 'Zapheit flagged the policy override language and paused the response for review.',
+  toxic_output: 'Zapheit detected harmful language and blocked the response.',
+  hallucination: 'Zapheit flagged a potentially made-up or inaccurate answer.',
+  legal_advice: 'Zapheit flagged legal-risk content and raised this alert.',
+  angry_user: 'Zapheit detected an escalation pattern and flagged it for human review.',
+  policy_violation: 'Zapheit blocked the action because it violated your active rules.',
+};
+
+const INCIDENT_WHAT_NEXT: Record<string, string> = {
+  pii_leak: 'Review who received the response and notify affected users if needed. Check the rule that should have prevented this.',
+  data_extraction_attempt: 'Review the conversation for further signs of tampering. Consider tightening your assistant rules.',
+  prompt_injection: 'Review the conversation for further signs of tampering. Consider tightening your assistant rules.',
+  refund_abuse: 'Confirm no unauthorised refund was issued. Review the policy rule that should cover this case.',
+  toxic_output: 'Confirm the response was not delivered to a user. Update the safety rule if needed.',
+  hallucination: 'Review the AI response for accuracy. If incorrect, update the assistant knowledge base.',
+  legal_advice: 'Do not rely on this response for legal decisions. Add a rule to prevent legal advice.',
+  angry_user: 'Route to a human support agent. Follow up with the customer within 24 hours.',
+  policy_violation: 'Review your active rules to confirm they cover this case, then close the alert.',
+};
+
+function incidentPlainLanguage(incident: Incident, meta: IncidentUiMeta) {
+  const type = incident.incident_type;
+  return {
+    whatHappened: incident.description || `A ${normalizeLabel(type).toLowerCase()} was detected on ${incident.agent_name || 'an AI assistant'}.`,
+    whatWeDid: INCIDENT_WHAT_WE_DID[type] ?? 'Zapheit flagged this activity and created a safety alert for your review.',
+    whatNext: meta.nextAction && meta.nextAction !== defaultMetaForIncident(incident).nextAction
+      ? meta.nextAction
+      : INCIDENT_WHAT_NEXT[type] ?? 'Review the details below and assign an owner to investigate.',
+  };
 }
 
 function defaultMetaForIncident(incident: Incident): IncidentUiMeta {
@@ -746,9 +782,12 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-white">Incident log</h2>
-                <p className="mt-1 text-sm text-slate-400">{filteredIncidents.length} of {visibleIncidents.length} incident records visible</p>
-                <p className="mt-1 text-xs text-slate-500">Incidents are detected from live agent conversations, webhooks, audit rules, and manual tests.</p>
+                <h2 className="inline-flex items-center text-xl font-semibold text-white">
+                  Safety Alerts
+                  <HelpTip text={HELP_TIPS.piiDetection} />
+                </h2>
+                <p className="mt-1 text-sm text-slate-400">{filteredIncidents.length} of {visibleIncidents.length} alerts visible</p>
+                <p className="mt-1 text-xs text-slate-500">Problems detected from live AI conversations, webhooks, audit rules, and manual tests.</p>
               </div>
               <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-center">
                 {hasActiveFilters && (
@@ -920,8 +959,28 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                               {incident.confidence == null ? '— confidence' : `${Math.round(incident.confidence * 100)}% confidence`}
                             </span>
                           </div>
-                          <p className="mt-2 line-clamp-2 text-sm text-slate-300">{incident.description}</p>
-                          <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-500">
+                          {(() => {
+                            const plain = incidentPlainLanguage(incident, meta);
+                            return (
+                              <div className="mt-3 space-y-2">
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 text-xs">
+                                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
+                                    <p className="font-semibold text-slate-400 mb-1">What happened</p>
+                                    <p className="text-slate-300 line-clamp-2">{plain.whatHappened}</p>
+                                  </div>
+                                  <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/[0.05] px-3 py-2.5">
+                                    <p className="font-semibold text-emerald-400 mb-1">What we did</p>
+                                    <p className="text-slate-300 line-clamp-2">{plain.whatWeDid}</p>
+                                  </div>
+                                  <div className="rounded-xl border border-cyan-500/15 bg-cyan-500/[0.05] px-3 py-2.5">
+                                    <p className="font-semibold text-cyan-400 mb-1">What you should do next</p>
+                                    <p className="text-slate-300 line-clamp-2">{plain.whatNext}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-500">
                             <span>{incident.agent_name}</span>
                             <span>{normalizeLabel(incident.incident_type)}</span>
                             <span>{meta.owner}</span>
@@ -1014,6 +1073,27 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
             </div>
 
             <div className="mt-6 space-y-6">
+              {/* Plain-language summary */}
+              {(() => {
+                const plain = incidentPlainLanguage(selectedIncident, selectedMeta);
+                return (
+                  <div className="space-y-2">
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3">
+                      <p className="text-xs font-semibold text-slate-400 mb-1">What happened</p>
+                      <p className="text-sm text-slate-300 leading-relaxed">{plain.whatHappened}</p>
+                    </div>
+                    <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/[0.05] px-4 py-3">
+                      <p className="text-xs font-semibold text-emerald-400 mb-1">What we did</p>
+                      <p className="text-sm text-slate-300 leading-relaxed">{plain.whatWeDid}</p>
+                    </div>
+                    <div className="rounded-xl border border-cyan-500/15 bg-cyan-500/[0.05] px-4 py-3">
+                      <p className="text-xs font-semibold text-cyan-400 mb-1">What you should do next</p>
+                      <p className="text-sm text-slate-300 leading-relaxed">{plain.whatNext}</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                 <p className="text-sm leading-relaxed text-slate-300">{selectedIncident.description}</p>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">

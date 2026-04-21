@@ -33,9 +33,11 @@ const ActionPoliciesPage = lazy(() => import('./dashboard/ActionPoliciesPage'));
 const IncidentsPage = lazy(() => import('./dashboard/IncidentsPage'));
 const PersonaPage = lazy(() => import('./dashboard/PersonaPage'));
 const CostsPage = lazy(() => import('./dashboard/CostsPage'));
+const UsagePage = lazy(() => import('./dashboard/UsagePage'));
 const ShadowModePage = lazy(() => import('./dashboard/ShadowModePage'));
 const BlackBoxPage = lazy(() => import('./dashboard/BlackBoxPage'));
 const PricingPage = lazy(() => import('./dashboard/PricingPage'));
+const ROIPage = lazy(() => import('./dashboard/ROIPage'));
 const SafeHarborPage = lazy(() => import('./dashboard/SafeHarborPage'));
 const SettingsPage = lazy(() => import('./dashboard/SettingsPage'));
 const ApiAnalyticsPage = lazy(() => import('./dashboard/ApiAnalyticsPage'));
@@ -689,7 +691,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   </div>
                   <div>
                     <span className="text-base font-bold text-white leading-none">Zapheit</span>
-                    <span className="text-[10px] text-blue-300 block leading-none mt-0.5">AI Agent Governance</span>
+                    <span className="text-[10px] text-blue-300 block leading-none mt-0.5">AI Workforce Manager</span>
                   </div>
                 </div>
                 <button onClick={() => setMobileNavOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.05] transition-colors">
@@ -727,12 +729,12 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   { id: 'agents', icon: Users, label: 'Agents', badge: null },
                   { id: 'apps', icon: Building2, label: 'Apps', badge: null },
                   { id: 'chat', icon: MessageSquare, label: 'Chat', badge: null },
-                  { id: 'agent-studio', icon: Sparkles, label: 'Templates', badge: null },
-                  { id: 'action-policies', icon: Sparkles, label: 'Policies', badge: null },
-                  { id: 'approvals', icon: Sparkles, label: 'Approvals', badge: null },
-                  { id: 'incidents', icon: AlertTriangle, label: 'Incidents', badge: incidents.filter(i => i.status !== 'resolved' && i.status !== 'false_positive' && i.source !== 'manual_test').length || null },
-                  { id: 'audit-log', icon: Sparkles, label: 'Audit', badge: null },
-                  { id: 'costs', icon: DollarSign, label: 'Costs', badge: null },
+                  { id: 'agent-studio', icon: Sparkles, label: 'Create an Assistant', badge: null },
+                  { id: 'action-policies', icon: Sparkles, label: 'Rules', badge: null },
+                  { id: 'approvals', icon: Sparkles, label: 'Human Review', badge: null },
+                  { id: 'incidents', icon: AlertTriangle, label: 'Safety Alerts', badge: incidents.filter(i => i.status !== 'resolved' && i.status !== 'false_positive' && i.source !== 'manual_test').length || null },
+                  { id: 'audit-log', icon: Sparkles, label: 'Activity History', badge: null },
+                  { id: 'costs', icon: DollarSign, label: 'Usage & Spending', badge: null },
                 ] as const).map((item) => (
                   <button key={item.id} data-tour={item.id} onClick={() => { navigateTo(item.id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === item.id && 'nav-item-active')}>
                     <item.icon className="w-4 h-4 shrink-0" />
@@ -1195,6 +1197,11 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                       <CostsPage agents={enrichedAgents} incidents={incidents} onNavigate={navigateTo} />
                     </SectionErrorBoundary>
                   } />
+                  <Route path="usage" element={
+                    <SectionErrorBoundary fallbackMessage="Usage page failed to load">
+                      <UsagePage onNavigate={navigateTo} />
+                    </SectionErrorBoundary>
+                  } />
                   {/* API & Webhooks — consolidated */}
                   <Route path="api-webhooks" element={
                     <SectionErrorBoundary fallbackMessage="API & Webhooks failed to load">
@@ -1286,6 +1293,11 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="legal" element={
                     <SectionErrorBoundary fallbackMessage="Legal page failed to load">
                       <SafeHarborPage onNavigate={navigateTo} userRole={role} />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="roi" element={
+                    <SectionErrorBoundary fallbackMessage="ROI dashboard failed to load">
+                      <ROIPage />
                     </SectionErrorBoundary>
                   } />
                   <Route path="*" element={<Navigate to="overview" replace />} />

@@ -11,6 +11,7 @@ import { notifyApprovalAssignedAsync } from '../lib/notification-service';
 import { storeCorrection } from '../lib/correction-memory';
 import { markApprovalDeniedExecution, resumeApprovedToolCall } from '../lib/agentic-tool-execution';
 import { sendTransactionalEmail } from '../lib/email';
+import { approvalRequestedEmail, approvalResolvedEmail } from '../lib/email-templates';
 import {
   buildApprovalSummaryFromApprovalRequest,
   buildApprovalSummaryFromJobApproval,
@@ -571,6 +572,28 @@ router.post('/', requirePermission('policies.manage'), async (req: Request, res:
       details: req.body?.details || undefined,
     });
 
+    // Email org managers + admins about the new approval request (fire-and-forget)
+    void (async () => {
+      try {
+        const frontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, '') || '';
+        const approvalUrl = `${frontendUrl}/dashboard/approvals`;
+        const autoBlockIn = expires_in_hours <= 24 ? `${expires_in_hours} hour${expires_in_hours !== 1 ? 's' : ''}` : undefined;
+        const usersQ = new URLSearchParams();
+        usersQ.set('organization_id', eq(orgId));
+        usersQ.set('role', `in.(admin,manager)`);
+        usersQ.set('select', 'email');
+        const managers = (await supabaseRestAsService('users', usersQ)) as Array<{ email: string }>;
+        const actionDesc = `${service} → ${action}${action_payload ? ' (see details in dashboard)' : ''}`;
+        const agentNameLabel = agent_id || requested_by || 'Your AI assistant';
+        await Promise.allSettled((managers || []).map((u) => {
+          const tmpl = approvalRequestedEmail({ approverEmail: u.email, agentName: agentNameLabel, actionDescription: actionDesc, approvalUrl, autoBlockIn });
+          return sendTransactionalEmail({ to: u.email, subject: tmpl.subject, html: tmpl.html, text: tmpl.text });
+        }));
+      } catch (err: any) {
+        logger.warn('[approvals] Email notification failed', { err: err?.message });
+      }
+    })();
+
     return res.status(201).json({ success: true, data: row });
   } catch (err: any) {
     return errorResponse(res, err);
@@ -736,6 +759,28 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
         action: row.action,
       },
     });
+
+    // Notify org admins about the resolved approval (fire-and-forget)
+    void (async () => {
+      try {
+        const frontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, '') || '';
+        const dashboardUrl = `${frontendUrl}/dashboard/approvals`;
+        const resolvedByEmail = req.user?.email || 'a team member';
+        const actionDesc = `${row.service} → ${row.action}`;
+        const agentLabel = row.agent_id || row.requested_by || 'Your AI assistant';
+        const usersQ = new URLSearchParams();
+        usersQ.set('organization_id', eq(orgId));
+        usersQ.set('role', 'in.(admin,manager)');
+        usersQ.set('select', 'email');
+        const admins = (await supabaseRestAsService('users', usersQ)) as Array<{ email: string }>;
+        await Promise.allSettled((admins || []).map((u) => {
+          const tmpl = approvalResolvedEmail({ requesterEmail: u.email, agentName: agentLabel, decision: 'approved', actionDescription: actionDesc, resolvedBy: resolvedByEmail, dashboardUrl });
+          return sendTransactionalEmail({ to: u.email, subject: tmpl.subject, html: tmpl.html, text: tmpl.text });
+        }));
+      } catch (err: any) {
+        logger.warn('[approvals] Resolved email notification failed', { err: err?.message });
+      }
+    })();
 
     // Portal email actions: send directly via email service (no connector execution needed)
     if (row.service === 'email' && row.action === 'send_email') {

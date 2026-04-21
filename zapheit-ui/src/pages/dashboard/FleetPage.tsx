@@ -10,6 +10,7 @@ import {
 import type { AIAgent, AgentPackId, AgentWorkspaceAnalytics, AgentWorkspaceConversation, AgentWorkspaceIncident, AgentWorkspaceSummary } from '../../types';
 import { toast } from '../../lib/toast';
 import { api } from '../../lib/api-client';
+import { AgentHealthBadge } from '../../components/AgentHealthBadge';
 import { getFrontendConfig } from '../../lib/config';
 import { supabase } from '../../lib/supabase-client';
 import { packDisplayBadge, type IntegrationPackId } from '../../lib/integration-packs';
@@ -1508,20 +1509,7 @@ export default function FleetPage({
                           agent.risk_level === 'medium' ? 'bg-amber-400/10 text-amber-400 border border-amber-400/20' :
                             'bg-red-400/10 text-red-400 border border-red-400/20'
                           }`}>Risk {agent.risk_score}/100</span>
-                        {(() => {
-                          // Quick local trust score estimate based on risk_score alone (full score loads in workspace)
-                          const ts = Math.round((100 - agent.risk_score) * 0.35 + 65 * 0.65);
-                          const grade = ts >= 90 ? 'A' : ts >= 75 ? 'B' : ts >= 60 ? 'C' : 'D';
-                          const color = grade === 'A' ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20'
-                            : grade === 'B' ? 'bg-blue-400/10 text-blue-400 border-blue-400/20'
-                            : grade === 'C' ? 'bg-amber-400/10 text-amber-400 border-amber-400/20'
-                            : 'bg-rose-400/10 text-rose-400 border-rose-400/20';
-                          return (
-                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${color}`} title="Trust Score — open workspace for full breakdown">
-                              Trust {grade}
-                            </span>
-                          );
-                        })()}
+                        <AgentHealthBadge agentId={agent.id} />
                         {agent.publishStatus === 'live' ? (
                           <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-400/10 text-emerald-300 border border-emerald-400/20">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />Live

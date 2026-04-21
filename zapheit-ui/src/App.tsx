@@ -165,12 +165,11 @@ function App() {
   }, [mounted]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const enterDemoMode = () => {
-    if (!demoEnabled) return;
     const demoUser: AuthUser = {
       id: 'demo-' + crypto.randomUUID(),
       email: 'demo@zapheit.com',
       organizationName: 'Demo Organization',
-      role: 'viewer',
+      role: 'admin',
     };
     setUser(demoUser);
     setIsDemoMode(true);
@@ -293,7 +292,7 @@ function App() {
     <AppContext.Provider value={{ user, loading: false, signUp, signIn, signInWithOAuth, signOut, completeMfaLogin }}>
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
-          <Route path="/" element={<LandingPage onSignUp={() => navigate('/signup')} onLogin={() => navigate('/login')} onDemo={demoEnabled ? enterDemoMode : undefined} />} />
+          <Route path="/" element={<LandingPage onSignUp={() => navigate('/signup')} onLogin={() => navigate('/login')} onDemo={enterDemoMode} />} />
           <Route path="/signup" element={<SignUpPage onSignIn={() => navigate('/login')} onBack={() => navigate('/')} />} />
           <Route path="/login" element={<LoginPage onSignUp={() => navigate('/signup')} onBack={() => navigate('/')} />} />
           <Route path="/accept-invite/*" element={

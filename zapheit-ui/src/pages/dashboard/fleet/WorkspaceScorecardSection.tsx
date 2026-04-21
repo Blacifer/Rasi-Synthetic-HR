@@ -7,13 +7,14 @@
  * 3-period trend chart.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   Star, TrendingUp, TrendingDown, Minus, RefreshCw,
   CheckCircle2, AlertTriangle, DollarSign, Heart,
 } from 'lucide-react';
 import { api } from '../../../lib/api-client';
 import type { AIAgent } from '../../../types';
+import { HelpTip, HELP_TIPS } from '../../../components/HelpTip';
 
 interface Props {
   agent: AIAgent;
@@ -43,7 +44,7 @@ const SCORE_BAR_COLOR: Record<string, string> = {
 };
 
 function ScoreBar({ label, value, icon, weight }: {
-  label: string;
+  label: ReactNode;
   value: number;
   icon: React.ReactNode;
   weight: string;
@@ -177,7 +178,7 @@ export default function WorkspaceScorecardSection({ agent }: Props) {
           weight="40%"
         />
         <ScoreBar
-          label="SLO Compliance"
+          label={<span className="inline-flex items-center">SLO Compliance<HelpTip text={HELP_TIPS.performanceRules} /></span>}
           value={current.breakdown.slo_pass_rate}
           icon={<CheckCircle2 className="w-3.5 h-3.5" />}
           weight="30%"

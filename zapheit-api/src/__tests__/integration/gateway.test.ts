@@ -64,6 +64,11 @@ jest.mock('../../lib/api-key-usage', () => ({
   checkApiKeyRateLimit: jest.fn().mockResolvedValue({ count: 0 }),
 }));
 
+// Mock redis-client so org rate limiter falls back to in-memory (always allows in tests)
+jest.mock('../../lib/redis-client', () => ({
+  getRedisClient: jest.fn().mockResolvedValue(null),
+}));
+
 // Mock observability
 jest.mock('../../lib/observability', () => ({
   getTracer: () => ({ startActiveSpan: (_n: any, fn: any) => fn({ end: () => {} }) }),

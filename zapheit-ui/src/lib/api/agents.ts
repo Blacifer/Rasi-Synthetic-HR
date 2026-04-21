@@ -132,6 +132,19 @@ export const agentApi = {
     return authenticatedFetch(`/agents/${agentId}/health`, { method: 'GET' });
   },
 
+  async getHealthScore(agentId: string): Promise<ApiResponse<{
+    agentId: string;
+    total: number;
+    performance: number;
+    safety: number;
+    cost: number;
+    activity: number;
+    grade: 'A' | 'B' | 'C' | 'D' | 'F';
+    recommendations: string[];
+  }>> {
+    return authenticatedFetch(`/agents/${agentId}/health-score`, { method: 'GET' });
+  },
+
   async getPublishState(id: string): Promise<ApiResponse<{
     publishStatus: 'not_live' | 'ready' | 'live';
     primaryPack: string | null;

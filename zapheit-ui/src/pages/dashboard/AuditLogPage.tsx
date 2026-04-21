@@ -196,7 +196,7 @@ export default function AuditLogPage() {
               <Shield className="w-4.5 h-4.5 text-violet-400" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-slate-100">Audit Log</h1>
+              <h1 className="text-lg font-semibold text-slate-100">Activity History</h1>
               <p className="text-xs text-slate-500">
                 {total > 0 ? `${total.toLocaleString()} events` : 'Full trail of all actions in your organization'}
               </p>
@@ -357,11 +357,18 @@ export default function AuditLogPage() {
             Loading audit log…
           </div>
         ) : entries.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-slate-500">
-            <Shield className="w-10 h-10 mb-3 opacity-20" />
-            <p className="text-sm">No audit events found</p>
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Shield className="w-12 h-12 mb-4 text-slate-600" />
+            <p className="text-base font-semibold text-white">
+              {hasActiveFilters ? 'No events match your filters' : 'No activity recorded yet'}
+            </p>
+            <p className="mt-1 text-sm text-slate-400 max-w-sm">
+              {hasActiveFilters
+                ? 'Try adjusting your date range, action type, or user filters.'
+                : 'Every action taken in your workspace — logins, policy changes, approvals — will appear here.'}
+            </p>
             {hasActiveFilters && (
-              <button onClick={clearFilters} className="mt-2 text-xs text-violet-400 hover:underline">
+              <button onClick={clearFilters} className="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-xs font-semibold text-violet-300 transition hover:bg-violet-500/20">
                 Clear filters
               </button>
             )}

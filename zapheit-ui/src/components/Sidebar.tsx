@@ -15,7 +15,7 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import {
   Brain, BarChart3, Users, AlertTriangle, MessageSquare, DollarSign,
   Layers, Settings, Sparkles, Wand2, CheckSquare, Shield, ScrollText,
-  Key, PlugZap, ClipboardList, Database, Server,
+  Key, PlugZap, ClipboardList, Database, Server, TrendingUp,
   User, LogOut, Sun, Moon, Bell, ChevronRight, Search, Building2,
   LifeBuoy, ShieldCheck, Calculator, Box,
 } from 'lucide-react';
@@ -51,15 +51,16 @@ type NavGroup = {
 
 const CORE_ITEMS: NavItem[] = [
   { id: 'overview', icon: BarChart3, label: 'Overview' },
-  { id: 'agents', icon: Users, label: 'Agents' },
-  { id: 'apps', icon: Building2, label: 'Apps' },
+  { id: 'agents', icon: Users, label: 'My AI Workforce' },
+  { id: 'apps', icon: Building2, label: 'Connected Apps' },
   { id: 'chat', icon: MessageSquare, label: 'Chat' },
-  { id: 'agent-studio', icon: Wand2, label: 'Templates' },
-  { id: 'action-policies', icon: Shield, label: 'Policies' },
-  { id: 'approvals', icon: CheckSquare, label: 'Approvals' },
-  { id: 'incidents', icon: AlertTriangle, label: 'Incidents' },
-  { id: 'audit-log', icon: ScrollText, label: 'Audit' },
-  { id: 'costs', icon: DollarSign, label: 'Costs' },
+  { id: 'agent-studio', icon: Wand2, label: 'Create an Assistant' },
+  { id: 'action-policies', icon: Shield, label: 'Rules' },
+  { id: 'approvals', icon: CheckSquare, label: 'Human Review' },
+  { id: 'incidents', icon: AlertTriangle, label: 'Safety Alerts' },
+  { id: 'audit-log', icon: ScrollText, label: 'Activity History' },
+  { id: 'costs', icon: DollarSign, label: 'Usage & Spending' },
+  { id: 'roi', icon: TrendingUp, label: 'Your ROI' },
 ];
 
 const GROUPS: NavGroup[] = [
@@ -77,8 +78,9 @@ const GROUPS: NavGroup[] = [
   {
     label: 'Admin & Developer',
     items: [
+      { id: 'usage', icon: BarChart3, label: 'Usage & Plan' },
       { id: 'settings', icon: Settings, label: 'Settings' },
-      { id: 'api-webhooks', icon: Key, label: 'API & Webhooks' },
+      { id: 'api-webhooks', icon: Key, label: 'Developer Settings' },
       { id: 'developer', icon: PlugZap, label: 'Developer' },
       { id: 'execution-history', icon: ClipboardList, label: 'Execution History' },
       { id: 'platform', icon: Server, label: 'Platform' },
@@ -87,6 +89,28 @@ const GROUPS: NavGroup[] = [
 ];
 
 const ALL_NON_CORE = new Set(GROUPS.flatMap((g) => g.items.map((i) => i.id)));
+
+// Role-based visibility. Items not in any set are visible to all roles.
+const VIEWER_ONLY_IDS = new Set([
+  'overview', 'agents', 'approvals', 'audit-log', 'chat',
+]);
+const MANAGER_EXTRA_IDS = new Set([
+  'incidents', 'agent-studio', 'action-policies', 'costs',
+  'apps', 'hubs', 'work-items', 'governed-actions',
+  'usage',
+]);
+const ADMIN_EXTRA_IDS = new Set([
+  'settings', 'api-webhooks', 'developer', 'execution-history',
+  'platform', 'coverage', 'ctc-calculator', 'blackbox',
+]);
+
+function isVisible(id: string, role?: string): boolean {
+  const r = role?.toLowerCase() || 'viewer';
+  if (r === 'super_admin' || r === 'admin') return true;
+  if (r === 'manager') return !ADMIN_EXTRA_IDS.has(id);
+  // viewer
+  return VIEWER_ONLY_IDS.has(id);
+}
 
 function NavBtn({
   item,
@@ -185,9 +209,9 @@ export function Sidebar({
     return null;
   });
 
-  const coreWithBadge: NavItem[] = CORE_ITEMS.map((item) =>
-    item.id === 'incidents' ? { ...item, badge: incidentBadge } : item,
-  );
+  const coreWithBadge: NavItem[] = CORE_ITEMS
+    .filter((item) => isVisible(item.id, role))
+    .map((item) => item.id === 'incidents' ? { ...item, badge: incidentBadge } : item);
 
   return (
     <Tooltip.Provider>
@@ -219,7 +243,7 @@ export function Sidebar({
               </div>
               <div>
                 <span className="text-base font-bold gradient-text leading-none">Zapheit</span>
-                <span className="text-[10px] text-slate-500 block leading-none mt-0.5">AI Agent Governance</span>
+                <span className="text-[10px] text-slate-500 block leading-none mt-0.5">AI Workforce Manager</span>
               </div>
             </div>
           ) : (
@@ -300,14 +324,16 @@ export function Sidebar({
         {/* Grouped nav */}
         <div className={cn('flex-1 overflow-y-auto space-y-0.5', expanded ? 'px-2' : 'px-1.5')}>
           {GROUPS.map((group) => {
+            const visibleItems = group.items.filter((i) => isVisible(i.id, role));
+            if (visibleItems.length === 0) return null;
             const isGroupOpen = openGroup === group.label;
-            const hasActive = group.items.some((i) => i.id === currentPage);
+            const hasActive = visibleItems.some((i) => i.id === currentPage);
 
             if (!expanded) {
               // Collapsed: show all group items as icon-only buttons
               return (
                 <div key={group.label} className="space-y-0.5 mb-2">
-                  {group.items.map((item) => (
+                  {visibleItems.map((item) => (
                     <NavBtn
                       key={item.id}
                       item={item}
@@ -347,7 +373,7 @@ export function Sidebar({
                       className="overflow-hidden"
                     >
                       <div className="space-y-0.5 pb-1">
-                        {group.items.map((item) => (
+                        {visibleItems.map((item) => (
                           <NavBtn
                             key={item.id}
                             item={item}

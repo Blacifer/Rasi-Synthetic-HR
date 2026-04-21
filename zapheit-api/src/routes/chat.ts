@@ -17,6 +17,21 @@ const SYSTEM_PROMPTS: Record<'operator' | 'employee' | 'external', string> = {
 
 const router = express.Router();
 
+// ---------------------------------------------------------------------------
+// SSE client registry — push conversation events to connected dashboards
+// ---------------------------------------------------------------------------
+type SseClient = Response & { orgId?: string };
+const sseClients = new Map<string, Set<SseClient>>();
+
+export function pushConversationEvent(orgId: string, payload: Record<string, unknown>): void {
+  const clients = sseClients.get(orgId);
+  if (!clients || clients.size === 0) return;
+  const data = JSON.stringify(payload);
+  for (const client of clients) {
+    try { client.write(`event: conversation.new\ndata: ${data}\n\n`); } catch { /* client gone */ }
+  }
+}
+
 const runtimeProfileSchema = z.object({
   id: z.string().min(1),
   kind: z.enum(['provider', 'gateway']),
@@ -669,6 +684,8 @@ router.post('/chat/sessions', requirePermission('dashboard.read'), async (req: R
       return res.status(500).json({ success: false, error: 'Failed to create chat session' });
     }
 
+    pushConversationEvent(orgId, { id: session.id, agent_id: session.agent_id || null, created_at: session.created_at });
+
     res.json({
       success: true,
       data: {
@@ -1120,6 +1137,35 @@ router.post('/chat/sessions/:id/messages/stream', requirePermission('dashboard.r
       try { sseWrite({ type: 'error', error: 'Internal server error' }); res.end(); } catch { /* already closed */ }
     }
   }
+});
+
+// GET /chat/sessions/stream — SSE endpoint; emits conversation.new when a session is created
+router.get('/chat/sessions/stream', requirePermission('dashboard.read'), (req: Request, res: Response) => {
+  const orgId = getOrgId(req);
+  if (!orgId) { res.status(400).end(); return; }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const client = res as SseClient;
+  client.orgId = orgId;
+  if (!sseClients.has(orgId)) sseClients.set(orgId, new Set());
+  sseClients.get(orgId)!.add(client);
+
+  res.write('event: connected\ndata: {}\n\n');
+
+  const pingTimer = setInterval(() => {
+    try { res.write(':ping\n\n'); } catch { clearInterval(pingTimer); }
+  }, 25_000);
+
+  req.on('close', () => {
+    clearInterval(pingTimer);
+    sseClients.get(orgId)?.delete(client);
+    if (sseClients.get(orgId)?.size === 0) sseClients.delete(orgId);
+  });
 });
 
 export default router;

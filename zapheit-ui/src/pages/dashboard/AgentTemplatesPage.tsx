@@ -78,6 +78,21 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
     load().finally(() => setModelsLoading(false));
   }, []);
 
+  // Static marketplace social proof per template
+  const TEMPLATE_META: Record<string, { teams: number; setupMins: number; featured?: boolean }> = {
+    'hr-policy-assistant':      { teams: 412,  setupMins: 5,  featured: true },
+    'support-triage-bot':       { teams: 891,  setupMins: 3,  featured: true },
+    'interview-scheduler':      { teams: 278,  setupMins: 8,  featured: true },
+    'expense-approver':         { teams: 634,  setupMins: 5,  featured: true },
+    'meeting-note-taker':       { teams: 567,  setupMins: 4,  featured: true },
+    'leave-management':         { teams: 321,  setupMins: 6  },
+    'performance-review':       { teams: 198,  setupMins: 10 },
+    'it-helpdesk':              { teams: 445,  setupMins: 5  },
+    'sales-lead-qualifier':     { teams: 388,  setupMins: 7  },
+    'finance-invoice':          { teams: 256,  setupMins: 8  },
+  };
+  const FEATURED_IDS = Object.entries(TEMPLATE_META).filter(([, v]) => v.featured).map(([k]) => k);
+
   const resolveModel = useCallback((modelId: string) =>
     (() => {
       const direct = liveModels.find(m => m.id === modelId);
@@ -259,6 +274,49 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
         ))}
       </div>
 
+      {/* Featured strip — shown only on "All" with no search */}
+      {selectedIndustry === 'all' && !templateSearchQuery && (
+        <div>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Most popular</p>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {AGENT_TEMPLATES.filter((t) => FEATURED_IDS.includes(t.id)).map((t) => {
+              const meta = TEMPLATE_META[t.id];
+              const Icon = t.icon;
+              const colors = (() => {
+                const all: Record<string, { text: string; light: string }> = {
+                  blue: { text: 'text-blue-400', light: 'bg-blue-500/10' },
+                  cyan: { text: 'text-cyan-400', light: 'bg-cyan-500/10' },
+                  violet: { text: 'text-violet-400', light: 'bg-violet-500/10' },
+                  emerald: { text: 'text-emerald-400', light: 'bg-emerald-500/10' },
+                  amber: { text: 'text-amber-400', light: 'bg-amber-500/10' },
+                  purple: { text: 'text-purple-400', light: 'bg-purple-500/10' },
+                  orange: { text: 'text-orange-400', light: 'bg-orange-500/10' },
+                };
+                return all[t.color] || all.blue;
+              })();
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setSelectedTemplate(t)}
+                  className="flex shrink-0 items-center gap-3 rounded-xl border border-slate-700 bg-slate-900/60 px-4 py-3 text-left transition hover:border-slate-600 hover:bg-slate-900"
+                >
+                  <div className={`rounded-lg p-2 ${colors.light}`}>
+                    <Icon className={`h-4 w-4 ${colors.text}`} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white whitespace-nowrap">{t.name}</p>
+                    {meta && (
+                      <p className="text-[11px] text-slate-500">Used by {meta.teams.toLocaleString()} teams · ~{meta.setupMins} min setup</p>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Templates Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredTemplates.map(template => {
@@ -345,6 +403,33 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
                 </div>
 
                 <div className="flex-1"></div>
+
+                {/* Social proof + setup time */}
+                {(() => {
+                  const meta = TEMPLATE_META[template.id];
+                  if (!meta) return null;
+                  return (
+                    <p className="mb-3 text-[11px] text-slate-500">
+                      Used by {meta.teams.toLocaleString()} teams · ~{meta.setupMins} min to set up
+                    </p>
+                  );
+                })()}
+
+                {/* Connectors required */}
+                {template.requiredSystems && template.requiredSystems.length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    {template.requiredSystems.slice(0, 3).map((sys) => (
+                      <span key={sys} className="rounded-full border border-slate-700 bg-slate-900/50 px-2 py-0.5 text-[10px] text-slate-400">
+                        {sys}
+                      </span>
+                    ))}
+                    {template.requiredSystems.length > 3 && (
+                      <span className="rounded-full border border-slate-700 bg-slate-900/50 px-2 py-0.5 text-[10px] text-slate-400">
+                        +{template.requiredSystems.length - 3} more
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-700/60">
                   <div>

@@ -4,9 +4,11 @@ import multer from 'multer';
 import { AnthropicService, OpenAIService, type ConnectorTool, type ToolCall } from '../services/ai-service';
 import { incidentDetection } from '../services/incident-detection';
 import { validateApiKey } from '../middleware/api-key-validation';
+import { checkOrgRateLimit } from '../middleware/orgRateLimiter';
+import { scanMessages } from '../lib/secret-scanner';
 import { buildFrontendUrl } from '../lib/frontend-url';
 import { logger } from '../lib/logger';
-import { supabaseRest, eq, gte } from '../lib/supabase-rest';
+import { supabaseRest, supabaseRestAsService, eq, gte } from '../lib/supabase-rest';
 import { fireAndForgetWebhookEvent } from '../lib/webhook-relay';
 import { sendTransactionalEmail } from '../lib/email';
 import { notifySlackIncident } from '../lib/slack-notify';
@@ -2019,6 +2021,10 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
     return;
   }
 
+  if (req.apiKey?.organization_id && !(await checkOrgRateLimit(req, res, req.apiKey.organization_id))) {
+    return;
+  }
+
   const _agentIdHeader = (req.header('x-zapheit-agent-id') || req.header('x-rasi-agent-id') || req.body?.agent_id) as string | undefined;
   let agentId: string | null = _agentIdHeader || null;
   if (_agentIdHeader && req.apiKey) {
@@ -2042,6 +2048,37 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: { message: 'messages must be a non-empty array', type: 'invalid_request_error' } });
+    }
+
+    // Secret scanning — block requests containing credentials / API keys
+    const secretScan = scanMessages(messages);
+    if (!secretScan.clean) {
+      const orgId = req.apiKey?.organization_id || '';
+      logger.warn('gateway: secret detected in request — blocked', { orgId, types: secretScan.matches.map((m) => m.type) });
+      // Fire safety alert asynchronously
+      void supabaseRestAsService('incidents', '', {
+        method: 'POST',
+        body: {
+          organization_id: orgId,
+          agent_id: req.header('x-zapheit-agent-id') || null,
+          incident_type: 'secret_in_prompt',
+          severity: 'high',
+          status: 'open',
+          title: 'Private data was shared with an AI',
+          description: `The message contained sensitive credentials: ${secretScan.matches.map((m) => m.redacted).join(', ')}. The request was blocked.`,
+          source: 'gateway',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      }).catch(() => null);
+      return res.status(400).json({
+        error: {
+          message: 'Your message appears to contain credentials or private keys. Please remove sensitive data before sending.',
+          type: 'invalid_request_error',
+          code: 'secret_detected',
+          detected: secretScan.matches.map((m) => m.type),
+        },
+      });
     }
 
     let modelConfig = normalizeModel(model);

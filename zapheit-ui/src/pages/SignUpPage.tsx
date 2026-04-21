@@ -146,7 +146,7 @@ export default function SignUpPage({ onSignIn, onBack }: SignUpPageProps) {
               </div>
               <div>
                 <span className="text-xl font-bold gradient-text">Zapheit</span>
-                <span className="text-xs text-blue-300 block -mt-1">AI Agent Governance</span>
+                <span className="text-xs text-blue-300 block -mt-1">AI Workforce Manager</span>
               </div>
             </div>
 

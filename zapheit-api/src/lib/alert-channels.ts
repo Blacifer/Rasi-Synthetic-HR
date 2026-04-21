@@ -14,6 +14,7 @@ import { buildFrontendUrl } from './frontend-url';
 import { logger } from './logger';
 import { decryptSecret, encryptSecret } from './integrations/encryption';
 import { sendTransactionalEmail } from './email';
+import { incidentFlaggedEmail } from './email-templates';
 
 export type ChannelType = 'pagerduty' | 'teams' | 'opsgenie' | 'email';
 export type SeverityLevel = 'low' | 'medium' | 'high' | 'critical';
@@ -283,12 +284,15 @@ async function sendEmailAlert(config: Record<string, string>, incident: Incident
     </div>`;
 
   for (const recipient of recipients) {
-    await sendTransactionalEmail({
-      to: recipient,
-      subject: `[Zapheit] ${incident.severity.toUpperCase()} Incident: ${incident.title}`,
-      html,
-      text: `${incident.severity.toUpperCase()} Incident: ${incident.title}\nType: ${incident.incidentType}\nAgent: ${incident.agentId || 'unknown'}\n${incident.description || ''}\n\n${url}`,
-    }).catch((err: any) => {
+    const tmpl = incidentFlaggedEmail({
+      recipientEmail: recipient,
+      agentName: incident.agentId || 'Your AI assistant',
+      incidentTitle: incident.title,
+      severity: incident.severity,
+      description: incident.description?.slice(0, 300) || '',
+      incidentUrl: url,
+    });
+    await sendTransactionalEmail({ to: recipient, subject: tmpl.subject, html: tmpl.html, text: tmpl.text }).catch((err: any) => {
       logger.warn('alert-channels/email: send failed', { to: recipient, error: err?.message });
     });
   }

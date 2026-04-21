@@ -67,7 +67,7 @@ export default function AgentStudioPage({
         </div>
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-bold text-white">Templates</h1>
+            <h1 className="text-xl font-bold text-white">Create an Assistant</h1>
             <span className="inline-flex items-center rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-200">
               Core
             </span>
