@@ -5,7 +5,8 @@ export type SettingsTab =
   | 'alerts'
   | 'security'
   | 'billing_data'
-  | 'advanced';
+  | 'advanced'
+  | 'enterprise';
 
 export interface TeamMember {
   id: string;

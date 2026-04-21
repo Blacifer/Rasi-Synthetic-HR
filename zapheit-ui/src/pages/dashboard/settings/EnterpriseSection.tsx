@@ -1,0 +1,254 @@
+import { useState, useEffect } from 'react';
+import { Globe, Shield, Eye, Plus, Trash2, Save, Loader2, CheckCircle2 } from 'lucide-react';
+import { useApp } from '../../../context/AppContext';
+
+const DATA_REGIONS = [
+  { value: 'in-south1', label: 'India (South 1)', badge: 'Data stored in India' },
+  { value: 'us-central1', label: 'United States (Central 1)', badge: 'Data stored in USA' },
+  { value: 'eu-west1', label: 'Europe (West 1)', badge: 'Data stored in EU' },
+] as const;
+
+interface ShadowAiSummary {
+  total: number;
+  blocked: number;
+  by_provider: Record<string, number>;
+}
+
+export function EnterpriseSection({ userRole }: { userRole?: string | null }) {
+  const { user } = useApp();
+  const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+
+  const [dataRegion, setDataRegion] = useState('in-south1');
+  const [ipAllowlist, setIpAllowlist] = useState<string[]>([]);
+  const [newCidr, setNewCidr] = useState('');
+  const [cidrError, setCidrError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [shadowAi, setShadowAi] = useState<ShadowAiSummary | null>(null);
+
+  const token = (user as any)?._jwt || localStorage.getItem('sb-access-token') || '';
+  const apiBase = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001';
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [settingsRes, shadowRes] = await Promise.all([
+          fetch(`${apiBase}/api/enterprise/settings`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${apiBase}/api/enterprise/shadow-ai`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(() => null),
+        ]);
+
+        if (settingsRes.ok) {
+          const data = await settingsRes.json();
+          setDataRegion(data.data_region ?? 'in-south1');
+          setIpAllowlist(data.ip_allowlist ?? []);
+        }
+        if (shadowRes?.ok) {
+          setShadowAi(await shadowRes.json());
+        }
+      } catch {
+        // non-fatal
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/;
+
+  function addCidr() {
+    const val = newCidr.trim();
+    if (!cidrRegex.test(val)) {
+      setCidrError('Enter a valid IPv4 address or CIDR range (e.g. 203.0.113.0/24)');
+      return;
+    }
+    if (ipAllowlist.includes(val)) {
+      setCidrError('Already in the list');
+      return;
+    }
+    setIpAllowlist((prev) => [...prev, val]);
+    setNewCidr('');
+    setCidrError('');
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setSaved(false);
+    try {
+      const res = await fetch(`${apiBase}/api/enterprise/settings`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ data_region: dataRegion, ip_allowlist: ipAllowlist }),
+      });
+      if (res.ok) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const regionInfo = DATA_REGIONS.find((r) => r.value === dataRegion);
+
+  if (loading) {
+    return (
+      <div className="min-h-[20vh] flex items-center justify-center">
+        <Loader2 className="w-6 h-6 text-slate-400 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-white mb-1">Enterprise</h2>
+        <p className="text-slate-400 text-sm">Data residency, network access controls, and shadow AI monitoring.</p>
+      </div>
+
+      {/* Stats row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Data region</p>
+          <p className="mt-3 text-lg font-bold text-white">{regionInfo?.label ?? dataRegion}</p>
+          <span className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-medium">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            {regionInfo?.badge ?? 'Data residency active'}
+          </span>
+        </div>
+        <div className="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">IP allowlist</p>
+          <p className="mt-3 text-2xl font-bold text-white">{ipAllowlist.length}</p>
+          <p className="mt-1 text-sm text-slate-400">{ipAllowlist.length === 0 ? 'No restrictions — all IPs allowed' : 'CIDR ranges permitted'}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Unauthorised AI (30 days)</p>
+          <p className="mt-3 text-2xl font-bold text-white">{shadowAi?.total ?? '—'}</p>
+          <p className="mt-1 text-sm text-slate-400">{shadowAi ? `${shadowAi.blocked} blocked` : 'Shadow AI detection active'}</p>
+        </div>
+      </div>
+
+      {/* Data residency */}
+      <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-blue-500/10 rounded-xl"><Globe className="w-5 h-5 text-blue-400" /></div>
+          <div>
+            <h3 className="text-base font-semibold text-white">Data Residency</h3>
+            <p className="text-sm text-slate-400">Choose where your organisation's data is stored and processed.</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {DATA_REGIONS.map((r) => (
+            <button
+              key={r.value}
+              disabled={!isAdmin}
+              onClick={() => isAdmin && setDataRegion(r.value)}
+              className={`p-4 rounded-xl border text-left transition-all ${
+                dataRegion === r.value
+                  ? 'border-cyan-500/60 bg-cyan-500/10 text-white'
+                  : 'border-slate-700/50 bg-slate-800/60 text-slate-400 hover:border-slate-600'
+              } ${!isAdmin ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <p className="text-sm font-semibold">{r.label}</p>
+              <p className="text-xs text-slate-500 mt-1">{r.badge}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* IP allowlist */}
+      <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-amber-500/10 rounded-xl"><Shield className="w-5 h-5 text-amber-400" /></div>
+          <div>
+            <h3 className="text-base font-semibold text-white">IP Allowlist</h3>
+            <p className="text-sm text-slate-400">Restrict API access to specific IP addresses or CIDR ranges. Leave empty to allow all IPs.</p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          {ipAllowlist.map((cidr) => (
+            <div key={cidr} className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-700/40 border border-slate-700/50">
+              <span className="text-sm font-mono text-slate-200">{cidr}</span>
+              {isAdmin && (
+                <button
+                  onClick={() => setIpAllowlist((prev) => prev.filter((c) => c !== cidr))}
+                  className="text-slate-500 hover:text-red-400 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          ))}
+          {ipAllowlist.length === 0 && (
+            <p className="text-sm text-slate-500 italic px-1">No IP restrictions — all IPs can access the API.</p>
+          )}
+        </div>
+
+        {isAdmin && (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newCidr}
+              onChange={(e) => { setNewCidr(e.target.value); setCidrError(''); }}
+              onKeyDown={(e) => e.key === 'Enter' && addCidr()}
+              placeholder="203.0.113.0/24 or 10.0.0.1"
+              className="flex-1 bg-slate-700/60 border border-slate-600/50 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/60 font-mono"
+            />
+            <button
+              onClick={addCidr}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600/50 rounded-lg text-sm text-slate-200 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Add
+            </button>
+          </div>
+        )}
+        {cidrError && <p className="text-xs text-red-400">{cidrError}</p>}
+      </div>
+
+      {/* Shadow AI events */}
+      {shadowAi && shadowAi.total > 0 && (
+        <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-purple-500/10 rounded-xl"><Eye className="w-5 h-5 text-purple-400" /></div>
+            <div>
+              <h3 className="text-base font-semibold text-white">Unauthorised AI Activity (Last 30 Days)</h3>
+              <p className="text-sm text-slate-400">Direct calls to AI providers detected outside the Zapheit gateway.</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {Object.entries(shadowAi.by_provider).map(([provider, count]) => (
+              <div key={provider} className="rounded-xl bg-slate-700/40 border border-slate-700/50 p-3 text-center">
+                <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">{provider}</p>
+                <p className="text-xl font-bold text-white">{count}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Save */}
+      {isAdmin && (
+        <div className="flex justify-end">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-black font-semibold rounded-xl text-sm transition-colors"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+            {saving ? 'Saving…' : saved ? 'Saved' : 'Save changes'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

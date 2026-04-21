@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   User, Building2, Users, Bell, Shield,
   Save, ChevronRight, X, RefreshCw, Copy, Zap,
-  Sparkles, DollarSign, Mail, Edit3, Check, ImagePlus, MessageCircle
+  Sparkles, DollarSign, Mail, Edit3, Check, ImagePlus, MessageCircle, Globe
 } from 'lucide-react';
 import { toast } from '../../lib/toast';
 import { PageHero } from '../../components/dashboard/PageHero';
@@ -40,6 +40,10 @@ const SecuritySection = lazy(async () => {
   const mod = await import('./settings/SecuritySection');
   return { default: mod.SecuritySection };
 });
+const EnterpriseSection = lazy(async () => {
+  const mod = await import('./settings/EnterpriseSection');
+  return { default: mod.EnterpriseSection };
+});
 
 function SettingsSectionLoading() {
   return (
@@ -49,7 +53,7 @@ function SettingsSectionLoading() {
   );
 }
 
-const SETTINGS_TABS: SettingsTab[] = ['overview', 'workspace', 'team_access', 'alerts', 'security', 'billing_data', 'advanced'];
+const SETTINGS_TABS: SettingsTab[] = ['overview', 'workspace', 'team_access', 'alerts', 'security', 'billing_data', 'advanced', 'enterprise'];
 
 function normalizeSettingsTab(value: string | null | undefined): SettingsTab | null {
   if (!value) return null;
@@ -485,6 +489,10 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
     />
   );
 
+  const renderEnterprise = () => (
+    <EnterpriseSection userRole={user?.role} />
+  );
+
   const TAB_CONTENT: Record<SettingsTab, () => JSX.Element> = {
     overview: renderOverview,
     workspace: renderWorkspace,
@@ -493,6 +501,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
     security: renderSecurity,
     billing_data: renderOrganization,
     advanced: renderTools,
+    enterprise: renderEnterprise,
   };
 
   const tabItems: { id: SettingsTab; label: string; icon: React.ElementType; badge?: string }[] = [
@@ -503,6 +512,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false }: { onNav
     { id: 'security', label: 'Security', icon: Shield, badge: twoFactorEnabled ? undefined : '!' },
     { id: 'billing_data', label: 'Billing & Data', icon: DollarSign, badge: usageData && usageData.quota > 0 && usageData.used / usageData.quota >= 0.8 ? '!' : undefined },
     { id: 'advanced', label: 'Advanced', icon: Zap },
+    { id: 'enterprise', label: 'Enterprise', icon: Globe },
   ];
 
   const activeTabHasUnsavedChanges = activeTab === 'workspace'

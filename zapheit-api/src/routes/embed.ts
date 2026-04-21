@@ -9,6 +9,7 @@ import express, { Request, Response } from 'express';
 import { logger } from '../lib/logger';
 import { supabaseRest, eq } from '../lib/supabase-rest';
 import { auditLog } from '../lib/audit-logger';
+import { logShadowAiEvent, detectProvider } from '../services/shadow-ai';
 
 const router = express.Router();
 
@@ -128,7 +129,7 @@ router.post('/embed/proxy', async (req: Request, res: Response) => {
 
     const responseBody = await upstreamRes.text();
 
-    // Fire-and-forget audit log
+    // Fire-and-forget audit log + shadow AI event
     void auditLog.log({
       user_id: '',
       action: 'embed.proxy.request',
@@ -136,6 +137,18 @@ router.post('/embed/proxy', async (req: Request, res: Response) => {
       resource_id: originUrl,
       organization_id: orgId,
       metadata: { origin_url: originUrl, status: upstreamRes.status },
+    }).catch(() => {});
+
+    void logShadowAiEvent({
+      organization_id: orgId,
+      source_ip: req.ip,
+      user_agent: req.headers['user-agent'],
+      request_url: originUrl,
+      provider: detectProvider(originUrl),
+      request_method: 'POST',
+      request_size: req.headers['content-length'] ? parseInt(req.headers['content-length'], 10) : undefined,
+      blocked: false,
+      metadata: { proxied: true },
     }).catch(() => {});
 
     res.status(upstreamRes.status);

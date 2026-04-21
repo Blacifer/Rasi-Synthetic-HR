@@ -48,9 +48,11 @@ import tracesRoutes from './routes/traces';
 import paymentsRoutes from './routes/payments';
 import billingRoutes from './routes/billing';
 import embedRoutes from './routes/embed';
+import enterpriseSettingsRoutes from './routes/enterprise-settings';
 import { initializeObservability, shutdownObservability, tracingMiddleware } from './lib/observability';
 import { validateEnvironment } from './lib/env-validation';
 import { authenticateToken, authErrorHandler, checkOrgAccess } from './middleware/auth';
+import { enforceIpAllowlist } from './middleware/ipAllowlist';
 import { validateApiKey } from './middleware/api-key-validation';
 import { metricsMiddleware, getMetricsSnapshot } from './middleware/metrics';
 import { protectMutationsFromCsrf } from './middleware/request-security';
@@ -456,7 +458,10 @@ app.use((req, res, next) => {
     // Chain auth -> org isolation in a single middleware so the OAuth callback can remain public.
     return authenticateToken(req, res, (err?: any) => {
       if (err) return next(err);
-      return checkOrgAccess(req, res, next);
+      return checkOrgAccess(req, res, (err2?: any) => {
+        if (err2) return next(err2);
+        return enforceIpAllowlist(req, res, next);
+      });
     });
   }
   next();
@@ -488,6 +493,7 @@ app.use('/api/integrations', integrationsRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api', paymentsRoutes);
 app.use('/api', billingRoutes);
+app.use('/api', enterpriseSettingsRoutes);
 app.use('/', embedRoutes);
 app.use('/api', webhooksRoutes);
 app.use('/api/metrics', metricsRoutes);
