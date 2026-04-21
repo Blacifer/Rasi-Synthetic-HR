@@ -9,15 +9,15 @@
  */
 import posthog from 'posthog-js';
 
-const POSTHOG_KEY = (import.meta as any).env?.VITE_POSTHOG_KEY as string | undefined;
-const POSTHOG_HOST = (import.meta as any).env?.VITE_POSTHOG_HOST as string | undefined ?? 'https://app.posthog.com';
-
 let initialized = false;
 
 export function initAnalytics(): void {
-  if (initialized || !POSTHOG_KEY) return;
-  posthog.init(POSTHOG_KEY, {
-    api_host: POSTHOG_HOST,
+  // Read env vars lazily so this file is safe to import in Jest (no import.meta at module level)
+  const key = (import.meta as any).env?.VITE_POSTHOG_KEY as string | undefined;
+  const host = ((import.meta as any).env?.VITE_POSTHOG_HOST as string | undefined) ?? 'https://app.posthog.com';
+  if (initialized || !key) return;
+  posthog.init(key, {
+    api_host: host,
     capture_pageview: true,
     capture_pageleave: true,
     autocapture: false,

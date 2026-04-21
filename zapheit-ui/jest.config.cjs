@@ -9,10 +9,15 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
   moduleNameMapper: {
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+    // analytics.ts uses import.meta.env (Vite-only) — stub in Jest
+    'lib/analytics': '<rootDir>/src/__mocks__/analytics.ts',
+    'posthog-js': '<rootDir>/src/__mocks__/posthog-js.ts',
   },
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
     '!src/**/*.d.ts',
     '!src/**/index.ts',
+    // Vite-only files that use import.meta and cannot be instrumented by Jest/Istanbul
+    '!src/lib/analytics.ts',
   ],
 };
