@@ -1,6 +1,47 @@
 import { logger } from './logger';
 import { supabaseRest } from './supabase-rest';
 
+/**
+ * Strict event taxonomy for the append-only audit log.
+ * All callers should use these constants — free-form action strings are still
+ * accepted for backwards compatibility but new events must use this list.
+ */
+export const AUDIT_EVENTS = {
+  // Agents
+  AGENT_CREATED:             'agent.created',
+  AGENT_UPDATED:             'agent.updated',
+  AGENT_DELETED:             'agent.deleted',
+  AGENT_PAUSED:              'agent.paused',
+  AGENT_RESUMED:             'agent.resumed',
+  AGENT_PUBLISHED:           'agent.published',
+  // Approvals
+  APPROVAL_REQUESTED:        'approval.requested',
+  APPROVAL_APPROVED:         'approval.approved',
+  APPROVAL_REJECTED:         'approval.rejected',
+  APPROVAL_TIMED_OUT:        'approval.timed_out',
+  // Policies
+  POLICY_CREATED:            'policy.created',
+  POLICY_UPDATED:            'policy.updated',
+  POLICY_DELETED:            'policy.deleted',
+  POLICY_VIOLATED:           'policy.violated',
+  // Data / PII
+  DATA_PII_DETECTED:         'data.pii_detected',
+  DATA_EXPORTED:             'data.exported',
+  DATA_DELETED:              'data.deleted',
+  // Payments
+  PAYMENTS_ORDER_PAID:       'payments.order.paid',
+  PAYMENTS_PLAN_ACTIVATED:   'payments.plan.activated',
+  // Auth
+  AUTH_LOGIN:                'auth.login',
+  AUTH_LOGOUT:               'auth.logout',
+  AUTH_INVITE_SENT:          'auth.invite.sent',
+  AUTH_INVITE_ACCEPTED:      'auth.invite.accepted',
+  // Incidents
+  INCIDENT_CREATED:          'incident.created',
+  INCIDENT_RESOLVED:         'incident.resolved',
+  INCIDENT_ESCALATED:        'incident.escalated',
+} as const;
+
 interface AuditLogEntry {
   user_id: string;
   action: string;
