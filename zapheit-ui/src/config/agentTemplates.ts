@@ -58,6 +58,9 @@ export interface AgentTemplate {
   approvalDefault?: string;
   requiredSystems?: string[];
   samplePrompts?: string[];
+  certifications?: string[];   // e.g. ['DPDP', 'GDPR', 'ISO 42001', 'SEBI', 'RBI', 'HIPAA']
+  usedBy?: number;             // number of teams using this template
+  setupMinutes?: number;       // estimated setup time in minutes
 }
 
 export const AGENT_TEMPLATE_INDUSTRIES = [
@@ -91,6 +94,9 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     color: 'rose',
     roi: 'Reduces benefits-related HR tickets by 60%',
     complexity: 'Basic',
+    certifications: ['DPDP', 'ISO 42001'],
+    usedBy: 291,
+    setupMinutes: 5,
   },
   {
     id: 'hr-onboarding',
@@ -116,6 +122,9 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
       'Create a day-one checklist for a new engineer joining next Monday.',
       'Draft the access requests needed for a sales manager in Mumbai.',
     ],
+    certifications: ['DPDP', 'ISO 42001'],
+    usedBy: 847,
+    setupMinutes: 10,
   },
   {
     id: 'hr-payroll',
@@ -132,6 +141,9 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     color: 'amber',
     roi: 'Handles 80% of payroll queries without HR intervention',
     complexity: 'Basic',
+    certifications: ['DPDP', 'RBI'],
+    usedBy: 423,
+    setupMinutes: 15,
   },
   {
     id: 'hr-leave',
@@ -148,6 +160,9 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     color: 'teal',
     roi: 'Saves HR 10+ hours per week on leave admin',
     complexity: 'Basic',
+    certifications: ['DPDP'],
+    usedBy: 318,
+    setupMinutes: 5,
   },
   {
     id: 'hr-policy',
@@ -173,6 +188,9 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
       'What is our reimbursement policy for home internet?',
       'When does remote work need manager approval?',
     ],
+    certifications: ['DPDP', 'ISO 42001'],
+    usedBy: 612,
+    setupMinutes: 5,
   },
   // ── Broader domain templates ───────────────────────────────────────────────
   {
@@ -197,6 +215,9 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
       'Where is order #84219 and when will it arrive?',
       'Can you process a refund for a damaged shipment?',
     ],
+    certifications: ['DPDP', 'ISO 42001'],
+    usedBy: 1247,
+    setupMinutes: 8,
   },
   {
     id: '2',
@@ -220,6 +241,9 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
       'Qualify this inbound lead and draft a follow-up email.',
       'Prepare a demo handoff summary for the account executive.',
     ],
+    certifications: ['ISO 42001'],
+    usedBy: 534,
+    setupMinutes: 12,
   },
   {
     id: '3',
@@ -257,6 +281,9 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
       'Summarize the termination clause risks in this vendor agreement.',
       'Highlight non-standard indemnity language that needs counsel review.',
     ],
+    certifications: ['GDPR', 'DPDP', 'ISO 42001'],
+    usedBy: 189,
+    setupMinutes: 20,
   },
   {
     id: '5',
@@ -280,6 +307,9 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
       'Prepare a summary of failed payout attempts from the last 24 hours.',
       'Draft the analyst notes for this flagged transaction.',
     ],
+    certifications: ['RBI', 'SEBI', 'DPDP'],
+    usedBy: 276,
+    setupMinutes: 15,
   },
   {
     id: '6',
@@ -352,6 +382,9 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     color: 'rose',
     roi: 'Reduces compliance risk by 95%',
     complexity: 'Advanced',
+    certifications: ['RBI', 'SEBI', 'DPDP', 'ISO 42001'],
+    usedBy: 163,
+    setupMinutes: 20,
   },
   {
     id: '11',

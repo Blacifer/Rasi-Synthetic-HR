@@ -306,8 +306,12 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-white whitespace-nowrap">{t.name}</p>
-                    {meta && (
-                      <p className="text-[11px] text-slate-500">Used by {meta.teams.toLocaleString()} teams · ~{meta.setupMins} min setup</p>
+                    {(t.usedBy || t.setupMinutes) && (
+                      <p className="text-[11px] text-slate-500">
+                        {t.usedBy ? `${t.usedBy.toLocaleString()} teams` : ''}
+                        {t.usedBy && t.setupMinutes ? ' · ' : ''}
+                        {t.setupMinutes ? `~${t.setupMinutes} min` : ''}
+                      </p>
                     )}
                   </div>
                 </button>
@@ -389,6 +393,16 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
                   </div>
                 )}
 
+                {template.certifications && template.certifications.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {template.certifications.map((cert) => (
+                      <span key={cert} className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[10px] font-semibold">
+                        <CheckCircle2 className="w-2.5 h-2.5" />{cert}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 <div className="flex flex-wrap gap-2 mb-4">
                   {template.features.slice(0, 3).map((feature, idx) => (
                     <span key={idx} className="px-2 py-1 bg-slate-700 rounded text-xs text-slate-300">
@@ -405,15 +419,13 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
                 <div className="flex-1"></div>
 
                 {/* Social proof + setup time */}
-                {(() => {
-                  const meta = TEMPLATE_META[template.id];
-                  if (!meta) return null;
-                  return (
-                    <p className="mb-3 text-[11px] text-slate-500">
-                      Used by {meta.teams.toLocaleString()} teams · ~{meta.setupMins} min to set up
-                    </p>
-                  );
-                })()}
+                {(template.usedBy || template.setupMinutes) && (
+                  <p className="mb-3 text-[11px] text-slate-500">
+                    {template.usedBy ? `Used by ${template.usedBy.toLocaleString()} teams` : ''}
+                    {template.usedBy && template.setupMinutes ? ' · ' : ''}
+                    {template.setupMinutes ? `~${template.setupMinutes} min to set up` : ''}
+                  </p>
+                )}
 
                 {/* Connectors required */}
                 {template.requiredSystems && template.requiredSystems.length > 0 && (
