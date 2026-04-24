@@ -35,7 +35,20 @@ interface SidebarProps {
   orgName?: string | null;
   email?: string | null;
   role?: string;
+  showTechTerms?: boolean;
 }
+
+const TECH_LABELS: Record<string, string> = {
+  'agents':          'Fleet Management',
+  'apps':            'Connectors',
+  'agent-studio':    'Agent Studio',
+  'action-policies': 'Action Policies',
+  'approvals':       'HITL Approvals',
+  'incidents':       'Incident Detection',
+  'audit-log':       'Audit Log',
+  'costs':           'Cost Tracking',
+  'api-webhooks':    'API Keys',
+};
 
 type NavItem = {
   id: string;
@@ -186,6 +199,11 @@ function NavBtn({
   );
 }
 
+function applyTechLabel(item: NavItem, showTech: boolean): NavItem {
+  if (!showTech || !TECH_LABELS[item.id]) return item;
+  return { ...item, label: TECH_LABELS[item.id] };
+}
+
 export function Sidebar({
   currentPage,
   onNavigate,
@@ -200,6 +218,7 @@ export function Sidebar({
   orgName,
   email,
   role,
+  showTechTerms = false,
 }: SidebarProps) {
   const [expanded, setExpanded] = useState(true);
   const [openGroup, setOpenGroup] = useState<string | null>(() => {
@@ -211,7 +230,10 @@ export function Sidebar({
 
   const coreWithBadge: NavItem[] = CORE_ITEMS
     .filter((item) => isVisible(item.id, role))
-    .map((item) => item.id === 'incidents' ? { ...item, badge: incidentBadge } : item);
+    .map((item) => {
+      const withBadge = item.id === 'incidents' ? { ...item, badge: incidentBadge } : item;
+      return applyTechLabel(withBadge, showTechTerms);
+    });
 
   return (
     <Tooltip.Provider>
@@ -324,7 +346,9 @@ export function Sidebar({
         {/* Grouped nav */}
         <div className={cn('flex-1 overflow-y-auto space-y-0.5', expanded ? 'px-2' : 'px-1.5')}>
           {GROUPS.map((group) => {
-            const visibleItems = group.items.filter((i) => isVisible(i.id, role));
+            const visibleItems = group.items
+              .filter((i) => isVisible(i.id, role))
+              .map((i) => applyTechLabel(i, showTechTerms));
             if (visibleItems.length === 0) return null;
             const isGroupOpen = openGroup === group.label;
             const hasActive = visibleItems.some((i) => i.id === currentPage);

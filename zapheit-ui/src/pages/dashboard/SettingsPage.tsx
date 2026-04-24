@@ -61,7 +61,7 @@ function normalizeSettingsTab(value: string | null | undefined): SettingsTab | n
 }
 
 // ==================== MAIN COMPONENT ====================
-export default function SettingsPage({ onNavigate, isDemoMode = false, isLightMode = false, onToggleTheme }: { onNavigate?: (page: string) => void; isDemoMode?: boolean; isLightMode?: boolean; onToggleTheme?: () => void }) {
+export default function SettingsPage({ onNavigate, isDemoMode = false, isLightMode = false, onToggleTheme, showTechTerms = false, onToggleTechTerms }: { onNavigate?: (page: string) => void; isDemoMode?: boolean; isLightMode?: boolean; onToggleTheme?: () => void; showTechTerms?: boolean; onToggleTechTerms?: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const pathSuffix = location.pathname.replace(/^.*\/dashboard\/settings\/?/, '');
@@ -391,7 +391,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false, isLightMo
             </div>
             <span className="text-sm text-white">{memberSince ?? '…'}</span>
           </div>
-          <div className="flex items-center justify-between py-3">
+          <div className="flex items-center justify-between py-3 border-b border-slate-700/50">
             <div>
               <p className="text-sm font-medium text-slate-300">Appearance</p>
               <p className="text-xs text-slate-500 mt-0.5">Choose light or dark interface</p>
@@ -402,6 +402,20 @@ export default function SettingsPage({ onNavigate, isDemoMode = false, isLightMo
             >
               {isLightMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
               {isLightMode ? 'Dark mode' : 'Light mode'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="text-sm font-medium text-slate-300">Show technical terms</p>
+              <p className="text-xs text-slate-500 mt-0.5">Use original labels like "Audit Log", "Action Policies", "Fleet Management"</p>
+            </div>
+            <button
+              onClick={onToggleTechTerms}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${showTechTerms ? 'bg-cyan-500' : 'bg-slate-700'}`}
+              role="switch"
+              aria-checked={showTechTerms}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showTechTerms ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>
         </div>

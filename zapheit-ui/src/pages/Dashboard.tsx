@@ -821,6 +821,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
           orgName={user?.organizationName}
           email={user?.email}
           role={role}
+          showTechTerms={showTechTerms}
         />
 
         {/* Notification Panel */}
@@ -1228,7 +1229,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="webhooks" element={<Navigate to="/dashboard/api-webhooks?tab=webhooks" replace />} />
                   <Route path="settings/*" element={
                     <SectionErrorBoundary fallbackMessage="Settings failed to load">
-                      <SettingsPage onNavigate={navigateTo} isDemoMode={!!isDemoMode} isLightMode={isLightMode} onToggleTheme={() => setIsLightMode((v: boolean) => !v)} />
+                      <SettingsPage onNavigate={navigateTo} isDemoMode={!!isDemoMode} isLightMode={isLightMode} onToggleTheme={() => setIsLightMode((v: boolean) => !v)} showTechTerms={showTechTerms} onToggleTechTerms={() => setShowTechTerms((v: boolean) => !v)} />
                     </SectionErrorBoundary>
                   } />
                   <Route path="developer" element={
