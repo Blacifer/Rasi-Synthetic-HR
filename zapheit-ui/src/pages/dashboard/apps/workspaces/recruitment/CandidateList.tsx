@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Search, Loader2, User, MapPin, Briefcase, ExternalLink } from 'lucide-react';
+import { Search, Loader2, User, Users, MapPin, Briefcase, ExternalLink } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
