@@ -120,12 +120,9 @@ export default function SignUpPage({ onSignIn, onBack }: SignUpPageProps) {
           <div className="surface-raised rounded-2xl p-4 w-48 opacity-30 absolute bottom-1/3 right-1/4 animate-float delay-100" style={{ height: 60 }} />
         </div>
         <div className="relative z-10 text-center px-12">
-          <div className="flex items-center justify-center gap-3 mb-6">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.20)] flex items-center justify-center">
-              <Brain className="w-8 h-8 text-cyan-300" />
-            </div>
+          <div className="flex items-center justify-center mb-6">
+            <img src="/logo-dark.png" alt="Zapheit" className="h-28 w-auto object-contain rounded-2xl" />
           </div>
-          <h1 className="gradient-text text-4xl font-bold mb-3">Zapheit</h1>
           <p className="text-slate-400 text-base leading-relaxed">AI Agent Control Plane<br />Govern every agent, every conversation</p>
         </div>
       </div>
@@ -140,14 +137,8 @@ export default function SignUpPage({ onSignIn, onBack }: SignUpPageProps) {
 
           <div className="card-surface p-8">
             {/* Logo — visible on mobile only */}
-            <div className="flex items-center gap-3 mb-8 lg:hidden">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/20 shadow-[0_0_12px_rgba(34,211,238,0.15)] flex items-center justify-center">
-                <Brain className="w-7 h-7 text-cyan-300" />
-              </div>
-              <div>
-                <span className="text-xl font-bold gradient-text">Zapheit</span>
-                <span className="text-xs text-blue-300 block -mt-1">AI Workforce Manager</span>
-              </div>
+            <div className="mb-8 lg:hidden">
+              <img src="/logo-dark.png" alt="Zapheit" className="h-12 w-auto object-contain rounded-xl" />
             </div>
 
             <h1 className="text-2xl font-bold text-white mb-2">Create your account</h1>

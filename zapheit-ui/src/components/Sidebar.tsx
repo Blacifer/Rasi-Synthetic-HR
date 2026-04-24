@@ -258,16 +258,11 @@ export function Sidebar({
         {/* Logo + toggle */}
         <div className={cn('flex items-center mb-5 px-3 pt-4', expanded ? 'justify-between' : 'justify-center')}>
           {expanded ? (
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500/25 to-blue-500/25 border border-cyan-500/25 flex items-center justify-center shadow-[0_0_16px_rgba(34,211,238,0.20)]"
-                style={{ backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
-                <Brain className="w-5 h-5 text-cyan-300" />
-              </div>
-              <div>
-                <span className="text-base font-bold gradient-text leading-none">Zapheit</span>
-                <span className="text-[10px] text-slate-500 block leading-none mt-0.5">AI Workforce Manager</span>
-              </div>
-            </div>
+            <img
+              src={showTechTerms || !isLightMode ? '/logo-dark.png' : '/logo-light.png'}
+              alt="Zapheit"
+              className="h-10 w-auto object-contain rounded-lg"
+            />
           ) : (
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500/25 to-blue-500/25 border border-cyan-500/25 flex items-center justify-center shadow-[0_0_16px_rgba(34,211,238,0.20)]"
               style={{ backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>

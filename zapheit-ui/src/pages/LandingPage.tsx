@@ -611,14 +611,8 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       }`}>
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/20 flex items-center justify-center shadow-[0_0_16px_rgba(34,211,238,0.18)]">
-                <Brain className="w-7 h-7 text-cyan-300" />
-              </div>
-              <div>
-                <span className="text-xl font-bold gradient-text">Zapheit</span>
-                <span className="text-xs text-slate-500 block -mt-1">AI Workforce Manager</span>
-              </div>
+            <div className="flex items-center">
+              <img src="/logo-dark.png" alt="Zapheit" className="h-12 w-auto object-contain rounded-lg" />
             </div>
 
             {/* Desktop nav links */}
@@ -1271,11 +1265,8 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
         <div className="max-w-7xl mx-auto">
           <div className="grid md:grid-cols-4 gap-6 md:gap-8 mb-8 md:mb-12">
             <div>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
-                  <Brain className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-lg font-bold text-white">Zapheit</span>
+              <div className="mb-4">
+                <img src="/logo-dark.png" alt="Zapheit" className="h-12 w-auto object-contain rounded-lg" />
               </div>
               <p className="text-sm text-slate-400">The governance layer for your AI workforce.</p>
             </div>
