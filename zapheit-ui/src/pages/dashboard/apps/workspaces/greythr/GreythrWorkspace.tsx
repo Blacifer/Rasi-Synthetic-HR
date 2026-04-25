@@ -388,8 +388,8 @@ export default function GreythrWorkspace() {
     setLoading((p) => ({ ...p, employees: true }));
     try {
       const res = await api.unifiedConnectors.executeAction('greythr', 'list_employees', { limit: 50 });
-      if (res.success && res.data?.employees) {
-        setEmployees(res.data.employees);
+      if (res.success && res.data?.data?.employees) {
+        setEmployees(res.data.data.employees);
         setConnectionStatus('connected');
       } else {
         setEmployees(MOCK_EMPLOYEES);
@@ -407,7 +407,7 @@ export default function GreythrWorkspace() {
     setLoading((p) => ({ ...p, leave: true }));
     try {
       const res = await api.unifiedConnectors.executeAction('greythr', 'list_leave_requests', {});
-      if (res.success && res.data?.requests) setLeaves(res.data.requests);
+      if (res.success && res.data?.data?.requests) setLeaves(res.data.data.requests);
       else setLeaves(MOCK_LEAVES);
     } catch {
       setLeaves(MOCK_LEAVES);
@@ -420,7 +420,7 @@ export default function GreythrWorkspace() {
     setLoading((p) => ({ ...p, payroll: true }));
     try {
       const res = await api.unifiedConnectors.executeAction('greythr', 'get_payroll_summary', {});
-      if (res.success && res.data) setPayroll(res.data);
+      if (res.success && res.data?.data) setPayroll(res.data.data as PayrollSummary);
       else setPayroll(MOCK_PAYROLL);
     } catch {
       setPayroll(MOCK_PAYROLL);
@@ -442,7 +442,7 @@ export default function GreythrWorkspace() {
         connector_action: 'approve_leave_request',
         payload: { leave_id: id },
         risk_level: 'low',
-      } as Parameters<typeof api.approvals.create>[0]);
+      } as unknown as Parameters<typeof api.approvals.create>[0]);
       setLeaves((prev) => prev.map((l) => l.id === id ? { ...l, status: 'approved' as const } : l));
       toast.success(`Leave approved for ${leave.employee}`);
     } catch {

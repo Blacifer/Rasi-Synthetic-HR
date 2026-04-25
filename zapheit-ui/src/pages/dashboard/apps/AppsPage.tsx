@@ -1088,15 +1088,13 @@ function CredForm({
     setTestState('testing');
     setTestError('');
     try {
-      const res = await authenticatedFetch(`/api/marketplace/apps/${app.appId}/test`, {
+      const res = await authenticatedFetch<{ success: boolean; message?: string }>(`/marketplace/apps/${app.appId}/test`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ credentials: values }),
       });
-      const data = await res.json().catch(() => ({ success: false }));
-      if (!res.ok || data.success === false) {
+      if (!res.success || res.data?.success === false) {
         setTestState('fail');
-        setTestError(data.message || "That API key didn't work. Double-check it in your app settings and try again.");
+        setTestError((res.data as any)?.message || res.error || "That API key didn't work. Double-check it in your app settings and try again.");
         return;
       }
       setTestState('ok');
@@ -1274,7 +1272,7 @@ function StackCard({ stack, onSelect }: { stack: AppStack; onSelect: () => void 
       className="shrink-0 w-56 rounded-2xl border border-white/8 bg-white/[0.03] hover:bg-white/[0.07] p-4 text-left transition-all hover:border-white/15 group"
     >
       <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3" style={{ background: `${stack.colorHex}22`, border: `1px solid ${stack.colorHex}33` }}>
-        <stack.Icon className="w-4 h-4" style={{ color: stack.colorHex }} />
+        <stack.Icon className="w-4 h-4" color={stack.colorHex} />
       </div>
       <p className="text-sm font-semibold text-white mb-1">{stack.name}</p>
       <p className="text-[11px] text-slate-400 leading-relaxed mb-3">{stack.description}</p>

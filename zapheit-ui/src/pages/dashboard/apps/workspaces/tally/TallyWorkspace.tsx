@@ -497,9 +497,9 @@ export default function TallyWorkspace() {
         api.unifiedConnectors.executeAction('tally', 'get_gst_summary', {}),
       ]);
 
-      setTransactions(txRes.status === 'fulfilled' && txRes.value?.success && txRes.value.data?.transactions ? txRes.value.data.transactions : MOCK_TRANSACTIONS);
-      setInvoices(invRes.status === 'fulfilled' && invRes.value?.success && invRes.value.data?.invoices ? invRes.value.data.invoices : MOCK_INVOICES);
-      setGst(gstRes.status === 'fulfilled' && gstRes.value?.success && gstRes.value.data ? [gstRes.value.data] : MOCK_GST);
+      setTransactions(txRes.status === 'fulfilled' && txRes.value?.success && txRes.value.data?.data?.transactions ? txRes.value.data.data.transactions : MOCK_TRANSACTIONS);
+      setInvoices(invRes.status === 'fulfilled' && invRes.value?.success && invRes.value.data?.data?.invoices ? invRes.value.data.data.invoices : MOCK_INVOICES);
+      setGst(gstRes.status === 'fulfilled' && gstRes.value?.success && gstRes.value.data?.data ? [gstRes.value.data.data as GSTSummary] : MOCK_GST);
       setConnectionStatus('connected');
     } catch {
       setTransactions(MOCK_TRANSACTIONS);
@@ -526,7 +526,7 @@ export default function TallyWorkspace() {
         connector_action: 'approve_payment',
         payload: { approval_id: id, amount: item.amount },
         risk_level: item.amount > 100000 ? 'high' : 'medium',
-      } as Parameters<typeof api.approvals.create>[0]);
+      } as unknown as Parameters<typeof api.approvals.create>[0]);
       setPendingApprovals((prev) => prev.filter((p) => p.id !== id));
       toast.success('Approval request created — your manager will be notified');
     } catch {
