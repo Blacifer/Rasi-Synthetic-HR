@@ -18,6 +18,7 @@ export type IntegrationCategory =
   | 'PRODUCTIVITY'
   | 'COLLABORATION'
   | 'IAM'
+  | 'DEVOPS'
   | 'OTHER';
 
 export type IntegrationAuthType = 'oauth2' | 'api_key' | 'client_credentials';

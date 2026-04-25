@@ -909,6 +909,7 @@ async function buildOAuthAuthorizeUrl(params: {
   else if (service === 'salesforce') clientIdEnv = 'SALESFORCE_CLIENT_ID';
   else if (service === 'intercom') clientIdEnv = 'INTERCOM_CLIENT_ID';
   else if (service === 'quickbooks') clientIdEnv = 'QUICKBOOKS_CLIENT_ID';
+  else if (service === 'github') clientIdEnv = 'GITHUB_CLIENT_ID';
   else throw new Error('OAuth provider not implemented');
 
   const clientId = process.env[clientIdEnv];
@@ -3011,6 +3012,9 @@ router.get('/oauth/callback/:service', async (req, res) => {
       } else if (service === 'quickbooks') {
         clientIdEnv = 'QUICKBOOKS_CLIENT_ID';
         clientSecretEnv = 'QUICKBOOKS_CLIENT_SECRET';
+      } else if (service === 'github') {
+        clientIdEnv = 'GITHUB_CLIENT_ID';
+        clientSecretEnv = 'GITHUB_CLIENT_SECRET';
       } else {
         throw new Error('OAuth provider not implemented');
       }
@@ -3027,6 +3031,14 @@ router.get('/oauth/callback/:service', async (req, res) => {
           redirect_uri: redirectUri,
           code,
         }, { Authorization: `Basic ${basic}` });
+      } else if (service === 'github') {
+        // GitHub returns form-encoded by default; request JSON explicitly.
+        token = await postForm(tokenUrl, {
+          client_id: clientId,
+          client_secret: clientSecret!,
+          redirect_uri: redirectUri,
+          code,
+        }, { Accept: 'application/json' });
       } else {
         token = await postForm(tokenUrl, {
           grant_type: 'authorization_code',

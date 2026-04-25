@@ -688,6 +688,36 @@ export const PHASE3_INTEGRATIONS: IntegrationSpec[] = [
 
 export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
   {
+    id: 'github',
+    name: 'GitHub',
+    category: 'DEVOPS',
+    description: 'GitHub OAuth integration. Read and manage repos, issues, pull requests, and CI/CD workflows.',
+    authType: 'oauth2',
+    tags: ['DEVOPS', 'AI-READY'],
+    status: 'READY',
+    color: '#24292e',
+    priority: 2,
+    oauthConfig: {
+      authorizationUrl: 'https://github.com/login/oauth/authorize',
+      tokenUrl: 'https://github.com/login/oauth/access_token',
+      scopes: ['repo', 'read:user', 'read:org'],
+      redirectPath: `${API_CALLBACK_BASE}/github`,
+    },
+    endpoints: {
+      repos: { method: 'GET', path: '/user/repos' },
+      issues: { method: 'GET', path: '/repos/{owner}/{repo}/issues' },
+      pulls: { method: 'GET', path: '/repos/{owner}/{repo}/pulls' },
+    },
+    capabilities: {
+      reads: ['devops.repos', 'devops.issues', 'devops.pull_requests'],
+      writes: [
+        { id: 'devops.issue.create', label: 'Create issue', risk: 'medium' },
+        { id: 'devops.issue.comment', label: 'Add comment to issue', risk: 'low' },
+        { id: 'devops.pr.merge', label: 'Merge pull request', risk: 'high' },
+      ],
+    },
+  },
+  {
     id: 'zendesk',
     name: 'Zendesk',
     category: 'SUPPORT',

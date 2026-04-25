@@ -48,6 +48,7 @@ import tracesRoutes from './routes/traces';
 import paymentsRoutes from './routes/payments';
 import billingRoutes from './routes/billing';
 import embedRoutes from './routes/embed';
+import contactRoutes from './routes/contact';
 import enterpriseSettingsRoutes from './routes/enterprise-settings';
 import ssoRoutes from './routes/sso';
 import whiteLabelRoutes from './routes/white-label';
@@ -404,6 +405,9 @@ app.use('/portal', portalRoutes);
 
 // Public playbook API endpoint (API key auth — no user JWT required)
 app.post('/public/playbooks/:slug', validateApiKey, handlePublicPlaybookRun);
+
+// Public contact-lead capture (landing page ROI calculator, no auth required)
+app.use('/', contactRoutes);
 
 // Public API-key gateway routes (OpenAI-compatible)
 app.use('/v1', gatewayRoutes);

@@ -35,6 +35,7 @@ const getProvisionUrl = () => {
 
 // Auth helper functions
 export const authHelpers = {
+  // Intentional direct read — RLS-protected, read-only, latency-critical auth path.
   getWorkspaceProfile: async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -280,6 +281,23 @@ export const authHelpers = {
   },
 };
 
+/*
+ * INTENTIONAL DIRECT READS — P3-11 Dual Data Access Audit
+ *
+ * The five reads below query Supabase directly from the UI (bypassing the
+ * backend API).  This is intentional and safe because:
+ *
+ *  1. All queries are READ-ONLY — no INSERT / UPDATE / DELETE.
+ *  2. Every table has Row-Level Security (RLS) enabled, so Supabase will only
+ *     return rows that belong to the authenticated user's organisation.
+ *  3. The Supabase anon key is safe to ship in the browser; it grants zero
+ *     privilege beyond what RLS explicitly permits.
+ *  4. These paths are latency-critical (initial dashboard render) — going
+ *     through the backend API would add an unnecessary round-trip.
+ *
+ *  ALL WRITES must go through the backend API (not direct Supabase calls).
+ *  If you need to add a write here, route it through a backend route instead.
+ */
 // Data query helpers
 export const dataHelpers = {
   // Get all agents for org

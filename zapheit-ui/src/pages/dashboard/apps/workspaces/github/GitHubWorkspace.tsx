@@ -245,8 +245,13 @@ export default function GitHubWorkspace() {
           <EmptyState
             type="disconnected"
             title="GitHub not connected"
-            description="Connect GitHub from the Apps page to use this workspace."
-            action={{ label: 'Go to Apps', onClick: () => navigate('/dashboard/apps') }}
+            description="Connect GitHub via OAuth to read repos, issues, and pull requests."
+            action={{
+              label: 'Connect GitHub with OAuth',
+              onClick: () => {
+                window.location.href = api.integrations.getOAuthAuthorizeUrl('github', window.location.href);
+              },
+            }}
           />
         </div>
       ) : activeTab === 'repos' ? (

@@ -1318,9 +1318,9 @@ export async function validateProviderConnection(
       };
     }
     case 'github': {
-      const personalAccessToken = credentials.personalAccessToken?.trim();
+      const personalAccessToken = (credentials.personalAccessToken || credentials.access_token)?.trim();
       if (!personalAccessToken) {
-        return { valid: false, error: 'GitHub Personal Access Token is required' };
+        return { valid: false, error: 'GitHub Personal Access Token or OAuth token is required' };
       }
 
       const response = await fetchWithTimeout('https://api.github.com/user', {
