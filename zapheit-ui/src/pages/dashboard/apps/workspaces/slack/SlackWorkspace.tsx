@@ -278,7 +278,6 @@ export default function SlackWorkspace() {
             onSelect={handleSelectChannel}
             loading={loadingChannels}
           />
-          </div>
         </div>
       ) : activeTab === 'messages' ? (
         <div className="flex-1 flex flex-col overflow-hidden">
