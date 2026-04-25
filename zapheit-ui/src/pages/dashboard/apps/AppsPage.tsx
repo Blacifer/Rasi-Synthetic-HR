@@ -1626,6 +1626,7 @@ function AppCard({
   onDisconnect,
   onOpenWorkspace,
   onRequestAccess,
+  onNavigate,
 }: {
   app: AppDef;
   status: ConnStatus;
