@@ -208,6 +208,18 @@ export const dashboardApi = {
   },
 };
 
+export const sessionRecordingApi = {
+  async get(): Promise<ApiResponse<{ enabled: boolean; retention_days: number }>> {
+    return authenticatedFetch('/organizations/session-recording', { method: 'GET' });
+  },
+  async update(patch: { enabled?: boolean; retention_days?: number }): Promise<ApiResponse<{ enabled?: boolean; retention_days?: number }>> {
+    return authenticatedFetch('/organizations/session-recording', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  },
+};
+
 export const apiKeysApi = {
   async list(): Promise<ApiResponse<ApiKeyRecord[]>> {
     return authenticatedFetch('/api-keys', { method: 'GET' });

@@ -111,6 +111,13 @@ export const policiesApi = {
       body: JSON.stringify({ yaml_source: yamlSource, rules, change_note: changeNote }),
     });
   },
+
+  async nlToPolicy(rule: string): Promise<ApiResponse<{ yaml: string; policy: { name: string; description?: string; enforcement_level: string; rules: unknown[] } }>> {
+    return authenticatedFetch('/policies/nl-to-policy', {
+      method: 'POST',
+      body: JSON.stringify({ rule }),
+    });
+  },
 };
 
 /**

@@ -18,6 +18,7 @@ export {
   playbooksApi,
   actionPoliciesApi,
   synthesizedRulesApi,
+  sessionRecordingApi,
 } from './platform';
 export { marketplaceApi } from './marketplace';
 export { approvalsApi } from './approvals';
@@ -89,6 +90,7 @@ import {
   playbooksApi,
   actionPoliciesApi,
   synthesizedRulesApi,
+  sessionRecordingApi,
 } from './platform';
 import { marketplaceApi } from './marketplace';
 import { approvalsApi } from './approvals';
@@ -146,6 +148,7 @@ export const api = {
   playbooks: playbooksApi,
   actionPolicies: actionPoliciesApi,
   synthesizedRules: synthesizedRulesApi,
+  sessionRecording: sessionRecordingApi,
   marketplace: marketplaceApi,
   approvals: approvalsApi,
   alertChannels: alertChannelsApi,

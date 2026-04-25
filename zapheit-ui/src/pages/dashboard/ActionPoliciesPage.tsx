@@ -559,6 +559,9 @@ export default function ActionPoliciesPage() {
   const [openApiChecked, setOpenApiChecked] = useState<Set<string>>(new Set());
   const [nlInput, setNlInput] = useState('');
   const [nlPreview, setNlPreview] = useState<Partial<Editor> | null>(null);
+  const [nlGenerating, setNlGenerating] = useState(false);
+  const [nlYaml, setNlYaml] = useState<{ yaml: string; name: string; enforcement_level: string } | null>(null);
+  const [nlCreating, setNlCreating] = useState(false);
   const [editor, setEditor] = useState<Editor>({
     service: 'internal',
     action: 'support.ticket.create',
@@ -925,7 +928,7 @@ export default function ActionPoliciesPage() {
             ) : null}
           </div>
 
-          {/* Plain-English policy builder */}
+          {/* Plain-English policy builder — AI-powered */}
           <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.04] p-4 space-y-3">
             <label className="text-xs font-semibold text-cyan-300 flex items-center gap-1.5">
               <BrainCircuit className="w-3.5 h-3.5" />
@@ -934,22 +937,87 @@ export default function ActionPoliciesPage() {
             <div className="flex gap-2">
               <input
                 value={nlInput}
-                onChange={(e) => { setNlInput(e.target.value); setNlPreview(null); }}
-                onKeyDown={(e) => { if (e.key === 'Enter') { const p = parseNaturalLanguagePolicy(nlInput); setNlPreview(p); } }}
+                onChange={(e) => { setNlInput(e.target.value); setNlPreview(null); setNlYaml(null); }}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter' && nlInput.trim() && !nlGenerating) {
+                    setNlGenerating(true);
+                    setNlYaml(null);
+                    const res = await api.policies.nlToPolicy(nlInput.trim());
+                    setNlGenerating(false);
+                    if (res.success && res.data) {
+                      setNlYaml({ yaml: res.data.yaml, name: res.data.policy.name, enforcement_level: res.data.policy.enforcement_level });
+                    } else {
+                      const fallback = parseNaturalLanguagePolicy(nlInput);
+                      setNlPreview(fallback);
+                      toast.error(res.error || 'AI generation failed — showing keyword match instead');
+                    }
+                  }
+                }}
                 placeholder="e.g. Require admin approval before deleting any data"
                 className="flex-1 rounded-lg border border-white/[0.08] bg-slate-900/60 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-cyan-500/50"
               />
               <button
-                onClick={() => { const p = parseNaturalLanguagePolicy(nlInput); setNlPreview(p); }}
-                className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 transition-colors"
+                disabled={nlGenerating || !nlInput.trim()}
+                onClick={async () => {
+                  if (!nlInput.trim() || nlGenerating) return;
+                  setNlGenerating(true);
+                  setNlYaml(null);
+                  setNlPreview(null);
+                  const res = await api.policies.nlToPolicy(nlInput.trim());
+                  setNlGenerating(false);
+                  if (res.success && res.data) {
+                    setNlYaml({ yaml: res.data.yaml, name: res.data.policy.name, enforcement_level: res.data.policy.enforcement_level });
+                  } else {
+                    const fallback = parseNaturalLanguagePolicy(nlInput);
+                    setNlPreview(fallback);
+                    toast.error(res.error || 'AI generation failed — showing keyword match instead');
+                  }
+                }}
+                className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 transition-colors disabled:opacity-40"
               >
-                Preview
+                {nlGenerating ? <><span className="w-3 h-3 border-2 border-cyan-400/40 border-t-cyan-400 rounded-full animate-spin" /></> : 'Generate'}
               </button>
             </div>
-            {nlPreview && (
+            {nlYaml && (
+              <div className="rounded-lg border border-emerald-500/20 bg-slate-900/60 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-emerald-300">{nlYaml.name}</p>
+                    <p className="text-[10px] text-slate-500 capitalize mt-0.5">Enforcement: {nlYaml.enforcement_level}</p>
+                  </div>
+                  <button
+                    disabled={nlCreating}
+                    onClick={async () => {
+                      setNlCreating(true);
+                      const res = await api.policies.createPolicyPack({
+                        name: nlYaml.name,
+                        description: `Generated from: "${nlInput}"`,
+                        policy_type: 'custom',
+                        rules: [],
+                        enforcement_level: nlYaml.enforcement_level,
+                      });
+                      setNlCreating(false);
+                      if (res.success) {
+                        toast.success(`Policy "${nlYaml.name}" created — find it in the YAML Policies tab`);
+                        setNlYaml(null);
+                        setNlInput('');
+                      } else {
+                        toast.error(res.error || 'Failed to create policy');
+                      }
+                    }}
+                    className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors disabled:opacity-40"
+                  >
+                    {nlCreating ? <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <CheckCheck className="w-3 h-3" />}
+                    Create Policy
+                  </button>
+                </div>
+                <pre className="text-[11px] text-slate-300 bg-black/30 rounded-lg p-3 overflow-x-auto max-h-40 font-mono whitespace-pre-wrap">{nlYaml.yaml}</pre>
+              </div>
+            )}
+            {nlPreview && !nlYaml && (
               <div className="rounded-lg border border-white/[0.06] bg-slate-900/40 p-3 space-y-1 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Parsed rule:</span>
+                  <span className="text-slate-400">Keyword match (no AI):</span>
                   <button
                     onClick={() => { setEditor((p) => ({ ...p, ...nlPreview })); setNlPreview(null); setNlInput(''); toast.success('Rule applied — review and save'); }}
                     className="rounded-lg bg-cyan-500 px-3 py-1 text-xs font-semibold text-white hover:bg-cyan-400 transition-colors"

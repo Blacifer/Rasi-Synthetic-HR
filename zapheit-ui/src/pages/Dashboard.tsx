@@ -67,6 +67,8 @@ const NotionWorkspace = lazy(() => import('./dashboard/apps/workspaces/notion/No
 const WhatsAppWorkspace = lazy(() => import('./dashboard/apps/workspaces/whatsapp/WhatsAppWorkspace'));
 const LinkedInWorkspace = lazy(() => import('./dashboard/apps/workspaces/linkedin/LinkedInWorkspace'));
 const RecruitmentWorkspace = lazy(() => import('./dashboard/apps/workspaces/recruitment/RecruitmentWorkspace'));
+const NotificationsPage = lazy(() => import('./dashboard/NotificationsPage'));
+const SessionRecordingPage = lazy(() => import('./dashboard/SessionRecordingPage'));
 
 interface DashboardProps {
   isDemoMode?: boolean;
@@ -1315,6 +1317,16 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="billing/success" element={
                     <SectionErrorBoundary fallbackMessage="Billing confirmation failed to load">
                       <BillingSuccessPage onNavigate={navigateTo} />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="notifications" element={
+                    <SectionErrorBoundary fallbackMessage="Notifications page failed to load">
+                      <NotificationsPage />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="session-recording" element={
+                    <SectionErrorBoundary fallbackMessage="Session Recording page failed to load">
+                      <SessionRecordingPage />
                     </SectionErrorBoundary>
                   } />
                   <Route path="*" element={<Navigate to="overview" replace />} />

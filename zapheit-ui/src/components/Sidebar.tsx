@@ -94,6 +94,8 @@ const GROUPS: NavGroup[] = [
     items: [
       { id: 'usage', icon: BarChart3, label: 'Usage & Plan' },
       { id: 'settings', icon: Settings, label: 'Settings' },
+      { id: 'notifications', icon: Bell, label: 'Notifications' },
+      { id: 'session-recording', icon: Shield, label: 'Session Recording' },
       { id: 'api-webhooks', icon: Key, label: 'Developer Settings' },
       { id: 'developer', icon: PlugZap, label: 'Developer' },
       { id: 'execution-history', icon: ClipboardList, label: 'Execution History' },
@@ -111,11 +113,11 @@ const VIEWER_ONLY_IDS = new Set([
 const MANAGER_EXTRA_IDS = new Set([
   'incidents', 'agent-studio', 'action-policies', 'costs',
   'apps', 'hubs', 'work-items', 'governed-actions',
-  'usage',
+  'usage', 'notifications',
 ]);
 const ADMIN_EXTRA_IDS = new Set([
   'settings', 'api-webhooks', 'developer', 'execution-history',
-  'platform', 'coverage', 'ctc-calculator', 'blackbox',
+  'platform', 'coverage', 'ctc-calculator', 'blackbox', 'session-recording',
 ]);
 
 function isVisible(id: string, role?: string): boolean {

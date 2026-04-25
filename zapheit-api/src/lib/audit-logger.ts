@@ -85,12 +85,16 @@ export const auditLog = {
     }
 
     try {
+      const event_category = entry.action.includes('.')
+        ? entry.action.split('.')[0]
+        : 'unknown';
       await supabaseRest('audit_logs', '', {
         method: 'POST',
         body: {
           organization_id: toUuidOrNull(entry.organization_id),
           user_id: toUuidOrNull(entry.user_id),
           action: entry.action,
+          event_category,
           resource_type: entry.resource_type || null,
           resource_id: toUuidOrNull(entry.resource_id),
           details: entry.metadata || {},

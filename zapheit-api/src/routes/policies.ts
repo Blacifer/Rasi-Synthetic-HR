@@ -3,6 +3,7 @@ import { eq, supabaseRestAsUser } from '../lib/supabase-rest';
 import { logger } from '../lib/logger';
 import { requirePermission } from '../middleware/rbac';
 import { parsePolicy, validateYaml, evaluatePolicies, POLICY_TEMPLATES, type EvalContext } from '../services/policy-engine';
+import { OpenAIService, AnthropicService } from '../services/ai-service';
 
 const router = express.Router();
 
@@ -477,6 +478,81 @@ router.get('/packs/:id/versions', requirePermission('policies.manage'), async (r
     return res.json({ success: true, data: versions || [] });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// POST /nl-to-policy — convert a plain-English rule description into a YAML policy
+// Uses the org's configured LLM (falls back to Anthropic if no org key, then OpenAI).
+router.post('/nl-to-policy', requirePermission('policies.manage'), async (req: Request, res: Response) => {
+  const { rule } = req.body as { rule?: string };
+  if (!rule || typeof rule !== 'string' || rule.trim().length < 5) {
+    return res.status(400).json({ success: false, error: 'rule must be a non-empty string describing the policy in plain English' });
+  }
+
+  const SYSTEM_PROMPT = `You are a Zapheit policy YAML generator. Convert plain-English descriptions into valid Zapheit policy YAML.
+
+YAML schema:
+---
+name: "<short name>"
+description: "<one sentence>"
+enforcement_level: block | warn | audit
+rules:
+  - id: r1
+    description: "<what this rule checks>"
+    condition:
+      all_of:           # or any_of:
+        - field: <field path>
+          op: eq | neq | contains | not_contains | matches | gt | gte | lt | lte | in | not_in | exists | not_exists
+          value: <value>
+    action: block | warn | redact | require_approval
+    reason: "<human-readable reason shown in audit log>"
+
+Available fields: content, context.service, context.action, context.user_role, context.agent_id, context.amount
+
+Rules:
+- Output ONLY the YAML block, no explanation or markdown fences.
+- Use enforcement_level: block for rules that should hard-stop.
+- Use enforcement_level: warn for monitoring/alerts only.
+- Use require_approval for actions needing human review.
+- Regex patterns in op: matches must be valid JavaScript regexes.`;
+
+  const userMsg = `Convert this rule to Zapheit policy YAML:\n\n${rule.trim()}`;
+
+  try {
+    let yamlText: string;
+
+    const anthropicKey = process.env.RASI_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
+    const openaiKey = process.env.RASI_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+
+    if (anthropicKey) {
+      const svc = new AnthropicService(anthropicKey);
+      const resp = await svc.chat(
+        [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: userMsg }],
+        'claude-haiku-4-5',
+        { maxTokens: 800 },
+      );
+      yamlText = resp.content.trim();
+    } else if (openaiKey) {
+      const svc = new OpenAIService(openaiKey);
+      const resp = await svc.chat(
+        [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: userMsg }],
+        'gpt-4o-mini',
+        { maxTokens: 800 },
+      );
+      yamlText = resp.content.trim();
+    } else {
+      return res.status(503).json({ success: false, error: 'No AI provider configured — set ANTHROPIC_API_KEY or OPENAI_API_KEY' });
+    }
+
+    // Strip markdown code fences if the model added them
+    yamlText = yamlText.replace(/^```(?:yaml)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+
+    const parsed = parsePolicy(yamlText);
+    logger.info('nl-to-policy generated', { name: parsed.name, rules: parsed.rules.length });
+    return res.json({ success: true, data: { yaml: yamlText, policy: parsed } });
+  } catch (err: any) {
+    logger.warn('nl-to-policy failed', { error: err?.message });
+    return res.status(422).json({ success: false, error: err?.message || 'Failed to generate policy from plain English' });
   }
 });
 

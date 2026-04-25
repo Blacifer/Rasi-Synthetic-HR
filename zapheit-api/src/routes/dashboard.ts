@@ -5,6 +5,7 @@ import { logger } from '../lib/logger';
 import { errorResponse, getOrgId, getUserJwt, clampDays, buildDaySeries, toIsoDay } from '../lib/route-helpers';
 import { checkCostAnomalies } from '../lib/reconciliation-alerts';
 import { checkApprovalSLAs } from '../lib/approval-sla';
+import { auditLog } from '../lib/audit-logger';
 
 const router = express.Router();
 
@@ -473,6 +474,61 @@ router.post('/mcp-servers/:id/test', requirePermission('settings.read'), async (
     } catch (fetchErr: any) {
       return res.json({ success: false, error: fetchErr?.message || 'Connection failed' });
     }
+  } catch (err: any) {
+    return errorResponse(res, err);
+  }
+});
+
+// GET /api/organizations/session-recording — get session recording + retention settings
+router.get('/organizations/session-recording', requirePermission('settings.read'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+    const jwt = getUserJwt(req);
+    const params = new URLSearchParams();
+    params.set('id', eq(orgId));
+    params.set('select', 'session_recording_enabled,conversation_retention_days');
+    const rows = await supabaseRestAsUser(jwt, 'organizations', params) as any[];
+    const row = rows?.[0] || {};
+    return res.json({
+      success: true,
+      data: {
+        enabled: row.session_recording_enabled ?? true,
+        retention_days: row.conversation_retention_days ?? 90,
+      },
+    });
+  } catch (err: any) {
+    return errorResponse(res, err);
+  }
+});
+
+// PATCH /api/organizations/session-recording — update session recording + retention
+router.patch('/organizations/session-recording', requirePermission('settings.update'), async (req: Request, res: Response) => {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return errorResponse(res, new Error('Organization not found'), 400);
+    const { enabled, retention_days } = req.body as { enabled?: boolean; retention_days?: number };
+
+    const patch: Record<string, unknown> = {};
+    if (enabled !== undefined) patch.session_recording_enabled = Boolean(enabled);
+    if (retention_days !== undefined) {
+      if (![30, 90, 365].includes(Number(retention_days))) {
+        return res.status(400).json({ success: false, error: 'retention_days must be 30, 90, or 365' });
+      }
+      patch.conversation_retention_days = Number(retention_days);
+    }
+    if (Object.keys(patch).length === 0) {
+      return res.status(400).json({ success: false, error: 'No valid fields to update' });
+    }
+
+    const jwt = getUserJwt(req);
+    const updateQ = new URLSearchParams();
+    updateQ.set('id', eq(orgId));
+    await supabaseRestAsUser(jwt, 'organizations', updateQ, { method: 'PATCH', body: patch });
+
+    logger.info('Session recording settings updated', { org_id: orgId, patch });
+    auditLog.log({ user_id: req.user?.id || 'unknown', action: 'org.session_recording_updated', resource_type: 'organization', resource_id: orgId, organization_id: orgId, metadata: patch });
+    return res.json({ success: true, data: { enabled: patch.session_recording_enabled, retention_days: patch.conversation_retention_days } });
   } catch (err: any) {
     return errorResponse(res, err);
   }
