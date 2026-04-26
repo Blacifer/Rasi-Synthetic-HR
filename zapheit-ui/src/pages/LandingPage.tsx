@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useRef, type ChangeEvent } from 'react';
 import {
-  Brain, ArrowRight, Play, FileText, DollarSign, BarChart3,
+  ArrowRight, Play, FileText, DollarSign, BarChart3,
   Shield, ZapOff, TrendingUp, Users, CheckCircle, Sparkles, Lock,
   Gauge, Target, ChevronDown, Building2, Award,
-  TrendingDown, Menu, X
+  Menu, X
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -12,68 +12,39 @@ interface LandingPageProps {
   onDemo?: () => void;
 }
 
-type PricingProfile = {
+type SaaSPlan = {
   id: string;
-  label: string;
-  team: string;
-  conversations: number;
-  agents: number;
-  governance: 'essentials' | 'scale' | 'command';
-};
-
-type PlanCard = {
   name: string;
-  subtitle: string;
-  price: string;
-  cadence: string;
-  bestFor: string;
-  features: string[];
-  cta: string;
-  accent: string;
+  tagline: string;
+  priceMonthly: number | null;
+  priceAnnual: number | null;
+  agents: string;
+  requests: string;
+  members: string;
+  audit: string;
+  highlight: boolean;
 };
 
-const PRICING_PROFILES: PricingProfile[] = [
-  { id: 'pilot', label: 'Pilot Team', team: '2-10 people', conversations: 1800, agents: 6, governance: 'essentials' },
-  { id: 'growth', label: 'Growth Ops', team: '10-50 people', conversations: 8500, agents: 22, governance: 'scale' },
-  { id: 'enterprise', label: 'Enterprise Fleet', team: '50+ people', conversations: 24000, agents: 80, governance: 'command' },
-];
-
-const GOVERNANCE_OPTIONS = [
-  { id: 'essentials', label: 'Essentials', multiplier: 1, note: 'Baseline audits and monthly governance' },
-  { id: 'scale', label: 'Scale', multiplier: 1.35, note: 'Weekly reviews, cost controls, and incident ops' },
-  { id: 'command', label: 'Command', multiplier: 1.8, note: 'Always-on control plane and executive reporting' },
-] as const;
-
-const PLAN_CARDS: PlanCard[] = [
+const PLANS: SaaSPlan[] = [
   {
-    name: 'The Audit',
-    subtitle: 'One-time assessment',
-    price: '₹25,000',
-    cadence: '/one-time',
-    bestFor: 'Teams validating a first AI rollout',
-    features: ['AI Workforce Health Scan', 'Risk score and leakage report', '1-hour strategic review', 'Governance action plan'],
-    cta: 'Book Audit',
-    accent: 'border-white/12 bg-white/[0.04]',
+    id: 'free', name: 'Free', tagline: 'Try with 1 assistant, no credit card.',
+    priceMonthly: 0, priceAnnual: 0,
+    agents: '1', requests: '1,000/mo', members: '1', audit: '7 days', highlight: false,
   },
   {
-    name: 'The Retainer',
-    subtitle: 'Continuous governance',
-    price: '₹40k-₹60k',
-    cadence: '/month',
-    bestFor: 'Operating teams with active agent fleets',
-    features: ['Weekly behavioral reviews', 'Token cost optimization', 'Incident log and black box', 'Monthly performance report'],
-    cta: 'Start Retainer',
-    accent: 'border-cyan-400/50 bg-[linear-gradient(180deg,rgba(34,211,238,0.18),rgba(8,47,73,0.32))]',
+    id: 'pro', name: 'Pro', tagline: 'Full visibility for small teams.',
+    priceMonthly: 4999, priceAnnual: 49999,
+    agents: '10', requests: '50,000/mo', members: '10', audit: '90 days', highlight: false,
   },
   {
-    name: 'Enterprise',
-    subtitle: 'Governance partnership',
-    price: 'Custom',
-    cadence: 'engagement',
-    bestFor: 'Regulated orgs running business-critical AI',
-    features: ['Policy enforcement planning', 'Real-time blocking and kill switch workflows', 'Dedicated governance manager', 'Executive-ready compliance layer'],
-    cta: 'Contact Sales',
-    accent: 'border-emerald-400/30 bg-[linear-gradient(180deg,rgba(16,185,129,0.12),rgba(6,78,59,0.22))]',
+    id: 'business', name: 'Business', tagline: 'Compliance + unlimited members + predictive alerts.',
+    priceMonthly: 19999, priceAnnual: 199999,
+    agents: '50', requests: '2,50,000/mo', members: 'Unlimited', audit: 'Unlimited', highlight: true,
+  },
+  {
+    id: 'enterprise', name: 'Enterprise', tagline: 'SSO, VPC, dedicated support, custom SLAs.',
+    priceMonthly: null, priceAnnual: null,
+    agents: 'Unlimited', requests: 'Unlimited', members: 'Unlimited', audit: 'Unlimited', highlight: false,
   },
 ];
 
@@ -410,10 +381,9 @@ function ProductPreview({ onDemo, onSignUp }: { onDemo?: () => void; onSignUp: (
 export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPageProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [selectedProfile, setSelectedProfile] = useState<PricingProfile['id']>('growth');
   const [monthlyConversations, setMonthlyConversations] = useState(8500);
   const [activeAgents, setActiveAgents] = useState(22);
-  const [governanceLayer, setGovernanceLayer] = useState<(typeof GOVERNANCE_OPTIONS)[number]['id']>('scale');
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const [calcEmail, setCalcEmail] = useState('');
   const [calcEmailSent, setCalcEmailSent] = useState(false);
   const year = new Date().getFullYear();
@@ -425,10 +395,10 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
   }, []);
 
   const stats = [
-    { icon: Users, value: 1, label: 'Control plane for your organization' },
-    { icon: DollarSign, value: 24, label: 'Hour cost visibility', suffix: '/7' },
-    { icon: TrendingDown, value: 4, label: 'Core operating loops' },
-    { icon: Award, value: 3, label: 'Launch-ready operator motions' },
+    { icon: DollarSign, value: 42, label: 'average monthly savings per team', suffix: 'L+' },
+    { icon: Shield, value: 3, label: 'AI problems caught before customers saw them (this week)' },
+    { icon: TrendingUp, value: 22, label: 'seconds to approve or block an AI action', suffix: ' sec' },
+    { icon: CheckCircle, value: 100, label: 'of decisions logged for compliance', suffix: '%' },
   ];
 
   const pillars = [
@@ -438,7 +408,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       color: 'from-cyan-500 to-blue-600',
       bgColor: 'cyan',
       title: 'Know What Agents Are Doing',
-      subtitle: 'Real-time LLM Gateway',
+      subtitle: 'AI message hub',
       problem: 'No visibility into what your agents are actually doing.',
       features: [
         'OpenAI-compatible proxy for any agent',
@@ -551,46 +521,18 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
     }
   ];
 
-  const calculator = useMemo(() => {
-    const profile = PRICING_PROFILES.find((item) => item.id === selectedProfile) || PRICING_PROFILES[1];
-    const governanceConfig = GOVERNANCE_OPTIONS.find((item) => item.id === governanceLayer) || GOVERNANCE_OPTIONS[1];
-    const opsLoad = monthlyConversations * 1.6 + activeAgents * 220;
-    const estimatedHours = Math.round((opsLoad / 1800) * governanceConfig.multiplier);
-    const rawInvestment = Math.round((18000 + estimatedHours * 1450) * governanceConfig.multiplier);
-    // Never quote below the actual Retainer floor (₹40,000/month)
-    const monthlyInvestment = Math.max(rawInvestment, 40000);
-    const costLeakage = Math.round(monthlyInvestment * 0.42);
-    const savingsWindow = {
-      low: Math.round(costLeakage * 0.7),
-      high: Math.round(costLeakage * 1.15),
-    };
+  const recommendedPlan = useMemo((): SaaSPlan => {
+    if (activeAgents > 50) return PLANS[3]; // Enterprise
+    if (activeAgents > 10) return PLANS[2]; // Business
+    if (activeAgents > 1)  return PLANS[1]; // Pro
+    return PLANS[0];                        // Free
+  }, [activeAgents]);
 
-    let recommendation = PLAN_CARDS[0];
-    if (monthlyInvestment >= 70000 || governanceLayer === 'command' || activeAgents >= 60) {
-      recommendation = PLAN_CARDS[2];
-    } else if (monthlyInvestment >= 40000 || governanceLayer === 'scale' || monthlyConversations >= 5000) {
-      recommendation = PLAN_CARDS[1];
-    }
-
-    return {
-      profile,
-      governanceConfig,
-      monthlyInvestment,
-      estimatedHours,
-      savingsWindow,
-      recommendation,
-      coverageScore: Math.min(98, Math.round(58 + activeAgents / 2 + governanceConfig.multiplier * 12)),
-    };
-  }, [activeAgents, governanceLayer, monthlyConversations, selectedProfile]);
-
-  const applyPricingProfile = (profileId: PricingProfile['id']) => {
-    const profile = PRICING_PROFILES.find((item) => item.id === profileId);
-    if (!profile) return;
-
-    setSelectedProfile(profileId);
-    setMonthlyConversations(profile.conversations);
-    setActiveAgents(profile.agents);
-    setGovernanceLayer(profile.governance);
+  const displayPrice = (plan: SaaSPlan): string => {
+    if (plan.priceMonthly === null) return 'Custom';
+    if (plan.priceMonthly === 0) return '₹0';
+    const price = billingCycle === 'annual' ? Math.round((plan.priceAnnual ?? 0) / 12) : plan.priceMonthly;
+    return `₹${price.toLocaleString('en-IN')}`;
   };
 
   const NAV_LINKS = [
@@ -692,7 +634,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
           <div className="mx-auto max-w-5xl text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full border border-cyan-500/20 bg-cyan-500/[0.06] backdrop-blur-md shadow-[0_0_20px_rgba(34,211,238,0.08)]">
             <Sparkles className="w-4 h-4 text-blue-300" />
-            <span className="text-sm text-slate-200">Your AI assistants are making decisions right now. Do you know what they're doing?</span>
+            <span className="text-sm text-slate-200">The AI governance platform built for India</span>
           </div>
 
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black text-white mb-6 leading-tight">
@@ -707,7 +649,7 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
             One dashboard for every AI assistant across your support, ops, HR, and sales teams.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 sm:mb-12 md:mb-16">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-6">
             <button
               onClick={onSignUp}
               className="btn-primary group w-full sm:w-auto"
@@ -724,21 +666,13 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
             </button>
           </div>
 
-          {/* Floating stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { value: '1 View', label: 'for agents, incidents, approvals, and spend' },
-              { value: '<10 min', label: 'to first useful signal' },
-              { value: 'Audit', label: 'trail attached to governed actions' },
-              { value: 'DPDPA', label: 'India-ready controls' }
-            ].map((stat, i) => (
-              <div
-                key={i}
-                className="card-surface p-5 transition-all"
-              >
-                <div className="text-2xl font-bold gradient-text">{stat.value}</div>
-                <div className="mt-1 text-sm leading-5 text-slate-400">{stat.label}</div>
-              </div>
+          {/* Trust badges */}
+          <div className="flex flex-wrap items-center justify-center gap-3 mb-10 md:mb-14">
+            {['SOC 2 in progress', 'DPDPA-ready', 'Data stored in India', 'Free tier — no credit card'].map((badge) => (
+              <span key={badge} className="flex items-center gap-1.5 text-xs text-slate-400 px-3 py-1.5 rounded-full border border-white/8 bg-white/[0.03]">
+                <CheckCircle className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                {badge}
+              </span>
             ))}
           </div>
           </div>
@@ -837,26 +771,26 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
               {
                 step: 1,
                 icon: FileText,
-                title: 'Connect',
-                desc: 'Connect an app or point any AI agent at the Zapheit gateway so traffic, app actions, cost, and risk all have one home.'
+                title: 'Connect your AI',
+                desc: 'Connect an app or point any AI assistant at Zapheit so traffic, actions, cost, and risk all come through one place.'
               },
               {
                 step: 2,
                 icon: BarChart3,
-                title: 'See',
-                desc: 'Know what agents are doing, what they cost, and where behavior is starting to drift.'
+                title: 'See every decision in plain English',
+                desc: 'Know what your assistants are doing, what they cost, and where behaviour is starting to drift — no technical jargon.'
               },
               {
                 step: 3,
                 icon: ZapOff,
-                title: 'Protect',
-                desc: 'Catch risky output, require approvals where needed, and intervene before bad behavior reaches customers.'
+                title: 'Stop problems automatically',
+                desc: 'Catch risky output, require human approval where needed, and block bad behaviour before it reaches customers.'
               },
               {
                 step: 4,
                 icon: Shield,
-                title: 'Control',
-                desc: 'Use evidence, audit trails, and operational controls when the stakes or complexity increase.'
+                title: 'Prove compliance in one click',
+                desc: 'Immutable audit logs, DPDPA-ready exports, and evidence packets ready whenever regulators or customers ask.'
               }
             ].map((item, i) => (
               <div
@@ -999,190 +933,197 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
       {/* Pricing Section */}
       <section id="pricing" className="py-24 px-6">
         <div className="max-w-6xl mx-auto">
-          <div className="mb-12 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-            <div className="max-w-3xl">
-              <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Pricing Calculator</span>
-              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mt-4">Find the right plan for your team</h2>
-              <p className="text-slate-400 mt-4 text-lg">
-                Tell us how many AI assistants you run and how actively you want to monitor them — we'll recommend the right plan.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-5 py-4 backdrop-blur-xl">
-              <p className="text-xs uppercase tracking-[0.22em] text-cyan-300">Recommended Plan</p>
-              <p className="mt-2 text-2xl font-bold text-white">{calculator.recommendation.name}</p>
-              <p className="text-sm text-cyan-100/80">{calculator.recommendation.bestFor}</p>
+          {/* Header */}
+          <div className="text-center mb-12">
+            <span className="text-cyan-400 font-semibold text-sm tracking-widest uppercase">Pricing</span>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mt-4">Simple, honest pricing</h2>
+            <p className="text-slate-400 mt-4 text-lg max-w-2xl mx-auto">
+              Start free. Upgrade when you need more agents, requests, or compliance features. INR billing, no hidden fees.
+            </p>
+
+            {/* Billing toggle */}
+            <div className="inline-flex items-center gap-1 mt-6 p-1 rounded-full border border-white/10 bg-white/[0.04]">
+              <button
+                onClick={() => setBillingCycle('monthly')}
+                className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${billingCycle === 'monthly' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'}`}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setBillingCycle('annual')}
+                className={`px-5 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${billingCycle === 'annual' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'}`}
+              >
+                Annual
+                <span className="text-xs font-semibold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">Save 17%</span>
+              </button>
             </div>
           </div>
 
-          <div className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.12),transparent_28%),linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.98))] p-4 md:p-6 shadow-[0_24px_80px_rgba(2,6,23,0.45)]">
-            <div>
-              <div className="rounded-[28px] border border-white/10 bg-slate-950/65 p-4 sm:p-6 backdrop-blur-xl">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="text-sm font-semibold uppercase tracking-[0.22em] text-cyan-300">Live Calculator</p>
-                    <h3 className="mt-2 text-3xl font-bold text-white">Governance workload estimator</h3>
-                  </div>
-                  <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-right">
-                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Coverage Score</p>
-                    <p className="mt-1 text-3xl font-bold text-white">{calculator.coverageScore}%</p>
-                  </div>
-                </div>
-
-                <div className="mt-6 grid gap-3 md:grid-cols-3">
-                  {PRICING_PROFILES.map((profile) => {
-                    const active = profile.id === selectedProfile;
-                    return (
-                      <button
-                        key={profile.id}
-                        onClick={() => applyPricingProfile(profile.id)}
-                        className={`rounded-2xl border p-4 text-left transition-all ${active ? 'border-cyan-400 bg-cyan-500/12 shadow-[0_0_0_1px_rgba(34,211,238,0.18)]' : 'border-white/10 bg-white/[0.03] hover:border-cyan-400/30'}`}
-                      >
-                        <p className="text-sm font-semibold text-white">{profile.label}</p>
-                        <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-400">{profile.team}</p>
-                        <p className="mt-4 text-sm text-slate-300">{profile.agents} agents · {profile.conversations.toLocaleString()} monthly conversations</p>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-6 grid gap-5 md:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="flex items-center justify-between text-sm font-medium text-white">
-                      <span>Monthly AI conversations</span>
-                      <span className="text-cyan-300">{monthlyConversations.toLocaleString()}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="500"
-                      max="50000"
-                      step="500"
-                      value={monthlyConversations}
-                      onChange={(e) => setMonthlyConversations(Number(e.target.value))}
-                      className="mt-4 w-full accent-cyan-400"
-                    />
-                    <div className="mt-2 flex justify-between text-xs text-slate-500">
-                      <span>500</span>
-                      <span>10k</span>
-                      <span>50k</span>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="flex items-center justify-between text-sm font-medium text-white">
-                      <span>Active AI agents</span>
-                      <span className="text-emerald-300">{activeAgents}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="1"
-                      max="150"
-                      step="1"
-                      value={activeAgents}
-                      onChange={(e) => setActiveAgents(Number(e.target.value))}
-                      className="mt-4 w-full accent-emerald-400"
-                    />
-                    <div className="mt-2 flex justify-between text-xs text-slate-500">
-                      <span>1</span>
-                      <span>75</span>
-                      <span>150</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-white">Governance layer</p>
-                      <p className="mt-1 text-sm text-slate-400">{calculator.governanceConfig.note}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {GOVERNANCE_OPTIONS.map((option) => {
-                        const active = option.id === governanceLayer;
-                        return (
-                          <button
-                            key={option.id}
-                            onClick={() => setGovernanceLayer(option.id)}
-                            className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${active ? 'bg-cyan-400 text-slate-950' : 'border border-white/10 bg-slate-900/80 text-slate-300 hover:border-cyan-400/30'}`}
-                          >
-                            {option.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6 grid gap-4 md:grid-cols-3">
-                  <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-cyan-200">Estimated Monthly Spend</p>
-                    <p className="mt-3 text-3xl font-bold text-white">₹{calculator.monthlyInvestment.toLocaleString('en-IN')}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Governance Hours</p>
-                    <p className="mt-3 text-3xl font-bold text-white">{calculator.estimatedHours}h</p>
-                  </div>
-                  <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-200">Likely Savings Window</p>
-                    <p className="mt-3 text-lg font-bold text-white">₹{calculator.savingsWindow.low.toLocaleString('en-IN')} to ₹{calculator.savingsWindow.high.toLocaleString('en-IN')}</p>
-                  </div>
-                </div>
-
-                {/* CTA after results */}
-                <div className="mt-6 flex flex-col sm:flex-row items-center gap-3 pt-5 border-t border-white/10">
-                  <button
-                    onClick={() => {
-                      const msg = `Hi, I used the Zapheit workload estimator. My setup: ${activeAgents} agents, ${monthlyConversations.toLocaleString('en-IN')} monthly conversations, estimated ₹${calculator.monthlyInvestment.toLocaleString('en-IN')}/month. I'd like to discuss the right plan.`;
-                      window.open(`https://wa.me/919433116259?text=${encodeURIComponent(msg)}`, '_blank');
-                    }}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-sm transition-all shadow-lg shadow-cyan-500/20"
-                  >
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.528 5.85L.057 23.571a.5.5 0 0 0 .61.61l5.757-1.485A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.89 0-3.663-.523-5.17-1.432l-.37-.22-3.818.985.998-3.75-.242-.386A9.956 9.956 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
-                    Talk to us — ₹{calculator.monthlyInvestment.toLocaleString('en-IN')}/mo estimated
-                  </button>
-                  <p className="text-xs text-slate-500 text-center sm:text-left">We'll recommend the right plan based on your numbers.</p>
-                </div>
-
-                {/* Email capture — for people not ready to WhatsApp */}
-                <div className="mt-4">
-                  {calcEmailSent ? (
-                    <div className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
-                      <svg viewBox="0 0 20 20" className="w-4 h-4 fill-current flex-shrink-0"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
-                      Got it — we'll reach out to {calcEmail} within one business day.
-                    </div>
-                  ) : (
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <input
-                        type="email"
-                        value={calcEmail}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => setCalcEmail(e.target.value)}
-                        placeholder="Not ready to chat? Leave your email"
-                        className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-slate-500 outline-none focus:border-cyan-500/40 transition-colors"
-                      />
-                      <button
-                        onClick={async () => {
-                          if (!calcEmail.includes('@')) return;
-                          await fetch('/public/contact', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              email: calcEmail,
-                              agents: activeAgents,
-                              conversations: monthlyConversations,
-                              estimated_spend: `₹${calculator.monthlyInvestment.toLocaleString('en-IN')}/month`,
-                            }),
-                          });
-                          setCalcEmailSent(true);
-                        }}
-                        disabled={!calcEmail.includes('@')}
-                        className="px-5 py-2.5 rounded-xl bg-white/8 hover:bg-white/12 disabled:opacity-40 disabled:cursor-not-allowed border border-white/10 text-white text-sm font-semibold transition-all whitespace-nowrap"
-                      >
-                        Send me the plan →
-                      </button>
+          {/* Plan cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+            {PLANS.map((plan) => {
+              const isRecommended = plan.id === recommendedPlan.id;
+              return (
+                <div
+                  key={plan.id}
+                  className={[
+                    'relative rounded-2xl border p-6 flex flex-col gap-5 transition-all',
+                    plan.highlight
+                      ? 'border-cyan-400/50 bg-[linear-gradient(160deg,rgba(34,211,238,0.10),rgba(8,47,73,0.25))]'
+                      : 'border-white/10 bg-white/[0.03]',
+                    isRecommended ? 'ring-2 ring-cyan-400/60 ring-offset-2 ring-offset-transparent' : '',
+                  ].join(' ')}
+                >
+                  {plan.highlight && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-cyan-500 text-white shadow-lg shadow-cyan-500/30 whitespace-nowrap">
+                        Most Popular
+                      </span>
                     </div>
                   )}
+                  {isRecommended && !plan.highlight && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-slate-700 text-slate-200 whitespace-nowrap border border-white/10">
+                        Recommended for you
+                      </span>
+                    </div>
+                  )}
+
+                  <div>
+                    <h3 className="text-lg font-bold text-white">{plan.name}</h3>
+                    <p className="text-xs text-slate-500 mt-1">{plan.tagline}</p>
+                  </div>
+
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-black text-white">{displayPrice(plan)}</span>
+                      {plan.priceMonthly !== null && (
+                        <span className="text-slate-500 text-sm">/mo</span>
+                      )}
+                    </div>
+                    {billingCycle === 'annual' && plan.priceAnnual && plan.priceAnnual > 0 && (
+                      <p className="text-xs text-emerald-400 mt-1">
+                        ₹{plan.priceAnnual.toLocaleString('en-IN')}/yr · saves ₹{((plan.priceMonthly ?? 0) * 12 - plan.priceAnnual).toLocaleString('en-IN')}
+                      </p>
+                    )}
+                    {plan.priceMonthly === null && (
+                      <p className="text-xs text-slate-500 mt-1">Talk to us for pricing</p>
+                    )}
+                  </div>
+
+                  <div className="border-t border-white/8" />
+
+                  <ul className="space-y-2 flex-1 text-xs text-slate-400">
+                    <li className="flex justify-between"><span>AI assistants</span><span className="text-white font-medium">{plan.agents}</span></li>
+                    <li className="flex justify-between"><span>Requests/mo</span><span className="text-white font-medium">{plan.requests}</span></li>
+                    <li className="flex justify-between"><span>Team members</span><span className="text-white font-medium">{plan.members}</span></li>
+                    <li className="flex justify-between"><span>Audit log</span><span className="text-white font-medium">{plan.audit}</span></li>
+                  </ul>
+
+                  <button
+                    onClick={() => {
+                      if (plan.id === 'free' || plan.id === 'pro' || plan.id === 'business') {
+                        onSignUp();
+                      } else {
+                        window.open(`https://wa.me/919433116259?text=${encodeURIComponent(`Hi, I'd like to discuss the Enterprise plan for Zapheit. Can we connect?`)}`, '_blank');
+                      }
+                    }}
+                    className={[
+                      'w-full py-2.5 rounded-xl text-sm font-semibold transition-all',
+                      plan.highlight
+                        ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/20'
+                        : plan.id === 'enterprise'
+                          ? 'border border-white/15 text-slate-300 hover:bg-white/[0.06]'
+                          : 'bg-white/8 hover:bg-white/14 text-white border border-white/10',
+                    ].join(' ')}
+                  >
+                    {plan.id === 'enterprise' ? 'Talk to Sales' : plan.id === 'free' ? 'Start Free' : 'Get Started'}
+                  </button>
                 </div>
+              );
+            })}
+          </div>
+
+          {/* Slider — updates recommendation */}
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+            <p className="text-sm font-semibold text-white mb-1">Find your plan</p>
+            <p className="text-xs text-slate-500 mb-5">Move the slider to see which plan fits your team. Recommended plan updates automatically.</p>
+            <div className="grid gap-5 md:grid-cols-2">
+              <div>
+                <div className="flex items-center justify-between text-sm font-medium text-white mb-3">
+                  <span>Active AI assistants</span>
+                  <span className="text-cyan-300 font-bold">{activeAgents}</span>
+                </div>
+                <input type="range" min="1" max="150" step="1" value={activeAgents}
+                  onChange={(e) => setActiveAgents(Number(e.target.value))}
+                  className="w-full accent-cyan-400" />
+                <div className="mt-2 flex justify-between text-xs text-slate-600"><span>1</span><span>75</span><span>150</span></div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between text-sm font-medium text-white mb-3">
+                  <span>Monthly AI conversations</span>
+                  <span className="text-emerald-300 font-bold">{monthlyConversations.toLocaleString()}</span>
+                </div>
+                <input type="range" min="500" max="50000" step="500" value={monthlyConversations}
+                  onChange={(e) => setMonthlyConversations(Number(e.target.value))}
+                  className="w-full accent-emerald-400" />
+                <div className="mt-2 flex justify-between text-xs text-slate-600"><span>500</span><span>10k</span><span>50k</span></div>
               </div>
             </div>
+            <div className="mt-5 flex items-center justify-between pt-4 border-t border-white/8">
+              <p className="text-sm text-slate-300">
+                Recommended: <span className="font-bold text-white">{recommendedPlan.name}</span>
+                {recommendedPlan.priceMonthly !== null && (
+                  <span className="text-slate-500 ml-1">· {displayPrice(recommendedPlan)}/mo</span>
+                )}
+              </p>
+              <button
+                onClick={onSignUp}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-semibold transition-all shadow-lg shadow-cyan-500/20"
+              >
+                Get started →
+              </button>
+            </div>
+          </div>
+
+          {/* Email capture */}
+          <div className="mt-6">
+            {calcEmailSent ? (
+              <div className="flex items-center justify-center gap-2 text-emerald-400 text-sm font-medium">
+                <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                Got it — we'll reach out to {calcEmail} within one business day.
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
+                <input
+                  type="email"
+                  value={calcEmail}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setCalcEmail(e.target.value)}
+                  placeholder="Not ready? Leave your email and we'll reach out"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-slate-500 outline-none focus:border-cyan-500/40 transition-colors"
+                />
+                <button
+                  onClick={async () => {
+                    if (!calcEmail.includes('@')) return;
+                    await fetch('/public/contact', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        email: calcEmail,
+                        agents: activeAgents,
+                        conversations: monthlyConversations,
+                        estimated_spend: recommendedPlan.name,
+                      }),
+                    });
+                    setCalcEmailSent(true);
+                  }}
+                  disabled={!calcEmail.includes('@')}
+                  className="px-5 py-2.5 rounded-xl bg-white/8 hover:bg-white/12 disabled:opacity-40 disabled:cursor-not-allowed border border-white/10 text-white text-sm font-semibold transition-all whitespace-nowrap"
+                >
+                  Send →
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -1238,10 +1179,10 @@ export default function LandingPage({ onSignUp, onLogin, onDemo }: LandingPagePr
 
         <div className="max-w-4xl mx-auto relative z-10 text-center">
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-6">
-            Your AI agents are already running. Is anyone watching?
+            Start governing your AI in under 5 minutes.
           </h2>
           <p className="text-lg sm:text-xl text-slate-300 mb-10 max-w-2xl mx-auto">
-            Route your first agent through Zapheit in 5 minutes. Free tier, no credit card required. Works with any AI agent — OpenAI, Anthropic, LangChain, or custom-built.
+            Free tier, no credit card required. Works with any AI assistant — OpenAI, Anthropic, Gemini, or custom-built.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
