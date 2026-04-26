@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Loader2, ChevronDown, ChevronUp, X, Eye, EyeOff, ExternalLink,
@@ -15,6 +15,9 @@ import type { AIAgent } from '../../../types';
 import { AppLogo } from './components/AppLogo';
 import { useAppsData } from './hooks/useAppsData';
 import { getAppServiceId } from './helpers';
+import { ConnectWizard } from './connect-wizard/ConnectWizard';
+import { IntentPicker } from './components/IntentPicker';
+import type { UnifiedApp } from './types';
 
 /* ─────────────────────────────────────────────────────────────────────────
    Types
@@ -1059,6 +1062,70 @@ function formatLastSync(backendApp: any): string | null {
   return d.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+/* Bridge AppDef → UnifiedApp so ConnectWizard can receive it */
+function appDefToUnifiedApp(def: AppDef, backendUnified?: UnifiedApp | null): UnifiedApp {
+  if (backendUnified) return backendUnified;
+  return {
+    id: `app:${def.appId}`,
+    appId: def.appId,
+    name: def.name,
+    description: def.description,
+    category: def.category,
+    source: 'marketplace',
+    connectionType: def.auth === 'oauth' ? 'oauth_connector' : 'native_connector',
+    primarySetupMode: def.auth === 'oauth' ? 'oauth' : 'api_key',
+    advancedSetupModes: [def.auth === 'oauth' ? 'oauth' : 'api_key'],
+    logoLetter: def.logoLetter,
+    colorHex: def.colorHex,
+    installCount: 0,
+    comingSoon: def.productionStatus === 'coming_soon',
+    connected: false,
+    status: 'disconnected',
+    authType: def.auth === 'oauth' ? 'oauth2' : 'api_key',
+    requiredFields: def.fields?.map((f) => ({
+      name: f.key,
+      label: f.label,
+      type: f.type,
+      placeholder: f.type === 'password' ? '••••••••' : f.label,
+      required: !f.optional,
+    })),
+    permissions: [],
+    actionsUnlocked: [],
+    featured: false,
+    trustTier: (def.category === 'finance' || def.category === 'it' || def.category === 'compliance')
+      ? 'high-trust-operational' : 'observe-only',
+    maturity: 'connected',
+    governanceSummary: { readCount: 0, actionCount: 0, enabledActionCount: 0 },
+    agentCapabilities: [],
+    capabilityPolicies: [],
+    mcpTools: [],
+    primaryServiceId: def.serviceId,
+  };
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Skeleton card — shown while backend apps load
+──────────────────────────────────────────────────────────────────────────── */
+
+function AppCardSkeleton() {
+  return (
+    <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-5 animate-pulse">
+      <div className="flex items-start gap-4">
+        <div className="w-10 h-10 rounded-xl bg-white/[0.06] shrink-0" />
+        <div className="flex-1 space-y-2.5 min-w-0">
+          <div className="flex items-center gap-2">
+            <div className="h-3.5 w-28 rounded bg-white/[0.07]" />
+            <div className="h-3 w-14 rounded-full bg-white/[0.05]" />
+          </div>
+          <div className="h-2.5 w-full max-w-sm rounded bg-white/[0.05]" />
+          <div className="h-2.5 w-3/4 rounded bg-white/[0.04]" />
+        </div>
+        <div className="h-7 w-20 rounded-xl bg-white/[0.06] shrink-0" />
+      </div>
+    </div>
+  );
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    CredForm — enhanced with helpText + test-connection step
 ──────────────────────────────────────────────────────────────────────────── */
@@ -1738,69 +1805,98 @@ function StackWizard({
    App Card
 ──────────────────────────────────────────────────────────────────────────── */
 
+/* 5-minute cache for live metrics to avoid re-fetching on every re-render */
+const METRIC_CACHE = new Map<string, { value: string; expiresAt: number }>();
+
 function AppCard({
   app,
   status,
   backendApp,
+  backendUnified,
   onConnect,
   onDisconnect,
   onOpenWorkspace,
+  onOpenWizard,
   onRequestAccess,
   onNavigate,
 }: {
   app: AppDef;
   status: ConnStatus;
   backendApp: any;
+  backendUnified: UnifiedApp | null;
   onConnect: (app: AppDef, creds?: Record<string, string>) => Promise<void>;
   onDisconnect: (app: AppDef) => Promise<void>;
   onOpenWorkspace: (app: AppDef) => void;
+  onOpenWizard: (app: AppDef, backendUnified: UnifiedApp | null) => void;
   onRequestAccess: (app: AppDef) => void;
   onNavigate?: (route: string) => void;
 }) {
-  const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [liveMetric, setLiveMetric] = useState<string | null>(null);
   const [notified, setNotified] = useState(() => getNotifiedApps().has(app.appId));
   const [actionsOpen, setActionsOpen] = useState(false);
   const [usageCount, setUsageCount] = useState<number | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const metricFetched = useRef(false);
+  const usageFetched = useRef(false);
 
-  // Fetch live metric once when connected
+  // Fetch live metric only when card enters viewport (IntersectionObserver throttle)
   useEffect(() => {
-    if (status !== 'connected') return;
+    if (status !== 'connected' || metricFetched.current) return;
     const config = LIVE_METRICS[app.appId];
     if (!config) return;
+
+    const cached = METRIC_CACHE.get(app.appId);
+    if (cached && cached.expiresAt > Date.now()) { setLiveMetric(cached.value); metricFetched.current = true; return; }
+
+    const el = cardRef.current;
+    if (!el) return;
     let cancelled = false;
-    api.unifiedConnectors.executeAction(app.appId, config.action, config.params)
-      .then((res) => {
-        if (cancelled) return;
-        const payload = res.data?.data ?? res.data;
-        const label = config.extract(payload);
-        if (label) setLiveMetric(label);
-      })
-      .catch(() => {/* silently ignore — metric is best-effort */});
-    return () => { cancelled = true; };
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting || metricFetched.current) return;
+      metricFetched.current = true;
+      observer.disconnect();
+      api.unifiedConnectors.executeAction(app.appId, config.action, config.params)
+        .then((res) => {
+          if (cancelled) return;
+          const payload = res.data?.data ?? res.data;
+          const label = config.extract(payload);
+          if (label) { setLiveMetric(label); METRIC_CACHE.set(app.appId, { value: label, expiresAt: Date.now() + 5 * 60 * 1000 }); }
+        })
+        .catch(() => {/* best-effort */});
+    }, { threshold: 0.1 });
+    observer.observe(el);
+    return () => { cancelled = true; observer.disconnect(); };
   }, [app.appId, status]);
 
-  // Fetch usage count for this month when connected
+  // Fetch usage count when card enters viewport
   useEffect(() => {
-    if (status !== 'connected') return;
+    if (status !== 'connected' || usageFetched.current) return;
+    const el = cardRef.current;
+    if (!el) return;
     let cancelled = false;
-    const from = new Date();
-    from.setDate(1); from.setHours(0, 0, 0, 0);
-    api.auditLogs.list({ search: app.appId, from: from.toISOString(), limit: 100 })
-      .then((res) => {
-        if (cancelled) return;
-        const count = (res as any).total ?? res.data?.length ?? 0;
-        if (count > 0) setUsageCount(count);
-      })
-      .catch(() => {/* best-effort */});
-    return () => { cancelled = true; };
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting || usageFetched.current) return;
+      usageFetched.current = true;
+      observer.disconnect();
+      const from = new Date();
+      from.setDate(1); from.setHours(0, 0, 0, 0);
+      api.auditLogs.list({ search: app.appId, from: from.toISOString(), limit: 100 })
+        .then((res) => {
+          if (cancelled) return;
+          const count = (res as any).total ?? res.data?.length ?? 0;
+          if (count > 0) setUsageCount(count);
+        })
+        .catch(() => {/* best-effort */});
+    }, { threshold: 0.1 });
+    observer.observe(el);
+    return () => { cancelled = true; observer.disconnect(); };
   }, [app.appId, status]);
 
   const connect = async (creds?: Record<string, string>) => {
     setBusy(true);
     try { await onConnect(app, creds); }
-    finally { setBusy(false); setFormOpen(false); }
+    finally { setBusy(false); }
   };
 
   const disconnect = async () => {
@@ -1825,10 +1921,13 @@ function AppCard({
   const connectorActions = CONNECTOR_ACTIONS[app.appId] ?? [];
 
   return (
-    <div className={cn(
-      'rounded-2xl border p-5 transition-all',
-      isConnected ? 'border-emerald-500/15 bg-emerald-500/[0.03]' : 'border-white/8 bg-white/[0.02] hover:border-white/12',
-    )}>
+    <div
+      ref={cardRef}
+      className={cn(
+        'rounded-2xl border p-5 transition-all',
+        isConnected ? 'border-emerald-500/15 bg-emerald-500/[0.03]' : 'border-white/8 bg-white/[0.02] hover:border-white/12',
+      )}
+    >
       <div className="flex items-start gap-4">
         {/* Logo */}
         <div className="relative shrink-0">
@@ -2006,7 +2105,7 @@ function AppCard({
           ) : isError ? (
             <div className="flex flex-col items-end gap-1.5">
               <button
-                onClick={() => app.auth === 'oauth' ? void connect() : setFormOpen((v) => !v)}
+                onClick={() => app.auth === 'oauth' ? void connect() : onOpenWizard(app, backendUnified)}
                 disabled={busy}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-white text-xs font-semibold transition-colors disabled:opacity-40"
               >
@@ -2039,26 +2138,16 @@ function AppCard({
             </button>
           ) : (
             <button
-              onClick={() => setFormOpen((v) => !v)}
+              onClick={() => onOpenWizard(app, backendUnified)}
               disabled={busy}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.13] text-slate-200 text-xs font-semibold transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold transition-all"
             >
-              {formOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               Connect
             </button>
           )}
         </div>
       </div>
 
-      {/* Inline credential form */}
-      {formOpen && app.fields && (
-        <CredForm
-          app={app}
-          onSubmit={(creds) => void connect(creds)}
-          onCancel={() => setFormOpen(false)}
-          submitting={busy}
-        />
-      )}
     </div>
   );
 }
@@ -2072,15 +2161,16 @@ interface AppsPageProps {
   onNavigate?: (route: string) => void;
 }
 
-export default function AppsPage({ onNavigate }: AppsPageProps) {
+export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeCategory, setActiveCategory] = useState('all');
   const [search, setSearch] = useState('');
   const [requestApp, setRequestApp] = useState<AppDef | null>(null);
   const [stackFilter, setStackFilter] = useState<string[] | null>(null);
   const [activeWizard, setActiveWizard] = useState<AppStack | null>(null);
+  const [wizardApp, setWizardApp] = useState<{ def: AppDef; unified: UnifiedApp } | null>(null);
 
-  const { allApps, loading, reload } = useAppsData();
+  const { allApps, loading, reload } = useAppsData(agents);
 
   // Handle OAuth callback
   useEffect(() => {
@@ -2107,11 +2197,11 @@ export default function AppsPage({ onNavigate }: AppsPageProps) {
 
   // Merge backend status
   const apps = useMemo(() => APP_CATALOG.map((def) => {
-    const backendApp = allApps.find((a) => {
+    const backendUnified = allApps.find((a) => {
       const sid = getAppServiceId(a);
       return a.appId === def.appId || sid === def.serviceId;
-    });
-    return { def, status: resolveStatus(def, backendApp), backendApp: backendApp ?? null };
+    }) ?? null;
+    return { def, status: resolveStatus(def, backendUnified), backendApp: backendUnified, backendUnified };
   }), [allApps]);
 
   // Filter
@@ -2171,6 +2261,18 @@ export default function AppsPage({ onNavigate }: AppsPageProps) {
       toast.error((res as any).error || 'Disconnect failed');
     }
   }, [reload]);
+
+  const handleOpenWizard = useCallback((def: AppDef, backendUnified: UnifiedApp | null) => {
+    setWizardApp({ def, unified: appDefToUnifiedApp(def, backendUnified) });
+  }, []);
+
+  const handleWizardConnect = useCallback(async (_unified: UnifiedApp, creds: Record<string, string>) => {
+    const def = wizardApp?.def;
+    if (!def) return;
+    const res = await api.integrations.connect(def.serviceId, creds);
+    if (!res.success) throw new Error((res as any).error || 'Connection failed');
+    void reload();
+  }, [wizardApp, reload]);
 
   const handleOpenWorkspace = useCallback((app: AppDef) => {
     if (app.workspaceRoute && onNavigate) onNavigate(app.workspaceRoute);
@@ -2340,11 +2442,18 @@ export default function AppsPage({ onNavigate }: AppsPageProps) {
           </div>
         )}
 
+        {/* Intent picker — shown on All tab with no filters */}
+        {!search && !stackFilter && activeCategory === 'all' && (
+          <IntentPicker onSelect={(bundleId) => {
+            const stack = STACKS.find((s) => s.id === bundleId);
+            if (stack) { setActiveWizard(stack); } else { setSearch(bundleId); }
+          }} />
+        )}
+
         {/* App list */}
         {loading ? (
-          <div className="flex items-center justify-center py-20 text-slate-500">
-            <Loader2 className="w-5 h-5 animate-spin mr-2" />
-            <span className="text-sm">Loading apps…</span>
+          <div className="space-y-3">
+            {Array.from({ length: 8 }).map((_, i) => <AppCardSkeleton key={i} />)}
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-20 text-slate-500 text-sm">
@@ -2358,15 +2467,17 @@ export default function AppsPage({ onNavigate }: AppsPageProps) {
           </div>
         ) : (
           <div className="space-y-3">
-            {filtered.map(({ def, status, backendApp }) => (
+            {filtered.map(({ def, status, backendApp, backendUnified }) => (
               <AppCard
                 key={def.appId}
                 app={def}
                 status={status}
                 backendApp={backendApp}
+                backendUnified={backendUnified}
                 onConnect={handleConnect}
                 onDisconnect={handleDisconnect}
                 onOpenWorkspace={handleOpenWorkspace}
+                onOpenWizard={handleOpenWizard}
                 onRequestAccess={setRequestApp}
                 onNavigate={onNavigate}
               />
@@ -2406,6 +2517,20 @@ export default function AppsPage({ onNavigate }: AppsPageProps) {
             .filter((a): a is AppDef => !!a && a.productionStatus === 'production_ready')}
           onConnect={handleConnect}
           onClose={() => setActiveWizard(null)}
+        />
+      )}
+
+      {wizardApp && (
+        <ConnectWizard
+          app={wizardApp.unified}
+          agents={agents}
+          onConnect={handleWizardConnect}
+          onClose={() => setWizardApp(null)}
+          onOpenWorkspace={(unifiedApp) => {
+            const def = APP_CATALOG.find((d) => d.appId === unifiedApp.appId);
+            if (def?.workspaceRoute && onNavigate) onNavigate(def.workspaceRoute);
+            setWizardApp(null);
+          }}
         />
       )}
     </div>
