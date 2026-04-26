@@ -38,6 +38,7 @@ const ShadowModePage = lazy(() => import('./dashboard/ShadowModePage'));
 const BlackBoxPage = lazy(() => import('./dashboard/BlackBoxPage'));
 const PricingPage = lazy(() => import('./dashboard/PricingPage'));
 const ROIPage = lazy(() => import('./dashboard/ROIPage'));
+const BillingPage = lazy(() => import('./dashboard/BillingPage'));
 const BillingSuccessPage = lazy(() => import('./dashboard/BillingSuccessPage'));
 const SafeHarborPage = lazy(() => import('./dashboard/SafeHarborPage'));
 const SettingsPage = lazy(() => import('./dashboard/SettingsPage'));
@@ -755,6 +756,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   { id: 'incidents', icon: AlertTriangle, label: 'Safety Alerts', badge: incidents.filter(i => i.status !== 'resolved' && i.status !== 'false_positive' && i.source !== 'manual_test').length || null },
                   { id: 'audit-log', icon: Sparkles, label: 'Activity History', badge: null },
                   { id: 'costs', icon: DollarSign, label: 'Usage & Spending', badge: null },
+                  { id: 'billing', icon: DollarSign, label: 'Billing & Plans', badge: null },
                 ] as const).map((item) => (
                   <button key={item.id} data-tour={item.id} onClick={() => { navigateTo(item.id); setMobileNavOpen(false); }} className={cn('nav-item', currentPage === item.id && 'nav-item-active')}>
                     <item.icon className="w-4 h-4 shrink-0" />
@@ -1333,6 +1335,11 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="roi" element={
                     <SectionErrorBoundary fallbackMessage="ROI dashboard failed to load">
                       <ROIPage />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="billing" element={
+                    <SectionErrorBoundary fallbackMessage="Billing page failed to load">
+                      <BillingPage onNavigate={navigateTo} />
                     </SectionErrorBoundary>
                   } />
                   <Route path="billing/success" element={
