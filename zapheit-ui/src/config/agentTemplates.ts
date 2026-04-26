@@ -808,7 +808,7 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     riskLevel: 'Low',
     approvalDefault: 'Required for leave approvals and payroll changes',
     requiredSystems: ['greythr', 'keka'],
-    samplePrompts: ['Approve Rohan's leave request', 'How many leaves does Priya have left?', 'Flag any payroll anomalies this month'],
+    samplePrompts: ['Approve Rohan\'s leave request', 'How many leaves does Priya have left?', 'Flag any payroll anomalies this month'],
     certifications: ['DPDP', 'ISO 42001'],
     usedBy: 847,
     setupMinutes: 8,
