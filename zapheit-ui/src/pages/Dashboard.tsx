@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense, useCallback, useRef } from 'react';
-import { useNavigate, useLocation, Routes, Route, Navigate } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams, Routes, Route, Navigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -74,6 +74,16 @@ const NaukriWorkspace = lazy(() => import('./dashboard/apps/workspaces/naukri/Na
 const RecruitmentWorkspace = lazy(() => import('./dashboard/apps/workspaces/recruitment/RecruitmentWorkspace'));
 const NotificationsPage = lazy(() => import('./dashboard/NotificationsPage'));
 const SessionRecordingPage = lazy(() => import('./dashboard/SessionRecordingPage'));
+
+// Redirect /dashboard/agents/new?template=X → /dashboard/agent-studio?tab=templates&template=X
+function AgentNewRedirect() {
+  const [searchParams] = useSearchParams();
+  const template = searchParams.get('template');
+  const to = template
+    ? `/dashboard/agent-studio?tab=templates&template=${encodeURIComponent(template)}`
+    : '/dashboard/agent-studio?tab=templates';
+  return <Navigate to={to} replace />;
+}
 
 interface DashboardProps {
   isDemoMode?: boolean;
@@ -1155,6 +1165,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="templates" element={<Navigate to="/dashboard/agent-studio?tab=templates" replace />} />
                   <Route path="agent-library" element={<Navigate to="/dashboard/agent-studio?tab=library" replace />} />
                   <Route path="playbooks" element={<Navigate to="/dashboard/agent-studio?tab=playbooks" replace />} />
+                  <Route path="agents/new" element={<AgentNewRedirect />} />
                   <Route path="connectors" element={<Navigate to="/dashboard/apps" replace />} />
                   <Route path="apps" element={
                     <SectionErrorBoundary fallbackMessage="Apps failed to load">

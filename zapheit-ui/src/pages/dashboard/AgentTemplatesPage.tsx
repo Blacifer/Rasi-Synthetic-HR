@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { X, Zap, RefreshCw, Search, CheckCircle2, LineChart, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase-client';
 import { toast } from '../../lib/toast';
@@ -25,6 +26,7 @@ interface AgentTemplatesPageProps {
 }
 
 export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTemplatesPageProps) {
+  const [searchParams] = useSearchParams();
   const [selectedIndustry, setSelectedIndustry] = useState<string>('all');
   const [selectedTemplate, setSelectedTemplate] = useState<AgentTemplate | null>(null);
   const [templateSearchQuery, setTemplateSearchQuery] = useState('');
@@ -103,6 +105,16 @@ export default function AgentTemplatesPage({ onDeploy, onLaunchInChat }: AgentTe
 
       return liveModels.find(m => normalize(m.id).includes(key) || key.includes(normalize(m.id)));
     })(), [liveModels]);
+
+  // Auto-select template from URL param (?template=hr-assistant)
+  useEffect(() => {
+    const templateParam = searchParams.get('template');
+    if (!templateParam) return;
+    const match = AGENT_TEMPLATES.find(
+      (t) => t.id === templateParam || t.name.toLowerCase().replace(/\s+/g, '-') === templateParam,
+    );
+    if (match) setSelectedTemplate(match);
+  }, [searchParams]);
 
   // Update selected model when template changes or live models load
   useEffect(() => {

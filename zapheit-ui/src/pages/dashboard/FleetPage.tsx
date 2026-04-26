@@ -1409,27 +1409,53 @@ export default function FleetPage({
           {Array.from({ length: 5 }).map((_, i) => <SkeletonAgentCard key={i} />)}
         </div>
       ) : agents.length === 0 ? (
-        <div className="rounded-2xl border border-slate-700/60 bg-slate-800/30 p-12 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-black/20">
-            <Bot className="h-8 w-8 text-slate-500" />
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-700/60 bg-slate-800/30 p-10 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-black/20">
+              <Bot className="h-8 w-8 text-slate-500" />
+            </div>
+            <h2 className="text-xl font-semibold text-white">No governed agents yet</h2>
+            <p className="mx-auto mt-2 max-w-sm text-sm text-slate-400">
+              Deploy your first agent in under 5 minutes. Every action is governed, every decision audit-logged.
+            </p>
+            <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <button
+                onClick={() => onOpenOperationsPage?.('getting-started')}
+                className="btn-primary px-4 py-2.5 text-sm"
+              >
+                <Rocket className="h-4 w-4" /> Start guided setup
+              </button>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
+              >
+                <Plus className="h-4 w-4" /> Build from scratch
+              </button>
+            </div>
           </div>
-          <h2 className="text-xl font-semibold text-white">No governed agents yet</h2>
-          <p className="mx-auto mt-2 max-w-sm text-sm text-slate-400">
-            Create one agent, connect one channel, and run one safe test. That is enough to unlock live telemetry, spend visibility, and incident monitoring.
-          </p>
-          <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <button
-              onClick={() => onOpenOperationsPage?.('getting-started')}
-              className="btn-primary px-4 py-2.5 text-sm"
-            >
-              <Rocket className="h-4 w-4" /> Start guided setup
-            </button>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
-            >
-              <Plus className="h-4 w-4" /> Create first agent
-            </button>
+
+          {/* Quick-start template cards */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3">Start with a template</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                { id: 'hr-assistant', name: 'HR Assistant', desc: 'Leave requests, payroll anomalies, policy Q&A', color: 'blue', emoji: '👥' },
+                { id: 'hiring-agent', name: 'Hiring Agent', desc: 'Resume scoring, interview scheduling, offer routing', color: 'violet', emoji: '🎯' },
+                { id: 'finance-ops-agent', name: 'Finance Ops Agent', desc: 'Transaction monitoring, GST summaries, payout approvals', color: 'emerald', emoji: '₹' },
+                { id: 'support-agent', name: 'Support Agent', desc: 'Ticket triage, reply drafts, SLA breach alerts', color: 'cyan', emoji: '🎧' },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => onOpenOperationsPage?.(`agent-studio?tab=templates&template=${t.id}`)}
+                  className="text-left rounded-xl border border-white/8 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/15 p-4 transition-all group"
+                >
+                  <div className="text-xl mb-2">{t.emoji}</div>
+                  <p className="text-sm font-semibold text-white group-hover:text-blue-300 transition-colors">{t.name}</p>
+                  <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{t.desc}</p>
+                  <p className="text-[10px] text-blue-400 mt-2 font-medium">Use template →</p>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       ) : filteredAgents.length === 0 ? (
