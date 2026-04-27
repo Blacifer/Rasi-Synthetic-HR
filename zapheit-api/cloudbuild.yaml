@@ -17,6 +17,22 @@ steps:
       - '--all-tags'
       - 'asia-south1-docker.pkg.dev/$PROJECT_ID/zapheit/zapheit-api'
 
+  # Remove any plain env vars that conflict with Secret Manager mounts.
+  # These were previously set manually in the Cloud Run Console and must be
+  # cleared before --set-secrets can manage them, otherwise gcloud fails with
+  # "Cannot update environment variable [...] to the given type".
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'services'
+      - 'update'
+      - 'zapheit-api'
+      - '--region=asia-south1'
+      - '--platform=managed'
+      - '--remove-env-vars=FRONTEND_URL,SLACK_CLIENT_ID,SLACK_CLIENT_SECRET'
+    allowFailure: true
+
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'
