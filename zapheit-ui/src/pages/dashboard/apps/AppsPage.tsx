@@ -730,6 +730,7 @@ function AppCard({
           {isConnected && (
             <SetupScoreBar
               score={score}
+              isConnected={isConnected}
               onAttachAgent={() => {
                 if (app.suggestedAgent && onNavigate) {
                   onNavigate(`agents/new?template=${encodeURIComponent(app.suggestedAgent.toLowerCase().replace(/\s+/g, '-'))}`);

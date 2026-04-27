@@ -2,9 +2,10 @@ export function setupScore(isConnected: boolean, health: { good: boolean } | nul
   return (isConnected ? 34 : 0) + (health?.good ? 33 : 0) + (hasAgent ? 33 : 0);
 }
 
-export function SetupScoreBar({ score, onAttachAgent }: { score: number; onAttachAgent: () => void }) {
+export function SetupScoreBar({ score, isConnected, onAttachAgent }: { score: number; isConnected?: boolean; onAttachAgent: () => void }) {
   const label = score >= 100 ? 'Fully set up' : score >= 67 ? 'Almost there' : score >= 34 ? 'Getting started' : 'Not set up';
   const color = score >= 100 ? 'bg-emerald-400' : score >= 67 ? 'bg-blue-400' : 'bg-amber-400';
+  const ctaText = isConnected ? 'Attach an agent to unlock automation →' : 'Connect to unlock automation →';
   return (
     <div className="mt-2">
       <div className="flex items-center justify-between mb-1">
@@ -19,7 +20,7 @@ export function SetupScoreBar({ score, onAttachAgent }: { score: number; onAttac
           onClick={onAttachAgent}
           className="mt-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
         >
-          {score < 67 ? 'Connect to unlock automation →' : 'Attach an agent to reach 100% →'}
+          {ctaText}
         </button>
       )}
     </div>
