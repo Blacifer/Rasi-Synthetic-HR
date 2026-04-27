@@ -177,3 +177,5 @@ const googleAdapter: ConnectorAdapter = {
 };
 
 registerAdapter(googleAdapter);
+// Also register under the underscore alias used by the execute route resolver
+registerAdapter({ ...googleAdapter, connectorId: 'google_workspace' });
