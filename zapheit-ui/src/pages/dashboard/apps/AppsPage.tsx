@@ -874,27 +874,55 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
 
   const { allApps, loading, reload } = useAppsData(agents);
 
-  // Handle OAuth callback
+  // Handle OAuth callback — supports both integrations flow (?status=&service=)
+  // and marketplace flow (?marketplace_connected=&marketplace_app= / ?marketplace_error=)
   useEffect(() => {
-    const status  = searchParams.get('status');
-    const service = searchParams.get('service') || searchParams.get('provider');
-    const message = searchParams.get('message');
-    if (!status || !service) return;
+    const status     = searchParams.get('status');
+    const service    = searchParams.get('service') || searchParams.get('provider');
+    const message    = searchParams.get('message');
+    const mConnected = searchParams.get('marketplace_connected');
+    const mApp       = searchParams.get('marketplace_app');
+    const mError     = searchParams.get('marketplace_error');
 
-    if (status === 'connected') {
-      void reload().then(() => {
-        const app = APP_CATALOG.find((a) => a.serviceId === service || a.appId === service);
-        toast.success(`${app?.name ?? service} connected`);
-        if (app?.workspaceRoute && onNavigate) onNavigate(app.workspaceRoute);
-      });
-    } else if (status === 'error') {
-      toast.error(message || 'Connection failed');
+    let needsClean = false;
+
+    // Integrations OAuth callback
+    if (status && service) {
+      needsClean = true;
+      if (status === 'connected') {
+        void reload().then(() => {
+          const app = APP_CATALOG.find((a) => a.serviceId === service || a.appId === service);
+          toast.success(`${app?.name ?? service} connected`);
+          if (app?.workspaceRoute && onNavigate) onNavigate(app.workspaceRoute);
+        });
+      } else if (status === 'error') {
+        toast.error(message || 'Connection failed');
+      }
     }
 
-    setSearchParams((p) => {
-      p.delete('status'); p.delete('service'); p.delete('provider'); p.delete('message');
-      return p;
-    }, { replace: true });
+    // Marketplace OAuth callback
+    if (mConnected === 'true' && mApp) {
+      needsClean = true;
+      void reload().then(() => {
+        const app = APP_CATALOG.find((a) => a.appId === mApp || a.serviceId === mApp);
+        toast.success(`${app?.name ?? mApp} connected`);
+        if (app?.workspaceRoute && onNavigate) onNavigate(app.workspaceRoute);
+      });
+    }
+
+    if (mError) {
+      needsClean = true;
+      const appName = mApp ? (APP_CATALOG.find((a) => a.appId === mApp)?.name ?? mApp) : 'App';
+      toast.error(`${appName}: OAuth failed — ${mError}`);
+    }
+
+    if (needsClean) {
+      setSearchParams((p) => {
+        ['status', 'service', 'provider', 'message', 'marketplace_connected', 'marketplace_app', 'marketplace_error']
+          .forEach((k) => p.delete(k));
+        return p;
+      }, { replace: true });
+    }
   }, [searchParams, setSearchParams, reload, onNavigate]);
 
   // Merge backend status
@@ -979,6 +1007,18 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   const handleWizardConnect = useCallback(async (_unified: UnifiedApp, creds: Record<string, string>) => {
     const def = wizardApp?.def;
     if (!def) return;
+
+    if (def.auth === 'oauth') {
+      // OAuth apps: initiate provider redirect — browser navigates away
+      const res = await api.integrations.initOAuth(def.serviceId, '/dashboard/apps');
+      if (res.success && (res.data as any)?.url) {
+        window.location.href = (res.data as any).url;
+      } else {
+        throw new Error((res as any).error || 'Failed to start OAuth flow');
+      }
+      return;
+    }
+
     const res = await api.integrations.connect(def.serviceId, creds);
     if (!res.success) throw new Error((res as any).error || 'Connection failed');
     void reload();
