@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
 import { AlertCircle, CheckCircle2, Key, Loader2, RefreshCw, X, Zap } from 'lucide-react';
 import { api } from '../../../../lib/api-client';
 import { toast } from '../../../../lib/toast';
@@ -14,15 +14,15 @@ import { ActionsTab } from './ActionsTab';
 import { SlackTab } from './SlackTab';
 import { PermissionsTab } from './PermissionsTab';
 import { ApprovalsTab } from './ApprovalsTab';
-import { HrWorkspaceTab } from './HrWorkspaceTab';
-import { RecruitmentWorkspaceTab } from './RecruitmentWorkspaceTab';
-import { CollaborationWorkspaceTab } from './CollaborationWorkspaceTab';
-import { SupportWorkspaceTab } from './SupportWorkspaceTab';
-import { FinanceWorkspaceTab } from './FinanceWorkspaceTab';
-import { ComplianceWorkspaceTab } from './ComplianceWorkspaceTab';
-import { SalesWorkspaceTab } from './SalesWorkspaceTab';
-import { MarketingWorkspaceTab } from './MarketingWorkspaceTab';
-import { ItWorkspaceTab } from './ItWorkspaceTab';
+const HrWorkspaceTab = lazy(() => import('./HrWorkspaceTab').then((m) => ({ default: m.HrWorkspaceTab })));
+const RecruitmentWorkspaceTab = lazy(() => import('./RecruitmentWorkspaceTab').then((m) => ({ default: m.RecruitmentWorkspaceTab })));
+const CollaborationWorkspaceTab = lazy(() => import('./CollaborationWorkspaceTab').then((m) => ({ default: m.CollaborationWorkspaceTab })));
+const SupportWorkspaceTab = lazy(() => import('./SupportWorkspaceTab').then((m) => ({ default: m.SupportWorkspaceTab })));
+const FinanceWorkspaceTab = lazy(() => import('./FinanceWorkspaceTab').then((m) => ({ default: m.FinanceWorkspaceTab })));
+const ComplianceWorkspaceTab = lazy(() => import('./ComplianceWorkspaceTab').then((m) => ({ default: m.ComplianceWorkspaceTab })));
+const SalesWorkspaceTab = lazy(() => import('./SalesWorkspaceTab').then((m) => ({ default: m.SalesWorkspaceTab })));
+const MarketingWorkspaceTab = lazy(() => import('./MarketingWorkspaceTab').then((m) => ({ default: m.MarketingWorkspaceTab })));
+const ItWorkspaceTab = lazy(() => import('./ItWorkspaceTab').then((m) => ({ default: m.ItWorkspaceTab })));
 
 interface DetailDrawerProps {
   app: UnifiedApp;
@@ -338,61 +338,63 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
               initialLinkedIds={linkedAgentIds}
             />
           )}
-          {tab === 'workspace' && isCollaborationWorkspace && rawConnectorId && (
-            <CollaborationWorkspaceTab
-              app={app}
-              serviceId={rawConnectorId}
-              agentNames={agentNames}
-            />
-          )}
-          {tab === 'workspace' && isHrWorkspace && (
-            <HrWorkspaceTab
-              app={app}
-              agentNames={agentNames}
-            />
-          )}
-          {tab === 'workspace' && isSupportWorkspace && (
-            <SupportWorkspaceTab
-              app={app}
-              agentNames={agentNames}
-            />
-          )}
-          {tab === 'workspace' && isFinanceWorkspace && (
-            <FinanceWorkspaceTab
-              app={app}
-              agentNames={agentNames}
-            />
-          )}
-          {tab === 'workspace' && isComplianceWorkspace && (
-            <ComplianceWorkspaceTab
-              app={app}
-              agentNames={agentNames}
-            />
-          )}
-          {tab === 'workspace' && isSalesWorkspace && (
-            <SalesWorkspaceTab
-              app={app}
-              agentNames={agentNames}
-            />
-          )}
-          {tab === 'workspace' && isMarketingWorkspace && (
-            <MarketingWorkspaceTab
-              app={app}
-              agentNames={agentNames}
-            />
-          )}
-          {tab === 'workspace' && isItWorkspace && (
-            <ItWorkspaceTab
-              app={app}
-              agentNames={agentNames}
-            />
-          )}
-          {tab === 'workspace' && isRecruitmentWorkspace && (
-            <RecruitmentWorkspaceTab
-              app={app}
-              agentNames={agentNames}
-            />
-          )}
+          <Suspense fallback={<div className="p-8 text-center text-slate-500 text-sm">Loading workspace…</div>}>
+            {tab === 'workspace' && isCollaborationWorkspace && rawConnectorId && (
+              <CollaborationWorkspaceTab
+                app={app}
+                serviceId={rawConnectorId}
+                agentNames={agentNames}
+              />
+            )}
+            {tab === 'workspace' && isHrWorkspace && (
+              <HrWorkspaceTab
+                app={app}
+                agentNames={agentNames}
+              />
+            )}
+            {tab === 'workspace' && isSupportWorkspace && (
+              <SupportWorkspaceTab
+                app={app}
+                agentNames={agentNames}
+              />
+            )}
+            {tab === 'workspace' && isFinanceWorkspace && (
+              <FinanceWorkspaceTab
+                app={app}
+                agentNames={agentNames}
+              />
+            )}
+            {tab === 'workspace' && isComplianceWorkspace && (
+              <ComplianceWorkspaceTab
+                app={app}
+                agentNames={agentNames}
+              />
+            )}
+            {tab === 'workspace' && isSalesWorkspace && (
+              <SalesWorkspaceTab
+                app={app}
+                agentNames={agentNames}
+              />
+            )}
+            {tab === 'workspace' && isMarketingWorkspace && (
+              <MarketingWorkspaceTab
+                app={app}
+                agentNames={agentNames}
+              />
+            )}
+            {tab === 'workspace' && isItWorkspace && (
+              <ItWorkspaceTab
+                app={app}
+                agentNames={agentNames}
+              />
+            )}
+            {tab === 'workspace' && isRecruitmentWorkspace && (
+              <RecruitmentWorkspaceTab
+                app={app}
+                agentNames={agentNames}
+              />
+            )}
+          </Suspense>
           {tab === 'history' && (
             <HistoryTab
               app={app}
