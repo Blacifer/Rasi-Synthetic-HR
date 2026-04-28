@@ -1421,10 +1421,7 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     actionsUnlocked: ['Open issues', 'Comment on PRs', 'Fetch CI status', 'Read repo activity', 'Trigger workflows'],
     setupTimeMinutes: 4,
     bundleIds: ['devops-stack'],
-    installMethod: 'api_key',
-    requiredFields: [
-      { name: 'access_token', label: 'Personal Access Token', type: 'password', placeholder: 'ghp_...', required: true },
-    ],
+    installMethod: 'oauth2',
     installCount: 8900,
     featured: true,
     badge: 'Popular',

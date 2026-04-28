@@ -561,10 +561,9 @@ export const APP_CATALOG: AppDef[] = [
   {
     appId: 'github', serviceId: 'github', name: 'GitHub',
     description: 'Repositories, issues, pull requests, and CI/CD pipeline management.',
-    category: 'it', auth: 'api_key', logoLetter: 'GH', colorHex: '#24292E',
+    category: 'it', auth: 'oauth', logoLetter: 'GH', colorHex: '#24292E',
     productionStatus: 'production_ready',
     workspaceRoute: 'apps/github/workspace', suggestedAgent: 'DevOps Agent',
-    fields: [{ key: 'access_token', label: 'Personal access token', type: 'password', helpText: 'GitHub → Settings → Developer Settings → Personal access tokens' }],
   },
   {
     appId: 'okta', serviceId: 'okta', name: 'Okta',
@@ -1013,4 +1012,3 @@ export const INDIA_POPULAR_IDS = [
   'whatsapp-business', 'naukri', 'greythr', 'tally',
   'cashfree', 'cleartax', 'freshdesk', 'zoho-crm',
 ];
-

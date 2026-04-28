@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Bot, GitPullRequest, BookOpen, CircleDot,
-  Activity, RefreshCw, Loader2,
+  Activity, RefreshCw, Loader2, Link2Off,
 } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
@@ -40,6 +40,21 @@ export default function GitHubWorkspace() {
   const [loadingIssues, setLoadingIssues] = useState(false);
   const [connected, setConnected] = useState<boolean | null>(null);
   const [selectedRepo, setSelectedRepo] = useState<{ owner: string; repo: string } | null>(null);
+
+  const handleDisconnect = useCallback(async () => {
+    if (!confirm('Disconnect GitHub? Repository, issue, and pull request access will stop.')) return;
+    try {
+      await api.integrations.disconnect(CONNECTOR_ID);
+      setConnected(false);
+      setRepos([]);
+      setPulls([]);
+      setIssues([]);
+      setSelectedRepo(null);
+      toast.success('GitHub disconnected');
+    } catch {
+      toast.error('Failed to disconnect GitHub');
+    }
+  }, []);
 
   /* -- Load repos -------------------------------------------------- */
   const loadRepos = useCallback(async () => {
@@ -201,6 +216,16 @@ export default function GitHubWorkspace() {
             </span>
           </div>
         </div>
+
+        {connected && (
+          <button
+            onClick={() => void handleDisconnect()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 text-xs font-medium transition-colors"
+          >
+            <Link2Off className="w-3.5 h-3.5" />
+            Disconnect
+          </button>
+        )}
 
         <button
           onClick={() => {
