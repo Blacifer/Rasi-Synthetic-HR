@@ -41,6 +41,17 @@ export default function GitHubWorkspace() {
   const [connected, setConnected] = useState<boolean | null>(null);
   const [selectedRepo, setSelectedRepo] = useState<{ owner: string; repo: string } | null>(null);
 
+  const loadConnectionStatus = useCallback(async () => {
+    try {
+      const res = await api.integrations.getAll();
+      const items = Array.isArray(res.data) ? res.data : [];
+      const github = items.find((item: any) => item.service_type === CONNECTOR_ID || item.id === CONNECTOR_ID);
+      setConnected(github?.status === 'connected');
+    } catch {
+      setConnected(null);
+    }
+  }, []);
+
   const handleConnect = useCallback(async () => {
     try {
       const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -75,20 +86,25 @@ export default function GitHubWorkspace() {
   const loadRepos = useCallback(async () => {
     setLoadingRepos(true);
     try {
+      await loadConnectionStatus();
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_repos', { limit: 30 });
-      if (res.success && res.data?.data) {
-        const list = Array.isArray(res.data.data) ? res.data.data : [];
+      const payload = res.data as any;
+      if (res.success && payload?.success !== false && Array.isArray(payload?.data)) {
+        const list = payload.data;
         setRepos(list);
         setConnected(true);
+      } else if (res.success && payload?.success === false) {
+        setRepos([]);
+        toast.error(payload.error || 'Failed to load repositories');
       } else {
-        setConnected(false);
+        setRepos([]);
       }
     } catch {
-      setConnected(false);
+      setRepos([]);
     } finally {
       setLoadingRepos(false);
     }
-  }, []);
+  }, [loadConnectionStatus]);
 
   /* -- Load PRs for a repo ----------------------------------------- */
   const loadPulls = useCallback(async (owner: string, repo: string) => {
@@ -181,8 +197,9 @@ export default function GitHubWorkspace() {
 
   /* -- Initial load ------------------------------------------------ */
   useEffect(() => {
+    void loadConnectionStatus();
     void loadRepos();
-  }, [loadRepos]);
+  }, [loadConnectionStatus, loadRepos]);
 
   /* ---------------------------------------------------------------- */
   /*  Render                                                           */
