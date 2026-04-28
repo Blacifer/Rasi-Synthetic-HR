@@ -4142,6 +4142,11 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
 
     const { connectorId } = req.params;
     const resolvedConnectorId = connectorId === 'google-workspace' ? 'google_workspace' : connectorId;
+    const integrationServiceAliases = Array.from(new Set([
+      resolvedConnectorId,
+      resolvedConnectorId.replace(/-/g, '_'),
+      resolvedConnectorId.replace(/_/g, '-'),
+    ]));
     const { action, params = {}, agentId } = req.body as { action: string; params?: Record<string, any>; agentId?: string };
 
     if (!action) return res.status(400).json({ success: false, error: 'action is required' });
@@ -4259,18 +4264,20 @@ router.post('/:connectorId/execute', authenticateToken, requirePermission('conne
     }
 
     // Load credentials for the org's integration
-    const integrations = (await supabaseRestAsService('integrations', new URLSearchParams({
+    const integrationQuery = new URLSearchParams({
       organization_id: eqFilter(orgId),
-      service_type: eqFilter(resolvedConnectorId),
-      select: 'id,status',
-      limit: '1',
-    }))) as Array<{ id: string; status: string }>;
+      select: 'id,status,service_type',
+      limit: '10',
+    });
+    integrationQuery.set('service_type', `in.(${integrationServiceAliases.join(',')})`);
+    const integrations = (await supabaseRestAsService('integrations', integrationQuery)) as Array<{ id: string; status: string; service_type: string }>;
 
-    if (!integrations?.length || integrations[0].status !== 'connected') {
+    const connectedIntegration = (integrations || []).find((row) => row.status === 'connected');
+    if (!connectedIntegration) {
       return res.status(400).json({ success: false, error: `${resolvedConnectorId} is not connected` });
     }
 
-    const integrationId = integrations[0].id;
+    const integrationId = connectedIntegration.id;
     const credRows = (await supabaseRestAsService('integration_credentials', new URLSearchParams({
       integration_id: eqFilter(integrationId),
       select: 'key,value,expires_at',
