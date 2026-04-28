@@ -41,6 +41,21 @@ export default function GitHubWorkspace() {
   const [connected, setConnected] = useState<boolean | null>(null);
   const [selectedRepo, setSelectedRepo] = useState<{ owner: string; repo: string } | null>(null);
 
+  const handleConnect = useCallback(async () => {
+    try {
+      const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      const res = await api.integrations.initOAuth(CONNECTOR_ID, returnTo);
+      const url = (res.data as any)?.url;
+      if (res.success && url) {
+        window.location.href = url;
+        return;
+      }
+      toast.error(res.error || 'Failed to start GitHub OAuth');
+    } catch {
+      toast.error('Failed to start GitHub OAuth');
+    }
+  }, []);
+
   const handleDisconnect = useCallback(async () => {
     if (!confirm('Disconnect GitHub? Repository, issue, and pull request access will stop.')) return;
     try {
@@ -282,9 +297,7 @@ export default function GitHubWorkspace() {
             description="Connect GitHub via OAuth to read repos, issues, and pull requests."
             action={{
               label: 'Connect GitHub with OAuth',
-              onClick: () => {
-                window.location.href = api.integrations.getOAuthAuthorizeUrl('github', window.location.href);
-              },
+              onClick: () => { void handleConnect(); },
             }}
           />
         </div>
