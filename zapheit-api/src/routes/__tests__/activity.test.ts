@@ -176,4 +176,116 @@ describe('GET /events', () => {
     expect(query.get('organization_id')).toBe(`eq.${ORG_ID}`);
     expect(query.get('limit')).toBe('10');
   });
+
+  it('merges approvals, jobs, incidents, connector health, executions, costs, and audit evidence', async () => {
+    mockRest
+      .mockResolvedValueOnce([
+        {
+          id: 'audit-4',
+          action: 'policy.violated',
+          resource_type: 'policy',
+          resource_id: 'policy-1',
+          user_id: USER_ID,
+          created_at: '2026-04-30T00:00:06.000Z',
+          details: {},
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'approval-1',
+          service: 'github',
+          action: 'create_issue',
+          status: 'pending',
+          required_role: 'manager',
+          requested_by: 'agent',
+          created_at: '2026-04-30T00:00:05.000Z',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'job-1',
+          type: 'connector_action',
+          status: 'running',
+          runtime_instance_id: 'runtime-1',
+          created_by: USER_ID,
+          created_at: '2026-04-30T00:00:04.000Z',
+          started_at: '2026-04-30T00:00:04.500Z',
+          output: {},
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'incident-1',
+          incident_type: 'pii_leak',
+          severity: 'high',
+          status: 'open',
+          title: 'PII detected',
+          description: 'Sensitive data detected in output',
+          created_at: '2026-04-30T00:00:03.000Z',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'execution-1',
+          connector_id: 'github',
+          action: 'create_issue',
+          success: true,
+          duration_ms: 320,
+          approval_required: true,
+          approval_id: 'approval-1',
+          created_at: '2026-04-30T00:00:02.000Z',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'integration-1',
+          service_type: 'github',
+          service_name: 'GitHub',
+          category: 'DEVOPS',
+          status: 'connected',
+          created_at: '2026-04-30T00:00:01.000Z',
+          updated_at: '2026-04-30T00:00:01.000Z',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'cost-1',
+          model_name: 'gpt-4o',
+          total_tokens: 1200,
+          cost_usd: '0.024',
+          request_count: 1,
+          date: '2026-04-30',
+          created_at: '2026-04-30T00:00:00.000Z',
+        },
+      ]);
+
+    const { statusCode, body } = await invokeActivityRoute('/events', { limit: '20' });
+
+    expect(statusCode).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.data.events).toHaveLength(7);
+    expect(body.data.events.map((event: any) => event.type)).toEqual([
+      'audit',
+      'approval',
+      'job',
+      'incident',
+      'connector',
+      'connector',
+      'cost',
+    ]);
+    expect(body.data.events[1]).toMatchObject({
+      title: 'Approval requested: Github · Create Issue',
+      status: 'needs_policy',
+      route: 'approvals',
+    });
+    expect(body.data.events[3]).toMatchObject({
+      title: 'Incident opened: PII detected',
+      tone: 'risk',
+      route: 'incidents',
+    });
+    expect(body.data.events[6]).toMatchObject({
+      title: 'Cost recorded: $0.024',
+      route: 'costs',
+    });
+  });
 });

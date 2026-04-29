@@ -15,6 +15,12 @@ const MAX_LIMIT = 100;
 const STREAM_BOOTSTRAP_LIMIT = 25;
 const STREAM_POLL_INTERVAL_MS = 5000;
 const ACTIVITY_SELECT = 'id,action,resource_type,resource_id,user_id,created_at,details';
+const APPROVAL_SELECT = 'id,service,action,status,required_role,requested_by,reviewer_id,agent_id,created_at,updated_at,reviewed_at,expires_at';
+const JOB_SELECT = 'id,agent_id,runtime_instance_id,type,status,error,created_by,created_at,started_at,finished_at,input,output';
+const INCIDENT_SELECT = 'id,agent_id,incident_type,severity,status,title,description,created_at,resolved_at';
+const CONNECTOR_EXECUTION_SELECT = 'id,agent_id,connector_id,action,success,error_message,duration_ms,approval_required,approval_id,created_at';
+const INTEGRATION_SELECT = 'id,service_type,service_name,category,status,last_sync_at,last_error_at,last_error_msg,created_at,updated_at';
+const COST_SELECT = 'id,agent_id,conversation_id,date,model_name,total_tokens,cost_usd,request_count,created_at';
 
 type AuditLogActivityRow = {
   id: string;
@@ -24,6 +30,86 @@ type AuditLogActivityRow = {
   user_id?: string | null;
   created_at?: string | null;
   details?: Record<string, any> | null;
+};
+
+type ApprovalActivityRow = {
+  id: string;
+  service?: string | null;
+  action?: string | null;
+  status?: string | null;
+  required_role?: string | null;
+  requested_by?: string | null;
+  reviewer_id?: string | null;
+  agent_id?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  reviewed_at?: string | null;
+  expires_at?: string | null;
+};
+
+type JobActivityRow = {
+  id: string;
+  agent_id?: string | null;
+  runtime_instance_id?: string | null;
+  type?: string | null;
+  status?: string | null;
+  error?: string | null;
+  created_by?: string | null;
+  created_at?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  input?: Record<string, any> | null;
+  output?: Record<string, any> | null;
+};
+
+type IncidentActivityRow = {
+  id: string;
+  agent_id?: string | null;
+  incident_type?: string | null;
+  severity?: string | null;
+  status?: string | null;
+  title?: string | null;
+  description?: string | null;
+  created_at?: string | null;
+  resolved_at?: string | null;
+};
+
+type ConnectorExecutionActivityRow = {
+  id: string;
+  agent_id?: string | null;
+  connector_id?: string | null;
+  action?: string | null;
+  success?: boolean | null;
+  error_message?: string | null;
+  duration_ms?: number | null;
+  approval_required?: boolean | null;
+  approval_id?: string | null;
+  created_at?: string | null;
+};
+
+type IntegrationActivityRow = {
+  id: string;
+  service_type?: string | null;
+  service_name?: string | null;
+  category?: string | null;
+  status?: string | null;
+  last_sync_at?: string | null;
+  last_error_at?: string | null;
+  last_error_msg?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type CostActivityRow = {
+  id: string;
+  agent_id?: string | null;
+  conversation_id?: string | null;
+  date?: string | null;
+  model_name?: string | null;
+  total_tokens?: number | null;
+  cost_usd?: number | string | null;
+  request_count?: number | null;
+  created_at?: string | null;
 };
 
 const ACTIVITY_TYPES = new Set<ProductionActivityType>(['approval', 'incident', 'job', 'connector', 'audit', 'cost']);
@@ -49,6 +135,32 @@ function cleanText(value: unknown, fallback: string) {
 
 function cleanNullableText(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function eventTime(...candidates: Array<string | null | undefined>) {
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const date = new Date(candidate);
+    if (!Number.isNaN(date.getTime())) return date.toISOString();
+  }
+  return new Date().toISOString();
+}
+
+function serviceLabel(value?: string | null) {
+  return cleanText(value, 'connector')
+    .replace(/[-_]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatUsd(value: unknown) {
+  const amount = Number(value || 0);
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: amount >= 1 ? 2 : 4,
+  }).format(Number.isFinite(amount) ? amount : 0);
 }
 
 function titleFromAuditAction(action: string) {
@@ -100,6 +212,160 @@ export function normalizeActivityEvent(row: AuditLogActivityRow): UnifiedProduct
   };
 }
 
+function normalizeApprovalEvent(row: ApprovalActivityRow): UnifiedProductionActivityEvent {
+  const status = cleanText(row.status, 'pending').toLowerCase();
+  const service = serviceLabel(row.service);
+  const action = serviceLabel(row.action);
+  const reviewed = Boolean(row.reviewed_at);
+  const at = eventTime(reviewed ? row.reviewed_at : row.created_at, row.updated_at, row.created_at);
+  const statusMap: Record<string, { readiness: ProductionReadinessStatus; tone: ProductionActivityTone; verb: string }> = {
+    pending: { readiness: 'needs_policy', tone: 'warn', verb: 'Approval requested' },
+    approved: { readiness: 'deployed', tone: 'success', verb: 'Approval approved' },
+    denied: { readiness: 'blocked', tone: 'risk', verb: 'Approval denied' },
+    expired: { readiness: 'blocked', tone: 'warn', verb: 'Approval expired' },
+    cancelled: { readiness: 'blocked', tone: 'warn', verb: 'Approval cancelled' },
+  };
+  const mapped = statusMap[status] || statusMap.pending;
+
+  return {
+    id: `approval-${row.id}-${status}`,
+    type: 'approval',
+    at,
+    title: `${mapped.verb}: ${service} · ${action}`,
+    detail: `${cleanText(row.required_role, 'manager')} review · requested by ${cleanText(row.requested_by, 'agent')}`,
+    status: mapped.readiness,
+    tone: mapped.tone,
+    route: 'approvals',
+    actor: row.reviewer_id || row.requested_by || null,
+    sourceRef: row.id,
+    evidenceRef: row.id,
+  };
+}
+
+function normalizeJobEvent(row: JobActivityRow): UnifiedProductionActivityEvent {
+  const status = cleanText(row.status, 'queued').toLowerCase();
+  const type = cleanText(row.type, 'job').replace(/_/g, ' ');
+  const at = eventTime(
+    status === 'succeeded' || status === 'failed' || status === 'canceled' ? row.finished_at : null,
+    status === 'running' ? row.started_at : null,
+    row.created_at,
+  );
+  const statusMap: Record<string, { readiness: ProductionReadinessStatus; tone: ProductionActivityTone; verb: string }> = {
+    pending_approval: { readiness: 'needs_policy', tone: 'warn', verb: 'Job waiting for approval' },
+    queued: { readiness: 'ready', tone: 'info', verb: 'Runtime job queued' },
+    running: { readiness: 'deployed', tone: 'info', verb: 'Runtime job running' },
+    succeeded: { readiness: 'deployed', tone: 'success', verb: 'Runtime job succeeded' },
+    failed: { readiness: 'blocked', tone: 'risk', verb: 'Runtime job failed' },
+    canceled: { readiness: 'blocked', tone: 'warn', verb: 'Runtime job canceled' },
+  };
+  const mapped = statusMap[status] || statusMap.queued;
+  const costUsd = Number(row.output?.cost_usd || row.output?.usage?.cost_usd || row.output?.raw?.usage?.cost_usd || 0);
+  const costDetail = Number.isFinite(costUsd) && costUsd > 0 ? ` · ${formatUsd(costUsd)}` : '';
+
+  return {
+    id: `job-${row.id}-${status}`,
+    type: 'job',
+    at,
+    title: `${mapped.verb}: ${type}`,
+    detail: `${row.runtime_instance_id ? `Runtime ${row.runtime_instance_id}` : 'Runtime pending'}${costDetail}${row.error ? ` · ${row.error}` : ''}`,
+    status: mapped.readiness,
+    tone: mapped.tone,
+    route: 'jobs',
+    actor: row.created_by || null,
+    sourceRef: row.id,
+    evidenceRef: row.id,
+  };
+}
+
+function normalizeIncidentEvent(row: IncidentActivityRow): UnifiedProductionActivityEvent {
+  const incidentStatus = cleanText(row.status, 'open').toLowerCase();
+  const severity = cleanText(row.severity, 'low').toLowerCase();
+  const resolved = incidentStatus === 'resolved' || incidentStatus === 'false_positive';
+  const severe = severity === 'critical' || severity === 'high';
+
+  return {
+    id: `incident-${row.id}-${incidentStatus}`,
+    type: 'incident',
+    at: eventTime(resolved ? row.resolved_at : row.created_at, row.created_at),
+    title: resolved
+      ? `Incident ${incidentStatus.replace(/_/g, ' ')}: ${cleanText(row.title, serviceLabel(row.incident_type))}`
+      : `Incident opened: ${cleanText(row.title, serviceLabel(row.incident_type))}`,
+    detail: `${severity} · ${incidentStatus}${row.description ? ` · ${row.description}` : ''}`,
+    status: resolved ? 'deployed' : severe ? 'blocked' : 'degraded',
+    tone: resolved ? 'success' : severe ? 'risk' : 'warn',
+    route: 'incidents',
+    actor: null,
+    sourceRef: row.id,
+    evidenceRef: row.id,
+  };
+}
+
+function normalizeConnectorExecutionEvent(row: ConnectorExecutionActivityRow): UnifiedProductionActivityEvent {
+  const connector = serviceLabel(row.connector_id);
+  const action = serviceLabel(row.action);
+  const success = row.success === true;
+  const approvalRequired = row.approval_required === true;
+  const duration = typeof row.duration_ms === 'number' && row.duration_ms >= 0 ? ` · ${row.duration_ms}ms` : '';
+
+  return {
+    id: `connector-execution-${row.id}-${success ? 'succeeded' : 'failed'}`,
+    type: 'connector',
+    at: eventTime(row.created_at),
+    title: `${connector} · ${action} ${success ? 'executed' : approvalRequired ? 'needs review' : 'failed'}`,
+    detail: success
+      ? `Production action recorded${duration}`
+      : `${approvalRequired ? 'Approval required' : 'Execution failed'}${row.error_message ? ` · ${row.error_message}` : ''}`,
+    status: success ? 'deployed' : approvalRequired ? 'needs_policy' : 'degraded',
+    tone: success ? 'success' : approvalRequired ? 'warn' : 'risk',
+    route: 'apps',
+    actor: null,
+    sourceRef: row.id,
+    evidenceRef: row.approval_id || row.id,
+  };
+}
+
+function normalizeIntegrationEvent(row: IntegrationActivityRow): UnifiedProductionActivityEvent {
+  const status = cleanText(row.status, 'disconnected').toLowerCase();
+  const degraded = status === 'error' || status === 'expired';
+  const connected = status === 'connected' || status === 'syncing';
+  const appName = cleanText(row.service_name, serviceLabel(row.service_type));
+
+  return {
+    id: `connector-health-${row.id}-${status}`,
+    type: 'connector',
+    at: eventTime(row.last_error_at, row.last_sync_at, row.updated_at, row.created_at),
+    title: `${appName} connector ${status.replace(/_/g, ' ')}`,
+    detail: degraded
+      ? cleanText(row.last_error_msg, 'Connector credentials or provider health needs attention')
+      : `${cleanText(row.category, 'App')} · ${connected ? 'available for production workflows' : 'not connected'}`,
+    status: degraded ? 'degraded' : connected ? 'deployed' : 'not_configured',
+    tone: degraded ? 'warn' : connected ? 'success' : 'info',
+    route: 'apps',
+    actor: null,
+    sourceRef: row.id,
+    evidenceRef: row.id,
+  };
+}
+
+function normalizeCostEvent(row: CostActivityRow): UnifiedProductionActivityEvent {
+  const requests = Number(row.request_count || 0);
+  const tokens = Number(row.total_tokens || 0);
+
+  return {
+    id: `cost-${row.id}`,
+    type: 'cost',
+    at: eventTime(row.created_at, row.date),
+    title: `Cost recorded: ${formatUsd(row.cost_usd)}`,
+    detail: `${cleanText(row.model_name, 'model unknown')} · ${requests.toLocaleString()} request(s) · ${tokens.toLocaleString()} tokens`,
+    status: 'deployed',
+    tone: 'info',
+    route: 'costs',
+    actor: null,
+    sourceRef: row.id,
+    evidenceRef: row.id,
+  };
+}
+
 function requireUserJwt(req: Request, res: Response): string | null {
   const userJwt = req.userJwt;
   if (!userJwt) {
@@ -130,17 +396,133 @@ async function loadActivityEvents(args: {
   since?: string | null;
   ascending?: boolean;
 }) {
-  const query = new URLSearchParams();
-  query.set('select', ACTIVITY_SELECT);
-  query.set('organization_id', eq(args.organizationId));
-  query.set('order', `created_at.${args.ascending ? 'asc' : 'desc'}`);
-  query.set('limit', String(args.limit));
-  if (args.since) {
-    query.set('created_at', gt(args.since));
-  }
+  const direction = args.ascending ? 'asc' : 'desc';
+  const buildQuery = (select: string, orderColumn = 'created_at', sinceFilter?: string) => {
+    const query = new URLSearchParams();
+    query.set('select', select);
+    query.set('organization_id', eq(args.organizationId));
+    query.set('order', `${orderColumn}.${direction}`);
+    query.set('limit', String(args.limit));
+    if (args.since) {
+      if (sinceFilter) {
+        query.set('or', sinceFilter);
+      } else {
+        query.set(orderColumn, gt(args.since));
+      }
+    }
+    return query;
+  };
 
-  const rows = (await supabaseRestAsUser(args.userJwt, 'audit_logs', query)) as AuditLogActivityRow[];
-  return (rows || []).map(normalizeActivityEvent);
+  const loadSource = async <TRow>(
+    source: string,
+    table: string,
+    query: URLSearchParams,
+    normalize: (row: TRow) => UnifiedProductionActivityEvent,
+  ) => {
+    try {
+      const rows = (await supabaseRestAsUser(args.userJwt, table, query)) as TRow[];
+      return (rows || []).map(normalize);
+    } catch (error: any) {
+      logger.warn('Activity source query failed', {
+        source,
+        table,
+        error: error?.message,
+      });
+      return [];
+    }
+  };
+
+  const [
+    auditEvents,
+    approvalEvents,
+    jobEvents,
+    incidentEvents,
+    connectorExecutionEvents,
+    integrationEvents,
+    costEvents,
+  ] = await Promise.all([
+    loadSource<AuditLogActivityRow>(
+      'audit_logs',
+      'audit_logs',
+      buildQuery(ACTIVITY_SELECT),
+      normalizeActivityEvent,
+    ),
+    loadSource<ApprovalActivityRow>(
+      'approval_requests',
+      'approval_requests',
+      buildQuery(
+        APPROVAL_SELECT,
+        'created_at',
+        `(created_at.gt.${args.since},updated_at.gt.${args.since},reviewed_at.gt.${args.since})`,
+      ),
+      normalizeApprovalEvent,
+    ),
+    loadSource<JobActivityRow>(
+      'agent_jobs',
+      'agent_jobs',
+      buildQuery(
+        JOB_SELECT,
+        'created_at',
+        `(created_at.gt.${args.since},started_at.gt.${args.since},finished_at.gt.${args.since})`,
+      ),
+      normalizeJobEvent,
+    ),
+    loadSource<IncidentActivityRow>(
+      'incidents',
+      'incidents',
+      buildQuery(
+        INCIDENT_SELECT,
+        'created_at',
+        `(created_at.gt.${args.since},resolved_at.gt.${args.since})`,
+      ),
+      normalizeIncidentEvent,
+    ),
+    loadSource<ConnectorExecutionActivityRow>(
+      'connector_action_executions',
+      'connector_action_executions',
+      buildQuery(CONNECTOR_EXECUTION_SELECT),
+      normalizeConnectorExecutionEvent,
+    ),
+    loadSource<IntegrationActivityRow>(
+      'integrations',
+      'integrations',
+      buildQuery(
+        INTEGRATION_SELECT,
+        'updated_at',
+        `(updated_at.gt.${args.since},last_sync_at.gt.${args.since},last_error_at.gt.${args.since})`,
+      ),
+      normalizeIntegrationEvent,
+    ),
+    loadSource<CostActivityRow>(
+      'cost_tracking',
+      'cost_tracking',
+      buildQuery(COST_SELECT),
+      normalizeCostEvent,
+    ),
+  ]);
+
+  const events = [
+    ...auditEvents,
+    ...approvalEvents,
+    ...jobEvents,
+    ...incidentEvents,
+    ...connectorExecutionEvents,
+    ...integrationEvents,
+    ...costEvents,
+  ].filter((event) => event.at);
+
+  const seen = new Set<string>();
+  return events
+    .sort((a, b) => {
+      const delta = new Date(a.at).getTime() - new Date(b.at).getTime();
+      return args.ascending ? delta : -delta;
+    })
+    .filter((event) => {
+      if (seen.has(event.id)) return false;
+      seen.add(event.id);
+      return true;
+    })
+    .slice(0, args.limit);
 }
 
 function writeSse(res: Response, event: string, data: unknown) {

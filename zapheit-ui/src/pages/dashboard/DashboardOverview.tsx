@@ -225,7 +225,7 @@ function activityStreamTone(status: ActivityStreamStatus) {
 }
 
 function activityStreamLabel(status: ActivityStreamStatus) {
-  if (status === 'live') return 'Live audit stream';
+  if (status === 'live') return 'Live evidence stream';
   if (status === 'polling') return 'Polling evidence';
   if (status === 'error') return 'Evidence stream delayed';
   if (status === 'connecting') return 'Connecting stream';
