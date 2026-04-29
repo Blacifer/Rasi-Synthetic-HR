@@ -345,6 +345,8 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
       const created = await api.agents.create({
         name: agentData.name, description: agentData.description, agent_type: agentData.agent_type,
         platform: agentData.platform, model_name: agentData.model_name,
+        system_prompt: agentData.system_prompt || '',
+        budget_limit: agentData.budget_limit,
         ...((agentData as any).primary_pack ? { primary_pack: (agentData as any).primary_pack } : {}),
         integration_ids: (agentData as any).integration_ids || [],
         config: { ...agentData.config, system_prompt: agentData.system_prompt },
@@ -361,7 +363,14 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         };
         if (isDemoMode) { setDemoAgents(prev => [...prev, newAgent]); }
         else { void queryClient.invalidateQueries({ queryKey: queryKeys.agents }); }
-        addNotification('success', 'Domain Agent Deployed', `${agentData.name} has been added to your fleet.`);
+        const isShadowRollout = agentData.config?.deployment_mode === 'shadow' || agentData.config?.shadow_mode === true;
+        addNotification(
+          'success',
+          isShadowRollout ? 'Shadow Agent Deployed' : 'Domain Agent Deployed',
+          isShadowRollout
+            ? `${agentData.name} is live in read-only shadow mode with approval-before-write controls.`
+            : `${agentData.name} has been added to your fleet.`,
+        );
         setDomainAgentPreselect(null);
         navigateTo('agents', { userInitiated: false });
       } else {

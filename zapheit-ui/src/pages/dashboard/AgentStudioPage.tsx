@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Zap, Bot, FileText, Wand2, Plus, Eye, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Zap, Bot, FileText, Wand2, Plus, Eye, ShieldCheck, ArrowRight, Loader2, IndianRupee, TimerReset } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { AIAgent } from '../../types';
 import type { IntegrationPackId } from '../../lib/integration-packs';
@@ -18,6 +18,7 @@ const TABS = [
 ] as const;
 
 type TabId = typeof TABS[number]['id'];
+type ShadowWorkflowId = 'hiring' | 'hr' | 'finance' | 'support' | 'sales' | 'devops' | string;
 
 interface AgentStudioPageProps {
   onDeployTemplate: (template: AgentTemplate & { system_prompt?: string; integration_ids?: string[] }) => Promise<void>;
@@ -38,6 +39,121 @@ function StudioLoading() {
   );
 }
 
+const SHADOW_WORKFLOW_PACK: Record<string, string> = {
+  hiring: 'recruitment',
+  hr: 'recruitment',
+  finance: 'finance',
+  support: 'support',
+  sales: 'sales',
+  devops: 'it',
+};
+
+const SHADOW_WORKFLOW_TYPE: Record<string, string> = {
+  hiring: 'recruiting',
+  hr: 'hr',
+  finance: 'finance',
+  support: 'customer_support',
+  sales: 'sales',
+  devops: 'devops',
+};
+
+function parseCsvParam(value: string | null): string[] {
+  return (value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function formatInr(value: number): string {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(Math.max(0, Math.round(value)));
+}
+
+function buildShadowAgentDraft(input: {
+  workflow: ShadowWorkflowId;
+  department: string;
+  agentName: string;
+  apps: string[];
+  appIds: string[];
+  confidence: number | null;
+  savingsInr: number | null;
+}) {
+  const workflowLabel = input.department || input.workflow || 'Operations';
+  const appsText = input.apps.length ? input.apps.join(', ') : 'connected business apps';
+  const savingsText = input.savingsInr && input.savingsInr > 0 ? formatInr(input.savingsInr) : 'the measured monthly upside';
+  const confidenceText = input.confidence ? `${input.confidence}% discovery confidence` : 'discovery confidence';
+  const name = input.agentName || `${workflowLabel} Shadow Agent`;
+
+  const systemPrompt = [
+    `You are ${name}, a Zapheit-managed AI agent running in SHADOW MODE for ${workflowLabel}.`,
+    `Primary systems observed: ${appsText}.`,
+    'You must operate read-only by default. Do not write, send, delete, approve, update, refund, message, or trigger external side effects unless Zapheit has routed a human approval and the approval decision is allowed.',
+    'For every proposed action, produce: business reason, affected app, affected record, risk level, required approval role, expected outcome, rollback note, and audit evidence.',
+    'If information is incomplete, ask for clarification instead of guessing. Never expose secrets, Aadhaar, PAN, passwords, tokens, bank details, or private employee/customer data.',
+    `The first rollout goal is a 7-day shadow run proving ${savingsText} of opportunity with ${confidenceText}.`,
+  ].join('\n\n');
+
+  return {
+    name,
+    description: `Read-only ${workflowLabel} shadow agent generated from Zapheit Workforce Discovery. It drafts actions, evidence, and approval packets before any live write is allowed.`,
+    agent_type: SHADOW_WORKFLOW_TYPE[input.workflow] || 'custom',
+    primary_pack: SHADOW_WORKFLOW_PACK[input.workflow] || null,
+    platform: 'api',
+    model_name: 'gpt-4o-mini',
+    system_prompt: systemPrompt,
+    budget_limit: 5000,
+    integration_ids: input.appIds,
+    status: 'active',
+    lifecycle_state: 'idle',
+    risk_level: 'medium',
+    risk_score: 45,
+    conversations: 0,
+    satisfaction: 0,
+    uptime: 100,
+    current_spend: 0,
+    auto_throttle: true,
+    config: {
+      deployment_mode: 'shadow',
+      shadow_mode: true,
+      source: 'workforce_discovery',
+      workflow: input.workflow,
+      department: workflowLabel,
+      connected_apps: input.apps,
+      connector_ids: input.appIds,
+      discovery_confidence: input.confidence,
+      estimated_monthly_savings_inr: input.savingsInr,
+      rollout_plan: {
+        duration_days: 7,
+        phase: 'read_only_shadow',
+        promote_after: [
+          'At least 20 observed workflow events',
+          'No critical policy violations',
+          'Human reviewers approve the proposed action quality',
+          'Budget cap and approval policy confirmed',
+        ],
+      },
+      safety_controls: {
+        read_only_first: true,
+        human_approval_before_writes: true,
+        auto_disable_on_incident: true,
+        pii_redaction_required: true,
+        budget_cap_inr: 5000,
+      },
+      success_metrics: [
+        'Actions drafted',
+        'Human approvals required',
+        'Estimated time saved',
+        'Estimated INR saved',
+        'Policy violations avoided',
+      ],
+      display_provider: 'Zapheit AI',
+    },
+  };
+}
+
 export default function AgentStudioPage({
   onDeployTemplate,
   onLaunchTemplateChat,
@@ -54,15 +170,50 @@ export default function AgentStudioPage({
   const shadowAgent = searchParams.get('agent');
   const shadowDepartment = searchParams.get('department');
   const shadowApps = searchParams.get('apps');
+  const shadowAppIds = searchParams.get('appIds');
   const shadowConfidence = searchParams.get('confidence');
+  const shadowWorkflow = searchParams.get('workflow') || 'custom';
+  const shadowSavings = searchParams.get('savings');
   const [activeTab, setActiveTab] = useState<TabId>(
     initialTab || (tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'templates'),
   );
   const [showWizard, setShowWizard] = useState(false);
+  const [shadowDeploying, setShadowDeploying] = useState(false);
+  const [shadowDeployError, setShadowDeployError] = useState<string | null>(null);
+
+  const shadowAppsList = parseCsvParam(shadowApps);
+  const shadowAppIdList = parseCsvParam(shadowAppIds);
+  const shadowConfidenceValue = shadowConfidence ? Number(shadowConfidence) : null;
+  const shadowSavingsValue = shadowSavings ? Number(shadowSavings) : null;
+  const shadowDraft = shadowSource
+    ? buildShadowAgentDraft({
+      workflow: shadowWorkflow,
+      department: shadowDepartment || 'Operations',
+      agentName: shadowAgent || `${shadowDepartment || 'Operations'} Shadow Agent`,
+      apps: shadowAppsList,
+      appIds: shadowAppIdList,
+      confidence: Number.isFinite(shadowConfidenceValue) ? shadowConfidenceValue : null,
+      savingsInr: Number.isFinite(shadowSavingsValue) ? shadowSavingsValue : null,
+    })
+    : null;
 
   const handleTabChange = (tab: TabId) => {
     setActiveTab(tab);
     setSearchParams({ tab }, { replace: true });
+  };
+
+  const deployShadowAgent = async () => {
+    if (!shadowDraft || shadowDeploying) return;
+    setShadowDeploying(true);
+    setShadowDeployError(null);
+    try {
+      await onDeployLibraryAgent(shadowDraft);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to deploy shadow agent';
+      setShadowDeployError(message);
+    } finally {
+      setShadowDeploying(false);
+    }
   };
 
   return (
@@ -108,14 +259,31 @@ export default function AgentStudioPage({
                 )}
               </div>
               <p className="mt-2 text-base font-semibold text-white">
-                Start with {shadowAgent || 'a governed agent'}{shadowDepartment ? ` for ${shadowDepartment}` : ''}.
+                Deploy {shadowDraft?.name || shadowAgent || 'a governed shadow agent'}{shadowDepartment ? ` for ${shadowDepartment}` : ''}.
               </p>
               <p className="mt-1 text-sm leading-relaxed text-slate-300">
-                Deploy this first in read-only mode, require human approval before writes, set a budget cap, then run Shadow Mode safety testing before production traffic.
+                One click creates a read-only agent with approval-before-write controls, a ₹5,000 budget cap, connector context, and a 7-day promotion checklist.
               </p>
-              {shadowApps && (
-                <p className="mt-2 text-xs text-slate-400">
-                  Source apps detected: <span className="text-slate-200">{shadowApps}</span>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                {shadowAppsList.length > 0 && (
+                  <span className="rounded-full border border-slate-700 bg-slate-950/50 px-2.5 py-1 text-slate-300">
+                    Apps: <span className="text-slate-100">{shadowAppsList.join(', ')}</span>
+                  </span>
+                )}
+                {shadowSavingsValue != null && Number.isFinite(shadowSavingsValue) && shadowSavingsValue > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-emerald-200">
+                    <IndianRupee className="h-3.5 w-3.5" />
+                    {formatInr(shadowSavingsValue || 0)} monthly upside
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-blue-200">
+                  <TimerReset className="h-3.5 w-3.5" />
+                  7-day shadow run
+                </span>
+              </div>
+              {shadowDeployError && (
+                <p className="mt-3 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                  {shadowDeployError}
                 </p>
               )}
             </div>
@@ -127,10 +295,18 @@ export default function AgentStudioPage({
                 </div>
               ))}
               <button
-                onClick={() => setShowWizard(true)}
-                className="mt-1 inline-flex items-center justify-center gap-2 rounded-lg bg-cyan-600 px-3 py-2 font-semibold text-white transition-colors hover:bg-cyan-500"
+                onClick={deployShadowAgent}
+                disabled={shadowDeploying}
+                className="mt-1 inline-flex items-center justify-center gap-2 rounded-lg bg-cyan-600 px-3 py-2 font-semibold text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Build from this brief
+                {shadowDeploying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                {shadowDeploying ? 'Deploying shadow agent...' : 'Deploy shadow agent'}
+              </button>
+              <button
+                onClick={() => setShowWizard(true)}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-950/40 px-3 py-2 font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:text-white"
+              >
+                Customize first
                 <ArrowRight className="h-3.5 w-3.5" />
               </button>
             </div>

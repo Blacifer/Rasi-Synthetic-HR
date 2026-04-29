@@ -242,7 +242,9 @@ function buildShadowStudioRoute(input: {
   department: string;
   agentName: string;
   appLabels: string[];
+  appIds: string[];
   confidence: number;
+  monthlySavingsInr: number;
 }): string {
   const params = new URLSearchParams({
     tab: 'templates',
@@ -251,8 +253,10 @@ function buildShadowStudioRoute(input: {
     department: input.department,
     agent: input.agentName,
     confidence: String(input.confidence),
+    savings: String(Math.max(0, Math.round(input.monthlySavingsInr))),
   });
   if (input.appLabels.length > 0) params.set('apps', input.appLabels.slice(0, 4).join(', '));
+  if (input.appIds.length > 0) params.set('appIds', input.appIds.slice(0, 8).join(','));
   return `agent-studio?${params.toString()}`;
 }
 
@@ -317,7 +321,11 @@ function buildDiscoveryOpportunities(input: {
     const activitySavings = manualEvents * (pattern.id === 'finance' ? 2200 : 1600);
     const runtimeSavings = totalModelRequests > 0 ? Math.min(18000, totalModelRequests * 20) : 0;
     const appLabels = matchedApps.slice(0, 4).map(connectorLabel);
+    const appIds = matchedApps
+      .map((connector) => connector.integrationId || connector.appId || connector.primary_service_id || connector.id)
+      .filter(Boolean) as string[];
     const recommendedAgent = existingAgent?.name || pattern.recommendedAgent;
+    const estimatedSavings = baseSavings + activitySavings + runtimeSavings;
 
     opportunities.push({
       id: pattern.id,
@@ -327,7 +335,7 @@ function buildDiscoveryOpportunities(input: {
       department: pattern.department,
       confidence,
       effort: matchedApps.length >= 2 ? 'M' : 'S',
-      estimatedMonthlySavingsInr: baseSavings + activitySavings + runtimeSavings,
+      estimatedMonthlySavingsInr: estimatedSavings,
       manualEvents,
       connectedAppLabels: appLabels,
       recommendedAgent,
@@ -349,7 +357,9 @@ function buildDiscoveryOpportunities(input: {
         department: pattern.department,
         agentName: recommendedAgent,
         appLabels,
+        appIds,
         confidence,
+        monthlySavingsInr: estimatedSavings,
       }),
       secondaryRoute: matchedApps[0] ? `apps/${matchedApps[0].id}/workspace` : 'apps',
     });
