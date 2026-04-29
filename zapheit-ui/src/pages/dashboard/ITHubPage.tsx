@@ -107,7 +107,7 @@ export default function ITHubPage() {
     finally { setBusy(false); }
   }, [statusFilter]);
 
-  useEffect(() => { void load(); }, [statusFilter]);
+  useEffect(() => { void load(); }, [load]);
 
   const filtered = useMemo(() => {
     let r = requests;

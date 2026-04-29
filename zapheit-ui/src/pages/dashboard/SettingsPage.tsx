@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, type MouseEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, type LangCode } from '../../i18n';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -166,11 +166,11 @@ export default function SettingsPage({ onNavigate, isDemoMode = false, isLightMo
     handleVerifyMfa,
   } = useSettingsState({ isDemoMode });
 
-  const navigateToTab = (tab: SettingsTab, replace = false) => {
+  const navigateToTab = useCallback((tab: SettingsTab, replace = false) => {
     const targetPath = tab === 'overview' ? '/dashboard/settings' : `/dashboard/settings/${tab}`;
     if (location.pathname === targetPath && !location.search) return;
     navigate(targetPath, { replace });
-  };
+  }, [location.pathname, location.search, navigate]);
 
   useEffect(() => {
     if (queryTab) {
@@ -181,7 +181,7 @@ export default function SettingsPage({ onNavigate, isDemoMode = false, isLightMo
     if (!routeTab && pathSuffix) {
       navigateToTab('overview', true);
     }
-  }, [navigate, pathSuffix, queryTab, routeTab]);
+  }, [navigateToTab, pathSuffix, queryTab, routeTab]);
 
   // ==================== SUB-VIEWS ====================
   const renderOverview = () => {

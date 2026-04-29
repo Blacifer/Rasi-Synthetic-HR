@@ -436,7 +436,7 @@ export default function FleetPage({
       );
       setSuggestedApps(uninstalled.slice(0, 3));
     }).catch(() => {});
-  }, [workspaceAgentId]);
+  }, [workspaceAgentId, agents]);
 
   const loadWorkspace = useCallback(async (agentId: string) => {
     setWorkspaceState((current) => ({
@@ -492,7 +492,7 @@ export default function FleetPage({
       analyticsError: null,
       forecast: forecastResponse?.success ? forecastResponse.data ?? null : null,
     });
-  }, [agents, onSelectAgent, setAgents]);
+  }, [onSelectAgent, setAgents]);
 
   const loadDeploymentState = useCallback(async (agentId: string) => {
     setRuntimesLoading(true);

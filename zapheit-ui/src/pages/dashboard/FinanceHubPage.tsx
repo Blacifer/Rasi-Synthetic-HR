@@ -100,8 +100,8 @@ export default function FinanceHubPage() {
     finally { setBusy(false); }
   }, [expenseStatusFilter]);
 
-  useEffect(() => { void loadInvoices(); }, [invoiceStatusFilter, invoiceMatchFilter]);
-  useEffect(() => { void loadExpenses(); }, [expenseStatusFilter]);
+  useEffect(() => { void loadInvoices(); }, [loadInvoices]);
+  useEffect(() => { void loadExpenses(); }, [loadExpenses]);
 
   const handleValidateInvoice = async (id: string) => {
     setBusy(true);

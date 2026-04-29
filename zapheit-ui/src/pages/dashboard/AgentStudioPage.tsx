@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Zap, Bot, FileText, Wand2, Plus, Eye, ShieldCheck, ArrowRight, Loader2, IndianRupee, TimerReset } from 'lucide-react';
+import { Zap, Bot, FileText, Wand2, Plus, Eye, ShieldCheck, ArrowRight, Loader2, IndianRupee, TimerReset, BriefcaseBusiness } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { AIAgent } from '../../types';
 import type { IntegrationPackId } from '../../lib/integration-packs';
@@ -16,6 +16,24 @@ const TABS = [
   { id: 'library', label: 'Agent Library', icon: Bot },
   { id: 'playbooks', label: 'Playbooks', icon: FileText },
 ] as const;
+
+const BUNDLE_SUGGESTIONS = [
+  {
+    id: 'finance',
+    name: 'Finance & Accounting',
+    detail: 'Tally, Razorpay, Cashfree, GST summaries, and payment approvals.',
+  },
+  {
+    id: 'hr',
+    name: 'HR',
+    detail: 'greytHR, Keka, Darwinbox, onboarding, leave, payroll exceptions.',
+  },
+  {
+    id: 'support',
+    name: 'Support',
+    detail: 'Freshdesk, Zendesk, WhatsApp, SLA routing, refunds, and replies.',
+  },
+];
 
 type TabId = typeof TABS[number]['id'];
 type ShadowWorkflowId = 'hiring' | 'hr' | 'finance' | 'support' | 'sales' | 'devops' | string;
@@ -174,6 +192,7 @@ export default function AgentStudioPage({
   const shadowConfidence = searchParams.get('confidence');
   const shadowWorkflow = searchParams.get('workflow') || 'custom';
   const shadowSavings = searchParams.get('savings');
+  const bundleParam = searchParams.get('bundle');
   const [activeTab, setActiveTab] = useState<TabId>(
     initialTab || (tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'templates'),
   );
@@ -309,6 +328,36 @@ export default function AgentStudioPage({
                 Customize first
                 <ArrowRight className="h-3.5 w-3.5" />
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!shadowSource && (
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">
+                <BriefcaseBusiness className="h-4 w-4" />
+                Recommended bundle path
+              </div>
+              <p className="mt-1 text-sm text-slate-300">
+                {bundleParam
+                  ? `Continue from the ${bundleParam} vertical bundle, or compare it with the top India-first bundles below.`
+                  : 'For faster production rollout, start from a vertical bundle instead of building a standalone agent.'}
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[620px]">
+              {BUNDLE_SUGGESTIONS.map((bundle) => (
+                <button
+                  key={bundle.id}
+                  onClick={() => onNavigate?.(`bundles/${bundle.id}`)}
+                  className="rounded-xl border border-slate-700 bg-slate-950/40 p-3 text-left transition hover:border-cyan-500/35 hover:bg-cyan-500/[0.04]"
+                >
+                  <p className="text-sm font-semibold text-white">{bundle.name}</p>
+                  <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">{bundle.detail}</p>
+                </button>
+              ))}
             </div>
           </div>
         </div>

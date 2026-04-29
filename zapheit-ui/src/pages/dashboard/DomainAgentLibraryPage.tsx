@@ -142,7 +142,7 @@ function AgentCard({
       setLiveModels(FALLBACK_MODELS);
     };
     load();
-  }, [expanded]);
+  }, [expanded, liveModels.length]);
 
   const selectedModelData = liveModels.find(m => m.id === editModel || m.name === editModel);
   const monthlyCostUsd = selectedModelData?.pricing

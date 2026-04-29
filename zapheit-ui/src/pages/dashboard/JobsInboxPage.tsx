@@ -746,7 +746,7 @@ export default function JobsInboxPage({ agents }: { agents: { id: string; name: 
 
   useEffect(() => {
     loadHistory();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   useEffect(() => {

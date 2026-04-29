@@ -255,7 +255,7 @@ export default function ModelCatalogPage() {
 
   // Filtered + sorted
   const filtered = useMemo(() => {
-    let list = models.filter((m) => {
+    const list = models.filter((m) => {
       const q = search.toLowerCase();
       if (q && !m.id.toLowerCase().includes(q) && !m.name.toLowerCase().includes(q) && !(m.provider || '').toLowerCase().includes(q)) return false;
       if (providerFilter !== 'All' && (m.id.split('/')[0] || '') !== providerFilter) return false;

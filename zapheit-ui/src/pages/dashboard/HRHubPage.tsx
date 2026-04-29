@@ -162,7 +162,7 @@ export default function HRHubPage() {
     } finally { setBusy(false); }
   }, []);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
   const handleSeedDemo = async () => {
     setBusy(true);

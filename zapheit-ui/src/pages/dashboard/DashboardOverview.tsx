@@ -916,111 +916,6 @@ const hasData = agents.length > 0;
       .slice(0, 6);
   }, [agents, costData, incidents]);
 
-  if (!hasData) {
-    const steps = [
-      { num: 1, label: 'Connect one app', sub: 'Link Slack, Jira, GitHub, or another governed app', action: () => onNavigate?.('apps') },
-      { num: 2, label: 'Create your first Agent', sub: 'Pick a template or start from scratch', action: () => onAddAgent() },
-      { num: 3, label: 'Set your first Safety Rule', sub: 'Control what your agent can and cannot do', action: () => onNavigate?.('action-policies') },
-    ];
-    return (
-      <div className="space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Welcome to Zapheit</h1>
-          <p className="mt-2 text-slate-400">Three steps to get your first AI agent running safely.</p>
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-8 space-y-3" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', boxShadow: '0 8px 32px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.10)' }}>
-          {steps.map((step) => (
-            <button
-              key={step.num}
-              onClick={step.action}
-              className="w-full flex items-center gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-5 py-4 text-left hover:bg-white/[0.07] hover:border-cyan-500/20 transition-all group"
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-sm font-bold text-cyan-300">
-                {step.num}
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white">{step.label}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{step.sub}</p>
-              </div>
-              <ArrowRight className="h-4 w-4 text-slate-600 group-hover:text-cyan-400 transition-colors shrink-0" />
-            </button>
-          ))}
-        </div>
-
-        {/* Quick Deploy */}
-        <div className="rounded-2xl border border-cyan-500/20 bg-slate-900/40 p-8" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', backgroundImage: 'radial-gradient(ellipse at top left, rgba(34,211,238,0.10), transparent 60%)', boxShadow: '0 8px 32px rgba(0,0,0,0.20), inset 0 1px 0 rgba(34,211,238,0.10)' }}>
-          <div className="flex items-start gap-4 mb-5">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-500/30 bg-cyan-500/10">
-              <Zap className="h-5 w-5 text-cyan-400" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-white">Quick Deploy from PDF</h3>
-              <p className="text-sm text-slate-400 mt-0.5">Upload your Employee Handbook or HR policy document and we will create a knowledgeable HR agent in seconds.</p>
-            </div>
-          </div>
-
-          {quickDeployState === 'idle' || quickDeployState === 'error' ? (
-            <label className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-white/10 bg-white/[0.02] px-6 py-8 text-center cursor-pointer hover:border-cyan-500/30 hover:bg-cyan-500/[0.03] transition-all group">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] group-hover:border-cyan-500/20 transition-colors">
-                <Upload className="h-5 w-5 text-slate-400 group-hover:text-cyan-400 transition-colors" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-white">Upload Employee Handbook (PDF)</p>
-                <p className="text-xs text-slate-500 mt-1">Max 20 MB · Text-based PDFs only</p>
-              </div>
-              {quickDeployError && (
-                <p className="text-xs text-rose-400 font-medium">{quickDeployError}</p>
-              )}
-              <input
-                type="file"
-                accept="application/pdf"
-                className="sr-only"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void handleQuickDeploy(file);
-                  e.target.value = '';
-                }}
-              />
-            </label>
-          ) : quickDeployState === 'uploading' ? (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] px-6 py-8 text-center">
-              <div className="w-10 h-10 rounded-full border-2 border-slate-700 border-t-cyan-400 animate-spin" />
-              <div>
-                <p className="text-sm font-semibold text-white">Ingesting document…</p>
-                <p className="text-xs text-slate-500 mt-1">Extracting knowledge and creating your HR agent</p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.05] px-6 py-8 text-center">
-              <CheckCircle2 className="h-10 w-10 text-emerald-400" />
-              <div>
-                <p className="text-sm font-semibold text-white">HR Agent created!</p>
-                <p className="text-xs text-slate-400 mt-1">Taking you to your new agent…</p>
-              </div>
-            </div>
-          )}
-
-          <p className="mt-4 text-center text-xs text-slate-500">
-            <FileText className="inline h-3.5 w-3.5 mr-1 align-middle" />
-            The document text is stored securely as the agent&apos;s knowledge context — never shared externally.
-          </p>
-        </div>
-
-        <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <button onClick={() => onNavigate?.('getting-started')} className="btn-primary">
-            <Sparkles className="h-5 w-5" />
-            Start guided setup
-          </button>
-          <button onClick={onAddAgent} className="btn-secondary">
-            <Bot className="h-5 w-5" />
-            Add your first agent
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   const totalCost = costData.reduce((sum, item) => sum + item.cost, 0);
   const latestCostAt = [...costData]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.date;
@@ -1250,6 +1145,111 @@ const hasData = agents.length > 0;
     : openIncidents.length > 0
       ? '#F59E0B'
       : '#10B981';
+
+  if (!hasData) {
+    const steps = [
+      { num: 1, label: 'Connect one app', sub: 'Link Slack, Jira, GitHub, or another governed app', action: () => onNavigate?.('apps') },
+      { num: 2, label: 'Create your first Agent', sub: 'Pick a template or start from scratch', action: () => onAddAgent() },
+      { num: 3, label: 'Set your first Safety Rule', sub: 'Control what your agent can and cannot do', action: () => onNavigate?.('action-policies') },
+    ];
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Welcome to Zapheit</h1>
+          <p className="mt-2 text-slate-400">Three steps to get your first AI agent running safely.</p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-8 space-y-3" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', boxShadow: '0 8px 32px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.10)' }}>
+          {steps.map((step) => (
+            <button
+              key={step.num}
+              onClick={step.action}
+              className="w-full flex items-center gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-5 py-4 text-left hover:bg-white/[0.07] hover:border-cyan-500/20 transition-all group"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-sm font-bold text-cyan-300">
+                {step.num}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">{step.label}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{step.sub}</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-slate-600 group-hover:text-cyan-400 transition-colors shrink-0" />
+            </button>
+          ))}
+        </div>
+
+        {/* Quick Deploy */}
+        <div className="rounded-2xl border border-cyan-500/20 bg-slate-900/40 p-8" style={{ backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', backgroundImage: 'radial-gradient(ellipse at top left, rgba(34,211,238,0.10), transparent 60%)', boxShadow: '0 8px 32px rgba(0,0,0,0.20), inset 0 1px 0 rgba(34,211,238,0.10)' }}>
+          <div className="flex items-start gap-4 mb-5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-500/30 bg-cyan-500/10">
+              <Zap className="h-5 w-5 text-cyan-400" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">Quick Deploy from PDF</h3>
+              <p className="text-sm text-slate-400 mt-0.5">Upload your Employee Handbook or HR policy document and we will create a knowledgeable HR agent in seconds.</p>
+            </div>
+          </div>
+
+          {quickDeployState === 'idle' || quickDeployState === 'error' ? (
+            <label className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-white/10 bg-white/[0.02] px-6 py-8 text-center cursor-pointer hover:border-cyan-500/30 hover:bg-cyan-500/[0.03] transition-all group">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] group-hover:border-cyan-500/20 transition-colors">
+                <Upload className="h-5 w-5 text-slate-400 group-hover:text-cyan-400 transition-colors" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">Upload Employee Handbook (PDF)</p>
+                <p className="text-xs text-slate-500 mt-1">Max 20 MB · Text-based PDFs only</p>
+              </div>
+              {quickDeployError && (
+                <p className="text-xs text-rose-400 font-medium">{quickDeployError}</p>
+              )}
+              <input
+                type="file"
+                accept="application/pdf"
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleQuickDeploy(file);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          ) : quickDeployState === 'uploading' ? (
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] px-6 py-8 text-center">
+              <div className="w-10 h-10 rounded-full border-2 border-slate-700 border-t-cyan-400 animate-spin" />
+              <div>
+                <p className="text-sm font-semibold text-white">Ingesting document…</p>
+                <p className="text-xs text-slate-500 mt-1">Extracting knowledge and creating your HR agent</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.05] px-6 py-8 text-center">
+              <CheckCircle2 className="h-10 w-10 text-emerald-400" />
+              <div>
+                <p className="text-sm font-semibold text-white">HR Agent created!</p>
+                <p className="text-xs text-slate-400 mt-1">Taking you to your new agent…</p>
+              </div>
+            </div>
+          )}
+
+          <p className="mt-4 text-center text-xs text-slate-500">
+            <FileText className="inline h-3.5 w-3.5 mr-1 align-middle" />
+            The document text is stored securely as the agent&apos;s knowledge context — never shared externally.
+          </p>
+        </div>
+
+        <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <button onClick={() => onNavigate?.('getting-started')} className="btn-primary">
+            <Sparkles className="h-5 w-5" />
+            Start guided setup
+          </button>
+          <button onClick={onAddAgent} className="btn-secondary">
+            <Bot className="h-5 w-5" />
+            Add your first agent
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

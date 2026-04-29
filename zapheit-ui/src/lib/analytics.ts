@@ -29,17 +29,23 @@ export function initAnalytics(): void {
 
 export function identifyUser(userId: string, traits?: Record<string, unknown>): void {
   if (!initialized) return;
-  try { posthog.identify(userId, traits); } catch {}
+  try { posthog.identify(userId, traits); } catch {
+    // Analytics must never interrupt product flows.
+  }
 }
 
 export function trackEvent(event: string, properties?: Record<string, unknown>): void {
   if (!initialized) return;
-  try { posthog.capture(event, properties); } catch {}
+  try { posthog.capture(event, properties); } catch {
+    // Analytics must never interrupt product flows.
+  }
 }
 
 export function resetAnalytics(): void {
   if (!initialized) return;
-  try { posthog.reset(); } catch {}
+  try { posthog.reset(); } catch {
+    // Analytics must never interrupt product flows.
+  }
 }
 
 // ── Typed event helpers ────────────────────────────────────────────────────

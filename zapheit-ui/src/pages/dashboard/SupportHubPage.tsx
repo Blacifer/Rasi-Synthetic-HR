@@ -74,7 +74,7 @@ export default function SupportHubPage() {
     finally { setBusy(false); }
   }, [statusFilter]);
 
-  useEffect(() => { void load(); }, [statusFilter]);
+  useEffect(() => { void load(); }, [load]);
 
   const filtered = useMemo(() => {
     let t = tickets;

@@ -221,7 +221,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
       }
       return next;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [incidents]);
 
   useEffect(() => {
@@ -365,7 +365,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
     { live: 0, simulated: 0 }
   );
 
-  const updateMeta = (id: string, updates: Partial<IncidentUiMeta>) => {
+  const updateMeta = useCallback((id: string, updates: Partial<IncidentUiMeta>) => {
     // Optimistic local update
     setIncidentMeta((current) => ({
       ...current,
@@ -388,9 +388,9 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
         toast.error('Failed to save incident changes');
       });
     }
-  };
+  }, [incidents]);
 
-  const updateIncidentStatus = async (id: string, status: Incident['status']) => {
+  const updateIncidentStatus = useCallback(async (id: string, status: Incident['status']) => {
     const incident = incidents.find((item) => item.id === id);
     if (!incident) return;
 
@@ -419,7 +419,7 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
       setIncidents(incidents);
       toast.error('Failed to update incident status');
     }
-  };
+  }, [incidentMeta, incidents, setIncidents]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
@@ -1202,7 +1202,9 @@ export default function IncidentsPage({ incidents, setIncidents, agents, onNavig
                           if (res.ok) {
                             void updateIncidentStatus(selectedIncident.id, 'open');
                           }
-                        } catch {}
+                        } catch {
+                          // Revert is best-effort; the incident remains visible if the API call fails.
+                        }
                       }}
                       className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-200 transition hover:bg-rose-500/15"
                     >

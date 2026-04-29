@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api-client';
@@ -45,7 +45,7 @@ export default function CashfreeReturnPage() {
   const [order, setOrder] = useState<PaymentOrder | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = async (shouldSync = true) => {
+  const load = useCallback(async (shouldSync = true) => {
     if (!merchantOrderId) {
       setViewState('missing-order');
       setMessage('Missing merchant order reference.');
@@ -79,11 +79,11 @@ export default function CashfreeReturnPage() {
     const copy = statusCopy(response.data?.status || 'failed');
     setViewState(copy.tone);
     setMessage(copy.detail);
-  };
+  }, [merchantOrderId]);
 
   useEffect(() => {
     void load(true);
-  }, []);
+  }, [load]);
 
   const icon = viewState === 'success'
     ? <CheckCircle2 className="w-12 h-12 text-emerald-400" />

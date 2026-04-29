@@ -209,7 +209,7 @@ function GatewayInterceptorsSection({ rows, show, onToggle, tab, onTabChange, sa
   useEffect(() => {
     setRules(ep?.interceptor_rules || []);
     setEnabled(ep?.enabled !== false);
-  }, [tab, ep?.id, ep?.updated_at]);
+  }, [tab, ep?.id, ep?.updated_at, ep?.enabled, ep?.interceptor_rules]);
 
   const addRule = () => setRules(prev => [...prev, emptyRule(tab)]);
 

@@ -129,6 +129,6 @@ export function OnboardingTour({ forceStart, onFinish }: Props) {
 }
 
 /** Call this from a Help menu button to re-trigger the tour */
-export function clearTourCompletion() {
+function clearTourCompletion() {
   localStorage.removeItem(TOUR_STORAGE_KEY);
 }

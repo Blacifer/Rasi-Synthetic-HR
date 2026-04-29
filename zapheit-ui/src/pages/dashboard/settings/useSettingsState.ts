@@ -89,7 +89,9 @@ export function useSettingsState({ isDemoMode = false }: { isDemoMode?: boolean 
       if (parsed.slackWebhook) setSlackWebhook(parsed.slackWebhook);
       if (parsed.pagerdutyKey) setPagerdutyKey(parsed.pagerdutyKey);
       if (parsed.alertEmail) setAlertEmail(parsed.alertEmail);
-    } catch {}
+    } catch {
+      // Ignore malformed saved alert settings and keep defaults.
+    }
   }, []);
 
   useEffect(() => {
@@ -116,7 +118,9 @@ export function useSettingsState({ isDemoMode = false }: { isDemoMode?: boolean 
         if (!res.ok || cancelled) return;
         const json = await res.json();
         if (json.success && json.data) setUsageData(json.data);
-      } catch {}
+      } catch {
+        // Ignore usage fetch failures; the UI can operate with local settings.
+      }
     };
     void load();
     return () => { cancelled = true; };
@@ -146,11 +150,15 @@ export function useSettingsState({ isDemoMode = false }: { isDemoMode?: boolean 
     if (savedResponseStyle) setDefaultResponseStyle(savedResponseStyle);
     const savedNotifications = localStorage.getItem('synthetic_hr_notifications_config');
     if (savedNotifications) {
-      try { setNotifications(JSON.parse(savedNotifications)); } catch {}
+      try { setNotifications(JSON.parse(savedNotifications)); } catch {
+        // Ignore malformed saved notification settings and keep defaults.
+      }
     }
     const savedSeverityRouting = localStorage.getItem('synthetic_hr_severity_routing');
     if (savedSeverityRouting) {
-      try { setSeverityRouting(JSON.parse(savedSeverityRouting)); } catch {}
+      try { setSeverityRouting(JSON.parse(savedSeverityRouting)); } catch {
+        // Ignore malformed saved routing settings and keep defaults.
+      }
     }
   }, []);
 
@@ -189,7 +197,7 @@ export function useSettingsState({ isDemoMode = false }: { isDemoMode?: boolean 
         reconciliationAlertConfig,
       }));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [alertsBaseline, notifications, severityRouting, slackWebhook, pagerdutyKey, alertEmail, reconciliationAlertConfig]);
 
   useEffect(() => {
@@ -299,7 +307,9 @@ export function useSettingsState({ isDemoMode = false }: { isDemoMode?: boolean 
           body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
         });
       }
-    } catch {}
+    } catch {
+      // Invite creation can fail offline; the optimistic pending member keeps the workflow usable.
+    }
 
     const nextMembers: TeamMember[] = [...teamMembers, {
       id: crypto.randomUUID(),

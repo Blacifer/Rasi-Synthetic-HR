@@ -118,7 +118,7 @@ export default function MarketingHubPage() {
     } finally { setBusy(false); }
   }, []);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
   const handleScoreAll = async () => {
     setBusy(true);

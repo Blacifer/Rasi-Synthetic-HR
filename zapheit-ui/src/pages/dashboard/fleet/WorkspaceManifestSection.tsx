@@ -6,7 +6,7 @@
  * Allows editing manifest fields inline.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   FileText, Tag, User, Globe, BarChart2, CheckCircle2, XCircle,
   AlertCircle, Edit2, Save, X, Plus, RefreshCw,
@@ -71,7 +71,7 @@ export default function WorkspaceManifestSection({ agent }: Props) {
   const [newCapability, setNewCapability] = useState('');
   const [newTag, setNewTag] = useState('');
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     api.agents.getManifest(agent.id)
       .then(res => {
@@ -83,9 +83,9 @@ export default function WorkspaceManifestSection({ agent }: Props) {
       })
       .catch(() => { })
       .finally(() => setLoading(false));
-  };
+  }, [agent.id]);
 
-  useEffect(() => { load(); }, [agent.id]);
+  useEffect(() => { load(); }, [load]);
 
   const startEdit = () => {
     setDraft({ ...manifest });

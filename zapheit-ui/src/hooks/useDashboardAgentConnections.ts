@@ -88,6 +88,16 @@ export function useDashboardAgentConnections({
     setAgentConnections(readAgentConnectionState(orgName));
   }, [mounted, orgName]);
 
+  const suggestPackForAgent = useCallback((agent: AIAgent): IntegrationPackId => {
+    const text = `${String(agent.agent_type || '').toLowerCase()} ${String(agent.name || '').toLowerCase()}`;
+    if (text.includes('support') || text.includes('customer')) return 'support';
+    if (text.includes('sales') || text.includes('lead') || text.includes('revenue')) return 'sales';
+    if (text.includes('refund') || text.includes('finance') || text.includes('billing') || text.includes('payment')) return 'finance';
+    if (text.includes('recruit') || text.includes('talent') || text.includes('hiring') || text.includes('hr')) return 'recruitment';
+    if (text.includes('compliance') || text.includes('legal') || text.includes('policy')) return 'compliance';
+    return 'it';
+  }, []);
+
   // Initialise from live API data on first successful load
   useEffect(() => {
     if (isDemoMode || liveAgents.length === 0 || agentConnectionsInitialized.current) return;
@@ -103,7 +113,7 @@ export function useDashboardAgentConnections({
         ]),
       ),
     );
-  }, [liveAgents, isDemoMode]);
+  }, [liveAgents, isDemoMode, suggestPackForAgent]);
 
   // Load focused workspace on mount
   useEffect(() => {
@@ -123,16 +133,6 @@ export function useDashboardAgentConnections({
     if (!mounted || isDemoMode) return;
     writeAgentConnectionState(orgName, agentConnections);
   }, [agentConnections, isDemoMode, mounted, orgName]);
-
-  const suggestPackForAgent = useCallback((agent: AIAgent): IntegrationPackId => {
-    const text = `${String(agent.agent_type || '').toLowerCase()} ${String(agent.name || '').toLowerCase()}`;
-    if (text.includes('support') || text.includes('customer')) return 'support';
-    if (text.includes('sales') || text.includes('lead') || text.includes('revenue')) return 'sales';
-    if (text.includes('refund') || text.includes('finance') || text.includes('billing') || text.includes('payment')) return 'finance';
-    if (text.includes('recruit') || text.includes('talent') || text.includes('hiring') || text.includes('hr')) return 'recruitment';
-    if (text.includes('compliance') || text.includes('legal') || text.includes('policy')) return 'compliance';
-    return 'it';
-  }, []);
 
   const openIntegrationsForAgent = useCallback(
     (agent: AIAgent, _packId?: IntegrationPackId | null) => {

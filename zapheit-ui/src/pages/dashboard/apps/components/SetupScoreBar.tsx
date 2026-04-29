@@ -1,7 +1,3 @@
-export function setupScore(isConnected: boolean, health: { good: boolean } | null, hasAgent: boolean): number {
-  return (isConnected ? 34 : 0) + (health?.good ? 33 : 0) + (hasAgent ? 33 : 0);
-}
-
 export function SetupScoreBar({ score, isConnected, onAttachAgent }: { score: number; isConnected?: boolean; onAttachAgent: () => void }) {
   const label = score >= 100 ? 'Fully set up' : score >= 67 ? 'Almost there' : score >= 34 ? 'Getting started' : 'Not set up';
   const color = score >= 100 ? 'bg-emerald-400' : score >= 67 ? 'bg-blue-400' : 'bg-amber-400';

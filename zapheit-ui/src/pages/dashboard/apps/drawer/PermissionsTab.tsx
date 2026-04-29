@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { ShieldCheck, Loader2, ToggleLeft, ToggleRight, AlertTriangle } from 'lucide-react';
 import { api } from '../../../../lib/api-client';
 import { toast } from '../../../../lib/toast';
@@ -29,7 +29,7 @@ const RISK_COLORS: Record<string, string> = {
 export function PermissionsTab({ app }: PermissionsTabProps) {
   const serviceId = getAppServiceId(app);
   // All possible capabilities come from the app's actionsUnlocked list
-  const allCapabilities: string[] = app.actionsUnlocked ?? [];
+  const allCapabilities: string[] = useMemo(() => app.actionsUnlocked ?? [], [app.actionsUnlocked]);
 
   const [enabledSet, setEnabledSet] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -47,7 +47,7 @@ export function PermissionsTab({ app }: PermissionsTabProps) {
     }).catch(() => {
       setEnabledSet(new Set(allCapabilities));
     }).finally(() => setLoading(false));
-  }, [serviceId]);
+  }, [serviceId, allCapabilities]);
 
   const toggle = async (capId: string) => {
     if (!serviceId || saving) return;

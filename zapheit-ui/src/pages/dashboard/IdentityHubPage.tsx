@@ -108,8 +108,8 @@ export default function IdentityHubPage() {
     finally { setBusy(false); }
   }, [graphStatusFilter]);
 
-  useEffect(() => { void loadEvents(); }, [eventTypeFilter, severityFilter]);
-  useEffect(() => { if (tab === 'graph') void loadGraph(); }, [tab, graphStatusFilter]);
+  useEffect(() => { void loadEvents(); }, [loadEvents]);
+  useEffect(() => { if (tab === 'graph') void loadGraph(); }, [tab, loadGraph]);
 
   const handleScoreAnomaly = async (id: string) => {
     setBusy(true);

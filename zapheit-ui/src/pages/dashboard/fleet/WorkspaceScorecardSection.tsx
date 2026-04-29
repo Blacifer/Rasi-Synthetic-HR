@@ -7,7 +7,7 @@
  * 3-period trend chart.
  */
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   Star, TrendingUp, TrendingDown, Minus, RefreshCw,
   CheckCircle2, AlertTriangle, DollarSign, Heart,
@@ -99,7 +99,7 @@ export default function WorkspaceScorecardSection({ agent }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     const res = await api.agents.getScorecard(agent.id);
@@ -109,9 +109,9 @@ export default function WorkspaceScorecardSection({ agent }: Props) {
       return;
     }
     setData(res.data);
-  }
+  }, [agent.id]);
 
-  useEffect(() => { load(); }, [agent.id]);
+  useEffect(() => { load(); }, [load]);
 
   if (loading) {
     return (

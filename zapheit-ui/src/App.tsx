@@ -85,6 +85,27 @@ function App() {
     }
   }, [config.apiUrl]);
 
+  // Sign out handler
+  const signOut = useCallback(async () => {
+    localStorage.removeItem('has_session');
+    localStorage.removeItem('synthetic_hr_user');
+    localStorage.removeItem(STORAGE_KEYS.AGENTS);
+    localStorage.removeItem(STORAGE_KEYS.INCIDENTS);
+    localStorage.removeItem(STORAGE_KEYS.COST_DATA);
+    localStorage.removeItem(STORAGE_KEYS.API_KEYS);
+
+    try {
+      await authHelpers.signOut();
+    } catch (err) {
+      console.error('Signout warning:', err);
+    }
+
+    setUser(null);
+    setIsDemoMode(false);
+    resetAnalytics();
+    navigate('/login');
+  }, [navigate]);
+
   // Inactivity timeout — only active while on the dashboard
   useEffect(() => {
     const isDashboard = location.pathname.startsWith('/dashboard');
@@ -114,7 +135,7 @@ function App() {
         window.removeEventListener(event, resetTimeout);
       });
     };
-  }, [mounted, location.pathname, isDemoMode]);
+  }, [mounted, location.pathname, isDemoMode, signOut]);
 
   useEffect(() => {
     setMounted(true);
@@ -266,27 +287,6 @@ function App() {
     } catch (err: any) {
       return { error: err.message };
     }
-  };
-
-  // Sign out handler
-  const signOut = async () => {
-    localStorage.removeItem('has_session');
-    localStorage.removeItem('synthetic_hr_user');
-    localStorage.removeItem(STORAGE_KEYS.AGENTS);
-    localStorage.removeItem(STORAGE_KEYS.INCIDENTS);
-    localStorage.removeItem(STORAGE_KEYS.COST_DATA);
-    localStorage.removeItem(STORAGE_KEYS.API_KEYS);
-
-    try {
-      await authHelpers.signOut();
-    } catch (err) {
-      console.error('Signout warning:', err);
-    }
-
-    setUser(null);
-    setIsDemoMode(false);
-    resetAnalytics();
-    navigate('/login');
   };
 
   if (!mounted || loading) {

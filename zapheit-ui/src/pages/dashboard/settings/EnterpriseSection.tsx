@@ -98,7 +98,7 @@ export function EnterpriseSection({ userRole }: { userRole?: string | null }) {
       }
     }
     load();
-  }, []);
+  }, [apiBase, token]);
 
   const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/;
 

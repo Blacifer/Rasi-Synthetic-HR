@@ -191,7 +191,12 @@ function SessionRow({ session, selected, onClick }: { session: Session; selected
 
 function TracePanel({ trace }: { trace: TraceEntry[] }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggle = (id: string) => setExpanded((s) => {
+    const n = new Set(s);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    return n;
+  });
 
   if (!trace.length) return (
     <p className="text-xs text-slate-500 text-center py-10 px-4">No trace data for this session. Traces are captured when agent reasoning is enabled.</p>

@@ -24,7 +24,8 @@ import { GOV_LABEL, GOV_COLOR, getGovTier } from './data/governance';
 import { LIVE_METRICS } from './data/live-metrics';
 import { CONNECTOR_ACTIONS, RISK_COLOR } from './data/connector-actions';
 import { AppCardSkeleton } from './components/AppCardSkeleton';
-import { setupScore, SetupScoreBar } from './components/SetupScoreBar';
+import { SetupScoreBar } from './components/SetupScoreBar';
+import { setupScore } from './components/setup-score';
 import { getNotifiedApps, toggleNotifyApp } from './data/notifications';
 
 /* ─────────────────────────────────────────────────────────────────────────

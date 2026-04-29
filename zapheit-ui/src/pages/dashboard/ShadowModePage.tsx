@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShieldAlert, Play, CheckCircle2, XCircle, Bot, Activity,
   AlertTriangle, Filter, Target, Zap, Clock, RefreshCw, X, FileTerminal, Lightbulb,
@@ -142,6 +142,78 @@ const WORKFLOW_PATTERNS = [
     route: 'agent-studio',
   },
 ];
+
+const BUNDLE_VERTICALS: Record<string, {
+  label: string;
+  departments: string[];
+  agent: string;
+  apps: string[];
+  upside: number;
+}> = {
+  finance: {
+    label: 'Finance & Accounting',
+    departments: ['finance'],
+    agent: 'Finance Reconciliation Agent',
+    apps: ['TallyPrime', 'Razorpay', 'Cashfree', 'Zoho Books', 'WhatsApp'],
+    upside: 85000,
+  },
+  hr: {
+    label: 'HR',
+    departments: ['hr', 'hr ops', 'hiring'],
+    agent: 'HR Assistant',
+    apps: ['greytHR', 'Keka', 'Darwinbox', 'Zoho People', 'WhatsApp'],
+    upside: 60000,
+  },
+  support: {
+    label: 'Support',
+    departments: ['support'],
+    agent: 'Support Triage Agent',
+    apps: ['Freshdesk', 'Zendesk', 'WhatsApp', 'Slack', 'Intercom'],
+    upside: 70000,
+  },
+  sales: {
+    label: 'Sales',
+    departments: ['sales'],
+    agent: 'Sales Agent',
+    apps: ['HubSpot', 'Salesforce', 'Pipedrive', 'Gmail'],
+    upside: 70000,
+  },
+  devops: {
+    label: 'DevOps',
+    departments: ['devops'],
+    agent: 'DevOps Agent',
+    apps: ['GitHub', 'Jira', 'PagerDuty', 'Slack'],
+    upside: 80000,
+  },
+  'it-operations': {
+    label: 'IT Operations',
+    departments: ['platform ops', 'devops'],
+    agent: 'IT Operations Agent',
+    apps: ['Jira', 'GitHub', 'Slack', 'Microsoft 365'],
+    upside: 50000,
+  },
+  marketing: {
+    label: 'Marketing',
+    departments: ['sales'],
+    agent: 'Marketing Ops Agent',
+    apps: ['HubSpot', 'Salesforce', 'Slack', 'Gmail'],
+    upside: 45000,
+  },
+  compliance: {
+    label: 'Compliance',
+    departments: ['governance', 'platform ops'],
+    agent: 'Compliance Evidence Agent',
+    apps: ['Zapheit Audit', 'DPDP workflows'],
+    upside: 65000,
+  },
+  legal: {
+    label: 'Legal',
+    departments: ['governance'],
+    agent: 'Legal Workflow Agent',
+    apps: ['Gmail', 'Notion', 'Slack'],
+    upside: 35000,
+  },
+};
 
 function formatInr(value: number): string {
   return new Intl.NumberFormat('en-IN', {
@@ -424,6 +496,41 @@ function buildDiscoveryOpportunities(input: {
     .slice(0, 6);
 }
 
+function buildBundleFallbackOpportunity(verticalId: string): DiscoveryOpportunity | null {
+  const bundle = BUNDLE_VERTICALS[verticalId];
+  if (!bundle) return null;
+  return {
+    id: `${verticalId}-bundle-starter`,
+    title: `Start ${bundle.label} in shadow mode with connector coverage first`,
+    department: bundle.label,
+    confidence: 72,
+    effort: 'S',
+    estimatedMonthlySavingsInr: bundle.upside,
+    manualEvents: 0,
+    connectedAppLabels: bundle.apps,
+    recommendedAgent: bundle.agent,
+    why: `This bundle is designed for ${bundle.label} teams even before live activity exists. Connect one core app, then Zapheit can observe manual work and launch the first read-only agent.`,
+    shadowPlan: 'Connect the recommended apps, run a 7-day read-only observation, draft approval packets, and promote only after evidence and budget caps are configured.',
+    evidenceBullets: [
+      `${bundle.label} bundle selected from Vertical Bundles`,
+      `Recommended first agent: ${bundle.agent}`,
+      `Target systems: ${bundle.apps.slice(0, 4).join(', ')}`,
+    ],
+    riskControls: ['Read-only first', 'Approval before writes', 'Budget cap before production'],
+    ctaLabel: 'Create shadow agent',
+    ctaRoute: buildShadowStudioRoute({
+      workflowId: verticalId === 'it-operations' ? 'devops' : verticalId,
+      department: bundle.label,
+      agentName: bundle.agent,
+      appLabels: bundle.apps,
+      appIds: [],
+      confidence: 72,
+      monthlySavingsInr: bundle.upside,
+    }),
+    secondaryRoute: 'apps',
+  };
+}
+
 function WorkforceDiscoveryPanel({
   agents,
   connectedApps,
@@ -431,6 +538,7 @@ function WorkforceDiscoveryPanel({
   loading,
   warning,
   lastScannedAt,
+  focusLabel,
   onRefresh,
   onNavigate,
 }: {
@@ -440,6 +548,7 @@ function WorkforceDiscoveryPanel({
   loading: boolean;
   warning?: string | null;
   lastScannedAt?: string | null;
+  focusLabel?: string | null;
   onRefresh: () => void;
   onNavigate: (route: string) => void;
 }) {
@@ -458,9 +567,16 @@ function WorkforceDiscoveryPanel({
             </div>
             <h2 className="mt-2 text-2xl font-bold tracking-tight text-white">Find the next work humans should stop doing manually.</h2>
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
-              Zapheit reads connected app coverage, approval queues, audit activity, active agents, and cost signals to recommend workflows that can run in read-only shadow mode before production.
+              {focusLabel
+                ? `Zapheit is focused on the ${focusLabel} bundle and will rank only the workflows relevant to that vertical.`
+                : 'Zapheit reads connected app coverage, approval queues, audit activity, active agents, and cost signals to recommend workflows that can run in read-only shadow mode before production.'}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              {focusLabel && (
+                <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1 text-cyan-200">
+                  Bundle focus: {focusLabel}
+                </span>
+              )}
               <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-emerald-200">
                 Read-only discovery
               </span>
@@ -657,6 +773,9 @@ function WorkforceDiscoveryPanel({
 // ==================== MAIN COMPONENT ====================
 export default function ShadowModePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const focusedVertical = searchParams.get('vertical') || '';
+  const focusedBundle = focusedVertical ? BUNDLE_VERTICALS[focusedVertical] : null;
   const [agents, setAgents] = useState<AIAgent[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 
@@ -823,6 +942,18 @@ export default function ShadowModePage() {
     costComparison,
   }), [agents, connectedApps, pendingApprovals, auditActivity, costComparison]);
 
+  const visibleDiscoveryOpportunities = useMemo(() => {
+    if (!focusedBundle || !focusedVertical) return discoveryOpportunities;
+    const allowedDepartments = focusedBundle.departments.map((item) => item.toLowerCase());
+    const filtered = discoveryOpportunities.filter((item) => {
+      const department = item.department.toLowerCase();
+      return allowedDepartments.some((allowed) => department.includes(allowed) || allowed.includes(department));
+    });
+    if (filtered.length > 0) return filtered;
+    const fallback = buildBundleFallbackOpportunity(focusedVertical);
+    return fallback ? [fallback] : filtered;
+  }, [discoveryOpportunities, focusedBundle, focusedVertical]);
+
   const navigateToDashboardRoute = (route: string) => {
     navigate(`/dashboard/${route}`);
   };
@@ -870,10 +1001,11 @@ export default function ShadowModePage() {
         <WorkforceDiscoveryPanel
           agents={agents}
           connectedApps={connectedApps}
-          opportunities={discoveryOpportunities}
+          opportunities={visibleDiscoveryOpportunities}
           loading={loadingDiscovery}
           warning={discoveryWarning}
           lastScannedAt={lastScannedAt}
+          focusLabel={focusedBundle?.label || null}
           onRefresh={loadDiscoverySignals}
           onNavigate={navigateToDashboardRoute}
         />

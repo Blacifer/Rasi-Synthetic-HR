@@ -246,7 +246,7 @@ function EmailDetailView({ connectorId, emailMeta, onBack, onArchived, onActionC
       } catch { setDetail({ ...emailMeta }); }
       finally { setLoading(false); }
     })();
-  }, [emailMeta]);
+  }, [connectorId, emailMeta]);
 
   const handleArchive = async () => {
     setArchiving(true);

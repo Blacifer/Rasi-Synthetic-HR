@@ -40,6 +40,7 @@ const ShadowModePage = lazy(() => import('./dashboard/ShadowModePage'));
 const BlackBoxPage = lazy(() => import('./dashboard/BlackBoxPage'));
 const PricingPage = lazy(() => import('./dashboard/PricingPage'));
 const ROIPage = lazy(() => import('./dashboard/ROIPage'));
+const VerticalBundlesPage = lazy(() => import('./dashboard/VerticalBundlesPage'));
 const BillingPage = lazy(() => import('./dashboard/BillingPage'));
 const BillingSuccessPage = lazy(() => import('./dashboard/BillingSuccessPage'));
 const SafeHarborPage = lazy(() => import('./dashboard/SafeHarborPage'));
@@ -378,7 +379,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
         throw new Error(created.error || created.errors?.join(', ') || 'Agent creation rejected by server');
       }
     } catch (err) { console.error('Domain agent deploy error:', err); throw err; }
-  }, [isDemoMode, queryClient, navigateTo, addNotification]);
+  }, [isDemoMode, queryClient, navigateTo, addNotification, setDomainAgentPreselect]);
 
   useEffect(() => {
     setMounted(true);
@@ -441,7 +442,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
       setNotifications([]);
       setError('Unable to load live operational data right now.');
     }
-  }, [isDemoMode, queryClient, user?.organizationName]);
+  }, [isDemoMode, queryClient, user?.organizationName, setAgentConnections, setApiKeys, setCoverageStatus, setIntegrationRows, setNotifications]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -639,7 +640,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
       console.error('Failed to save API keys:', err);
       setError('Failed to save API keys. Storage may be full.');
     }
-  }, []);
+  }, [setApiKeys]);
 
   // Prevent hydration mismatch
   if (!mounted) {
@@ -1351,6 +1352,16 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="roi" element={
                     <SectionErrorBoundary fallbackMessage="ROI dashboard failed to load">
                       <ROIPage />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="bundles" element={
+                    <SectionErrorBoundary fallbackMessage="Vertical bundles failed to load">
+                      <VerticalBundlesPage />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="bundles/:bundleId" element={
+                    <SectionErrorBoundary fallbackMessage="Vertical bundle failed to load">
+                      <VerticalBundlesPage />
                     </SectionErrorBoundary>
                   } />
                   <Route path="billing" element={

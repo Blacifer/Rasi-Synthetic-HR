@@ -117,8 +117,8 @@ export default function RecruitmentHubPage() {
     }
   }, [selectedJobId, minScore, statusFilter]);
 
-  useEffect(() => { void loadJobs(); }, []);
-  useEffect(() => { void loadApplications(); }, [selectedJobId, minScore, statusFilter]);
+  useEffect(() => { void loadJobs(); }, [loadJobs]);
+  useEffect(() => { void loadApplications(); }, [loadApplications]);
 
   const selectedJob = useMemo(() => jobs.find((j) => j.id === selectedJobId) || null, [jobs, selectedJobId]);
 

@@ -18,7 +18,7 @@ import {
   Layers, Settings, Sparkles, Wand2, CheckSquare, Shield, ScrollText,
   Key, PlugZap, ClipboardList, Database, Server, TrendingUp,
   User, LogOut, Sun, Moon, Bell, ChevronRight, Search, Building2,
-  LifeBuoy, ShieldCheck, Calculator, Box,
+  LifeBuoy, ShieldCheck, Calculator, Box, BriefcaseBusiness,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -69,6 +69,7 @@ const CORE_ITEMS: NavItem[] = [
   { id: 'apps', icon: Building2, label: 'Connected Apps' },
   { id: 'chat', icon: MessageSquare, label: 'Chat' },
   { id: 'agent-studio', icon: Wand2, label: 'Create an Assistant' },
+  { id: 'bundles', icon: BriefcaseBusiness, label: 'Vertical Bundles' },
   { id: 'action-policies', icon: Shield, label: 'Rules' },
   { id: 'approvals', icon: CheckSquare, label: 'Human Review' },
   { id: 'incidents', icon: AlertTriangle, label: 'Safety Alerts' },
@@ -112,7 +113,7 @@ const VIEWER_ONLY_IDS = new Set([
 ]);
 const MANAGER_EXTRA_IDS = new Set([
   'incidents', 'agent-studio', 'action-policies', 'costs',
-  'apps', 'hubs', 'work-items', 'governed-actions',
+  'apps', 'bundles', 'hubs', 'work-items', 'governed-actions',
   'usage', 'notifications',
 ]);
 const ADMIN_EXTRA_IDS = new Set([
@@ -239,6 +240,7 @@ export function Sidebar({
     'apps':              t('nav.apps'),
     'chat':              t('nav.chat'),
     'agent-studio':      t('nav.agentStudio'),
+    'bundles':           'Vertical Bundles',
     'action-policies':   t('nav.rules'),
     'approvals':         t('nav.approvals'),
     'incidents':         t('nav.incidents'),

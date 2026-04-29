@@ -90,7 +90,7 @@ export default function SalesHubPage() {
     finally { setBusy(false); }
   }, []);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
   const byStage = useMemo(() => {
     const m: Record<string, SalesLeadHub[]> = {};

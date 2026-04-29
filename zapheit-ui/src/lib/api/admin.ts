@@ -1,7 +1,7 @@
 import { getAuthHeaders, normalizeErrorPayload, API_BASE_URL, authenticatedFetch } from './_helpers';
 import type { ApiResponse } from './_helpers';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function safeParseJson(text: string): any {
   if (!text) return {};
   try {
