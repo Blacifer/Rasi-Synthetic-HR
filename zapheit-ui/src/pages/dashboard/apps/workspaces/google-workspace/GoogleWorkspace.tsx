@@ -254,10 +254,19 @@ export default function GoogleWorkspace() {
     if (activeTab === 'drive' && files.length === 0) void loadFiles();
   }, [activeTab, events.length, files.length, loadEvents, loadFiles]);
 
-  const handleConnect = useCallback(() => {
+  const handleConnect = useCallback(async () => {
     const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    const url = api.integrations.getOAuthAuthorizeUrl(CONNECTOR_ID, returnTo);
-    window.location.href = url;
+    try {
+      const res = await api.integrations.initOAuth(CONNECTOR_ID, returnTo);
+      const url = res.data?.url;
+      if (!res.success || !url) {
+        toast.error(res.error || 'Failed to start Google Workspace OAuth');
+        return;
+      }
+      window.location.href = url;
+    } catch {
+      toast.error('Failed to start Google Workspace OAuth');
+    }
   }, []);
 
   const handleDisconnect = useCallback(async () => {

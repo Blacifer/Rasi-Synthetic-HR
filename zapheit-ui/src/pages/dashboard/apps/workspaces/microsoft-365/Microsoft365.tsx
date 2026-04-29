@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Calendar, HardDrive, MessageSquare, Activity, Bot, RefreshCw, Loader2 } from 'lucide-react';
+import { ArrowLeft, Mail, Calendar, HardDrive, MessageSquare, Activity, Bot, RefreshCw, Loader2, Link2, Link2Off, Info } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
@@ -15,6 +15,17 @@ import { M365ActivityTab } from './M365ActivityTab';
 import { M365AutomationTab } from './M365AutomationTab';
 
 const CONNECTOR_ID = 'microsoft-365';
+const OAUTH_SERVICE_ID = 'microsoft_365';
+
+function unwrapConnectorList<T>(payload: any): { items: T[]; nextPageToken: string | null } | null {
+  if (Array.isArray(payload)) {
+    return { items: payload, nextPageToken: null };
+  }
+  if (Array.isArray(payload?.data)) {
+    return { items: payload.data, nextPageToken: payload.nextPageToken ?? null };
+  }
+  return null;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Tab config                                                         */
@@ -76,9 +87,10 @@ export default function Microsoft365() {
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_emails', { maxResults: 50 });
       const payload = res.data as any;
-      if (res.success && payload?.data) {
-        setEmails(payload.data);
-        setEmailsNextToken(payload.nextPageToken ?? null);
+      const list = unwrapConnectorList<OutlookMessage>(payload);
+      if (res.success && list) {
+        setEmails(list.items);
+        setEmailsNextToken(list.nextPageToken);
         setConnectionStatus('connected');
       } else {
         setConnectionStatus('disconnected');
@@ -96,9 +108,10 @@ export default function Microsoft365() {
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_emails', { maxResults: 50, skipToken: emailsNextToken });
       const payload = res.data as any;
-      if (res.success && payload?.data) {
-        setEmails((prev) => [...prev, ...payload.data]);
-        setEmailsNextToken(payload.nextPageToken ?? null);
+      const list = unwrapConnectorList<OutlookMessage>(payload);
+      if (res.success && list) {
+        setEmails((prev) => [...prev, ...list.items]);
+        setEmailsNextToken(list.nextPageToken);
       }
     } catch { /* empty */ }
     finally { setLoadingMoreEmails(false); }
@@ -109,7 +122,8 @@ export default function Microsoft365() {
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_calendar_events', { limit: 50 });
       const payload = res.data as any;
-      if (res.success && payload?.data) setEvents(payload.data);
+      const list = unwrapConnectorList<OutlookEvent>(payload);
+      if (res.success && list) setEvents(list.items);
     } catch { /* empty */ }
     finally { setLoadingEvents(false); }
   }, []);
@@ -119,9 +133,10 @@ export default function Microsoft365() {
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_files', { pageSize: 50 });
       const payload = res.data as any;
-      if (res.success && payload?.data) {
-        setFiles(payload.data);
-        setFilesNextToken(payload.nextPageToken ?? null);
+      const list = unwrapConnectorList<OneDriveFile>(payload);
+      if (res.success && list) {
+        setFiles(list.items);
+        setFilesNextToken(list.nextPageToken);
       }
     } catch { /* empty */ }
     finally { setLoadingFiles(false); }
@@ -133,9 +148,10 @@ export default function Microsoft365() {
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_files', { pageSize: 50, skipToken: filesNextToken });
       const payload = res.data as any;
-      if (res.success && payload?.data) {
-        setFiles((prev) => [...prev, ...payload.data]);
-        setFilesNextToken(payload.nextPageToken ?? null);
+      const list = unwrapConnectorList<OneDriveFile>(payload);
+      if (res.success && list) {
+        setFiles((prev) => [...prev, ...list.items]);
+        setFilesNextToken(list.nextPageToken);
       }
     } catch { /* empty */ }
     finally { setLoadingMoreFiles(false); }
@@ -146,7 +162,8 @@ export default function Microsoft365() {
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_teams', {});
       const payload = res.data as any;
-      if (res.success && payload?.data) setTeams(payload.data);
+      const list = unwrapConnectorList<MsTeam>(payload);
+      if (res.success && list) setTeams(list.items);
     } catch { /* empty */ }
     finally { setLoadingTeams(false); }
   }, []);
@@ -229,6 +246,40 @@ export default function Microsoft365() {
     if (activeTab === 'teams' && teams.length === 0) void loadTeams();
   }, [activeTab, events.length, files.length, teams.length, loadEvents, loadFiles, loadTeams]);
 
+  const handleConnect = useCallback(async () => {
+    const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    try {
+      const res = await api.integrations.initOAuth(OAUTH_SERVICE_ID, returnTo);
+      const url = res.data?.url;
+      if (!res.success || !url) {
+        toast.error(res.error || 'Failed to start Microsoft 365 OAuth');
+        return;
+      }
+      window.location.href = url;
+    } catch {
+      toast.error('Failed to start Microsoft 365 OAuth');
+    }
+  }, []);
+
+  const handleDisconnect = useCallback(async () => {
+    if (!confirm('Disconnect Microsoft 365? Outlook, Calendar, OneDrive, and Teams sync will stop.')) return;
+    try {
+      await api.integrations.disconnect(OAUTH_SERVICE_ID);
+      setConnectionStatus('disconnected');
+      setEmails([]);
+      setEmailsNextToken(null);
+      setEvents([]);
+      setFiles([]);
+      setFilesNextToken(null);
+      setTeams([]);
+      setPendingApprovals([]);
+      setAgentActivity({});
+      toast.success('Microsoft 365 disconnected');
+    } catch {
+      toast.error('Failed to disconnect Microsoft 365');
+    }
+  }, []);
+
   /* --------------------------------------------------------------- */
   /*  Refresh                                                         */
   /* --------------------------------------------------------------- */
@@ -288,98 +339,158 @@ export default function Microsoft365() {
           <p className="text-[10px] text-slate-500">Productivity — Outlook, Calendar, OneDrive &amp; Teams</p>
         </div>
 
-        <button
-          onClick={refreshCurrent}
-          disabled={isLoading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs font-medium transition-colors disabled:opacity-40"
-        >
-          {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-          Refresh
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex items-center gap-0.5 px-5 py-1.5 border-b border-white/5 shrink-0 overflow-x-auto">
-        {TABS.map(({ id, label, Icon }) => {
-          const count = pendingCountFor(id);
-          return (
+        <div className="flex items-center gap-2">
+          {connectionStatus === 'connected' && (
             <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={cn(
-                'relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap',
-                activeTab === id
-                  ? 'bg-white/[0.08] text-white'
-                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.04]',
-              )}
+              onClick={() => void handleDisconnect()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 text-xs font-medium transition-colors"
             >
-              <Icon className="w-3.5 h-3.5" /> {label}
-              {count > 0 && (
-                <span className="ml-0.5 text-[9px] px-1 py-0.5 rounded-full bg-amber-500/30 text-amber-400 font-bold leading-none">
-                  {count}
-                </span>
-              )}
+              <Link2Off className="w-3.5 h-3.5" />
+              Disconnect
             </button>
-          );
-        })}
+          )}
+          {connectionStatus === 'disconnected' && (
+            <button
+              onClick={handleConnect}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0078D4] hover:bg-[#1483da] text-white text-xs font-medium transition-colors"
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              Connect Microsoft 365
+            </button>
+          )}
+          <button
+            onClick={refreshCurrent}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs font-medium transition-colors disabled:opacity-40"
+          >
+            {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            Refresh
+          </button>
+        </div>
       </div>
 
-      {/* Agent suggestion banner */}
-      {showBanner && (
-        <div className="px-5 pt-3 pb-1 shrink-0">
-          <AgentSuggestionBanner serviceId="microsoft-365" onDismiss={() => setShowBanner(false)} />
-        </div>
-      )}
+      {connectionStatus === 'disconnected' ? (
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="w-full max-w-sm space-y-5">
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-xl overflow-hidden grid grid-cols-2 grid-rows-2 gap-0.5 bg-[#0a0a0f] p-1 mx-auto">
+                <div className="bg-[#f25022] rounded-sm" />
+                <div className="bg-[#7fba00] rounded-sm" />
+                <div className="bg-[#00a4ef] rounded-sm" />
+                <div className="bg-[#ffb900] rounded-sm" />
+              </div>
+              <h2 className="text-base font-semibold text-white">Connect Microsoft 365</h2>
+              <p className="text-sm text-slate-400">Authorize Zapheit to access Outlook, Calendar, OneDrive, and Teams for this workspace.</p>
+            </div>
 
-      {/* Tab content */}
-      {activeTab === 'email' ? (
-        <div className="flex-1 overflow-hidden">
-          <OutlookEmail
-            emails={emails}
-            loading={loadingEmails}
-            pendingApprovals={pendingApprovals.filter((a) => a.action === 'send_email')}
-            onApprovalResolved={handleApprovalResolved}
-            hasMore={!!emailsNextToken}
-            loadingMore={loadingMoreEmails}
-            onLoadMore={loadMoreEmails}
-          />
-        </div>
-      ) : activeTab === 'calendar' ? (
-        <div className="flex-1 overflow-hidden">
-          <OutlookCalendar
-            events={events}
-            loading={loadingEvents}
-            onCreate={createEvent}
-            pendingApprovals={pendingApprovals.filter((a) => a.action === 'create_calendar_event')}
-            onApprovalResolved={handleApprovalResolved}
-          />
-        </div>
-      ) : activeTab === 'files' ? (
-        <div className="flex-1 overflow-hidden">
-          <OneDriveFiles
-            files={files}
-            loading={loadingFiles}
-            onShare={shareFile}
-            pendingApprovals={pendingApprovals.filter((a) => a.action === 'share_file')}
-            onApprovalResolved={handleApprovalResolved}
-            agentActivity={agentActivity}
-            hasMore={!!filesNextToken}
-            loadingMore={loadingMoreFiles}
-            onLoadMore={loadMoreFiles}
-          />
-        </div>
-      ) : activeTab === 'teams' ? (
-        <div className="flex-1 overflow-hidden">
-          <TeamsTab teams={teams} loadingTeams={loadingTeams} />
-        </div>
-      ) : activeTab === 'activity' ? (
-        <div className="flex-1 overflow-y-auto">
-          <M365ActivityTab onApprovalResolved={loadApprovals} />
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 space-y-2">
+              <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">Permissions requested</p>
+              <div className="flex flex-wrap gap-2">
+                {['openid', 'email', 'offline_access', 'User.Read', 'Mail.ReadWrite', 'Calendars.ReadWrite', 'Files.ReadWrite.All', 'Directory.Read.All'].map((scope) => (
+                  <span key={scope} className="text-[11px] px-2 py-0.5 rounded bg-white/10 text-slate-300 font-mono">{scope}</span>
+                ))}
+              </div>
+              <div className="flex items-start gap-2 pt-1">
+                <Info className="w-3.5 h-3.5 text-slate-500 mt-0.5 shrink-0" />
+                <p className="text-[11px] text-slate-500">
+                  Callback URL:{' '}
+                  <span className="font-mono text-slate-400">https://api.zapheit.com/api/integrations/oauth/callback/microsoft_365</span>
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleConnect}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#0078D4] hover:bg-[#1483da] text-white text-sm font-semibold transition-colors"
+            >
+              <Link2 className="w-4 h-4" />
+              Connect Microsoft 365 with OAuth
+            </button>
+          </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto">
-          <M365AutomationTab />
-        </div>
+        <>
+          <div className="flex items-center gap-0.5 px-5 py-1.5 border-b border-white/5 shrink-0 overflow-x-auto">
+            {TABS.map(({ id, label, Icon }) => {
+              const count = pendingCountFor(id);
+              return (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={cn(
+                    'relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap',
+                    activeTab === id
+                      ? 'bg-white/[0.08] text-white'
+                      : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.04]',
+                  )}
+                >
+                  <Icon className="w-3.5 h-3.5" /> {label}
+                  {count > 0 && (
+                    <span className="ml-0.5 text-[9px] px-1 py-0.5 rounded-full bg-amber-500/30 text-amber-400 font-bold leading-none">
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {showBanner && (
+            <div className="px-5 pt-3 pb-1 shrink-0">
+              <AgentSuggestionBanner serviceId="microsoft-365" onDismiss={() => setShowBanner(false)} />
+            </div>
+          )}
+
+          {activeTab === 'email' ? (
+            <div className="flex-1 overflow-hidden">
+              <OutlookEmail
+                emails={emails}
+                loading={loadingEmails}
+                pendingApprovals={pendingApprovals.filter((a) => a.action === 'send_email')}
+                onApprovalResolved={handleApprovalResolved}
+                hasMore={!!emailsNextToken}
+                loadingMore={loadingMoreEmails}
+                onLoadMore={loadMoreEmails}
+              />
+            </div>
+          ) : activeTab === 'calendar' ? (
+            <div className="flex-1 overflow-hidden">
+              <OutlookCalendar
+                events={events}
+                loading={loadingEvents}
+                onCreate={createEvent}
+                pendingApprovals={pendingApprovals.filter((a) => a.action === 'create_calendar_event')}
+                onApprovalResolved={handleApprovalResolved}
+              />
+            </div>
+          ) : activeTab === 'files' ? (
+            <div className="flex-1 overflow-hidden">
+              <OneDriveFiles
+                files={files}
+                loading={loadingFiles}
+                onShare={shareFile}
+                pendingApprovals={pendingApprovals.filter((a) => a.action === 'share_file')}
+                onApprovalResolved={handleApprovalResolved}
+                agentActivity={agentActivity}
+                hasMore={!!filesNextToken}
+                loadingMore={loadingMoreFiles}
+                onLoadMore={loadMoreFiles}
+              />
+            </div>
+          ) : activeTab === 'teams' ? (
+            <div className="flex-1 overflow-hidden">
+              <TeamsTab teams={teams} loadingTeams={loadingTeams} />
+            </div>
+          ) : activeTab === 'activity' ? (
+            <div className="flex-1 overflow-y-auto">
+              <M365ActivityTab onApprovalResolved={loadApprovals} />
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto">
+              <M365AutomationTab />
+            </div>
+          )}
+        </>
       )}
     </div>
   );
