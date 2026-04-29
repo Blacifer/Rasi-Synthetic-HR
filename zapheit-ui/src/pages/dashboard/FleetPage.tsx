@@ -17,6 +17,8 @@ import { packDisplayBadge, type IntegrationPackId } from '../../lib/integration-
 import { SkeletonAgentCard } from '../../components/Skeleton';
 import { PageHero } from '../../components/dashboard/PageHero';
 import { getModelDisplayName, getProviderLabel } from '../../lib/models';
+import { useCostData } from '../../hooks/useData';
+import { calculateAgentRoi, formatInr, roiTone } from '../../lib/roi';
 const AddAgentModal = lazy(async () => {
   const mod = await import('./fleet/AddAgentModal');
   return { default: mod.AddAgentModal };
@@ -196,6 +198,7 @@ export default function FleetPage({
   onOpenOperationsPage,
   isLoading = false,
 }: FleetPageProps) {
+  const { costData } = useCostData();
   const [showAddModal, setShowAddModal] = useState(false);
   const [agentLimit, setAgentLimit] = useState<number>(-1);
   const fetchAgentLimit = useCallback(async () => {
@@ -1476,6 +1479,7 @@ export default function FleetPage({
             const connectedTargetCount = agent.connectedTargets?.length || 0;
             const providerLabel = (agent as any).config?.display_provider || getProviderLabel(agent.model_name || '');
             const modelDisplayName = getModelDisplayName(agent.model_name || '');
+            const roi = calculateAgentRoi(agent, costData, [], 800);
             const nextActionLabel = agent.publishStatus === 'live'
               ? 'Open workspace'
               : connectedTargetCount > 0
@@ -1573,6 +1577,24 @@ export default function FleetPage({
                             {agent.budget_limit > 0 ? `₹${agent.budget_limit.toLocaleString()} budget cap` : 'No budget cap set'}
                           </div>
                           <div className="mt-1 text-xs text-slate-500 capitalize">{agent.agent_type.replace('_', ' ')}</div>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-white/[0.08] bg-slate-950/35 p-3 sm:grid-cols-4">
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">INR saved</p>
+                          <p className="mt-1 text-sm font-bold text-emerald-300">{formatInr(roi.valueInr)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Cost</p>
+                          <p className="mt-1 text-sm font-bold text-slate-200">{formatInr(roi.costInr)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">ROI</p>
+                          <p className={`mt-1 text-sm font-bold ${roiTone(roi.roiRatio)}`}>{roi.roiRatio >= 99 ? '∞' : roi.roiRatio.toFixed(1)}x</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Hours saved</p>
+                          <p className="mt-1 text-sm font-bold text-cyan-300">{roi.hoursSaved.toLocaleString('en-IN')}h</p>
                         </div>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">

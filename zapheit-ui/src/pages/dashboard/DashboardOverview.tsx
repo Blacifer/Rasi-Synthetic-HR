@@ -47,6 +47,7 @@ import type { AIAgent, Incident, CostData } from '../../types';
 import type { AuditLogEntry } from '../../lib/api/governance';
 import type { ApprovalRequest } from '../../lib/api/approvals';
 import { USD_TO_INR } from '../../lib/currency';
+import { calculatePortfolioRoi, formatInr as formatRoiInr } from '../../lib/roi';
 import { api } from '../../lib/api-client';
 import { authenticatedFetch } from '../../lib/api/_helpers';
 import { useCountUp } from '../../hooks/useCountUp';
@@ -499,6 +500,7 @@ function TodaysPriorities({
   teamActivity,
   incidents,
   agents,
+  costData,
   agentsWithoutBudget,
   staleApprovals,
   severeIncidents,
@@ -510,6 +512,7 @@ function TodaysPriorities({
   teamActivity: AuditLogEntry[];
   incidents: Incident[];
   agents: AIAgent[];
+  costData: CostData[];
   agentsWithoutBudget: AIAgent[];
   staleApprovals: ApprovalRequest[];
   severeIncidents: Incident[];
@@ -520,6 +523,7 @@ function TodaysPriorities({
   const agentActions = teamActivity.filter((e) =>
     e.action.startsWith('agent.') || e.details?.via === 'agent',
   ).slice(0, 5);
+  const roi = calculatePortfolioRoi(agents, costData, incidents, 800);
 
   const priorityItems = buildPriorityItems({
     pendingApprovals,
@@ -549,6 +553,9 @@ function TodaysPriorities({
     : allClear
       ? 'Approvals, incidents, and budget controls are clear on the overview signals currently loaded.'
       : 'No urgent blocker is present, but Zapheit has non-blocking operational context to review.';
+  const roiInsight = roi.totalValueInr > 0 && roi.topAgent
+    ? `Your agents created ${formatRoiInr(roi.totalValueInr)} in value this month across ${roi.departments.length} department${roi.departments.length === 1 ? '' : 's'}. ${roi.topAgent.agent.name} is your top performer.`
+    : 'No ROI data yet — deploy your first agent to start tracking value.';
   const counters = [
     { label: 'Pending approvals', value: pendingApprovals.length, tone: pendingApprovals.length > 0 ? 'warn' as const : 'good' as const },
     { label: 'High-risk', value: highRiskApprovalCount + severeIncidents.length, tone: highRiskApprovalCount + severeIncidents.length > 0 ? 'risk' as const : 'good' as const },
@@ -605,6 +612,13 @@ function TodaysPriorities({
             >
               {nextPriority ? 'Act now' : 'Review ROI'}
             </button>
+          </div>
+        </div>
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] px-4 py-3">
+          <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-300">ROI insight</p>
+            <p className="mt-1 text-xs text-slate-300">{roiInsight}</p>
           </div>
         </div>
       </div>
@@ -1276,6 +1290,7 @@ const hasData = agents.length > 0;
         teamActivity={teamActivity}
         incidents={incidents}
         agents={agents}
+        costData={costData}
         agentsWithoutBudget={agentsWithoutBudget}
         staleApprovals={staleApprovals}
         severeIncidents={severeIncidents}
