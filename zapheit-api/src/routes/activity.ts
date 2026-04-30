@@ -448,12 +448,12 @@ async function loadActivityEvents(args: {
     integrationEvents,
     costEvents,
   ] = await Promise.all([
-    shouldLoad('audit') ? loadSource<AuditLogActivityRow>(
+    loadSource<AuditLogActivityRow>(
       'audit_logs',
       'audit_logs',
       buildQuery(ACTIVITY_SELECT),
       normalizeActivityEvent,
-    ) : Promise.resolve([]),
+    ),
     shouldLoad('approval') ? loadSource<ApprovalActivityRow>(
       'approval_requests',
       'approval_requests',
@@ -516,7 +516,9 @@ async function loadActivityEvents(args: {
     ...connectorExecutionEvents,
     ...integrationEvents,
     ...costEvents,
-  ].filter((event) => event.at);
+  ]
+    .filter((event) => event.at)
+    .filter((event) => !args.type || event.type === args.type);
 
   const seen = new Set<string>();
   return events

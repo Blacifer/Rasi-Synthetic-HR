@@ -89,6 +89,40 @@ async function recordApprovalActivity(args: {
   });
 }
 
+async function recordApprovalExecutionDegraded(args: {
+  orgId: string;
+  actorId?: string | null;
+  approvalId: string;
+  service?: string | null;
+  action?: string | null;
+  detail: string;
+  req?: Request;
+  metadata?: Record<string, any>;
+}) {
+  await recordProductionActivity({
+    organizationId: args.orgId,
+    actorId: args.actorId || 'system',
+    auditAction: 'approval.execution_degraded',
+    resourceType: 'approval_request',
+    resourceId: args.approvalId,
+    event: {
+      type: 'approval',
+      title: `Approval execution degraded: ${connectorActionTitle(args.service || 'workflow', args.action || 'review')}`,
+      detail: args.detail,
+      status: 'degraded',
+      tone: 'risk',
+      route: 'approvals',
+      sourceRef: args.approvalId,
+      evidenceRef: args.approvalId,
+    },
+    metadata: {
+      ...(args.metadata || {}),
+      ip_address: args.req?.ip || (args.req?.socket as any)?.remoteAddress,
+      user_agent: args.req?.get?.('user-agent') || undefined,
+    },
+  });
+}
+
 async function safeUserRest<T = any[]>(req: Request, table: string, query?: URLSearchParams | string, options?: Record<string, any>): Promise<T> {
   try {
     return await Promise.resolve(
@@ -856,22 +890,6 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
       metadata: { service: row.service, action: row.action, note: parsed.data?.note },
     });
 
-    await recordApprovalActivity({
-      orgId,
-      actorId: userId,
-      approvalId: id,
-      service: row.service,
-      action: row.action,
-      status: 'approved',
-      auditAction: 'approval.approved',
-      detail: parsed.data?.note || 'Human approval released the governed action.',
-      req,
-      metadata: {
-        production_journey: { stage: 'approval_approved', source: 'approval_api' },
-        note: parsed.data?.note || null,
-      },
-    });
-
     fireAndForgetWebhookEvent(orgId, 'approval.completed', {
       id: `evt_approval_resolve_${id}`,
       type: 'approval.completed',
@@ -911,6 +929,8 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
     // Portal email actions: send directly via email service (no connector execution needed)
     if (row.service === 'email' && row.action === 'send_email') {
       const { to, subject, body } = (row.action_payload || {}) as { to?: string; subject?: string; body?: string };
+      let emailSent = false;
+      let emailError: string | null = null;
       if (to && subject && body) {
         try {
           await sendTransactionalEmail({
@@ -930,15 +950,68 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
             user_agent: req.get('user-agent') || undefined,
             metadata: { recipient: to, subject, approval_id: id },
           });
+          emailSent = true;
+          await recordApprovalActivity({
+            orgId,
+            actorId: userId,
+            approvalId: id,
+            service: row.service,
+            action: row.action,
+            status: 'approved',
+            auditAction: 'approval.approved',
+            detail: parsed.data?.note || 'Human approval sent the governed email.',
+            req,
+            metadata: {
+              production_journey: { stage: 'approval_executed', source: 'approval_api' },
+              note: parsed.data?.note || null,
+              recipient: to,
+              subject,
+            },
+          });
         } catch (emailErr: any) {
+          emailError = emailErr?.message || 'Email delivery failed';
           logger.warn('Portal email send failed after approval', { approval_id: id, error: emailErr?.message });
+          await recordApprovalExecutionDegraded({
+            orgId,
+            actorId: userId,
+            approvalId: id,
+            service: row.service,
+            action: row.action,
+            detail: `Approval was recorded, but email delivery failed: ${emailError}`,
+            req,
+            metadata: {
+              production_journey: { stage: 'approval_execution_failed', source: 'approval_api' },
+              recipient: to,
+              subject,
+              error: emailError,
+            },
+          });
           // Don't fail the response — approval stands; delivery failure is a separate concern
         }
+      } else {
+        emailError = 'Email action payload is missing to, subject, or body.';
+        await recordApprovalExecutionDegraded({
+          orgId,
+          actorId: userId,
+          approvalId: id,
+          service: row.service,
+          action: row.action,
+          detail: `Approval was recorded, but the email action payload was incomplete: ${emailError}`,
+          req,
+          metadata: {
+            production_journey: { stage: 'approval_execution_failed', source: 'approval_api' },
+            missing_payload: {
+              to: !to,
+              subject: !subject,
+              body: !body,
+            },
+          },
+        });
       }
       return res.json({
         success: true,
         data: decorateApprovalRequest(updated?.[0] || row),
-        execution: { resumed: true, connector_id: 'email', action: 'send_email', result: { sent: true }, audit_ref: null },
+        execution: { resumed: emailSent, connector_id: 'email', action: 'send_email', result: { sent: emailSent, error: emailError }, audit_ref: null },
       });
     }
 
@@ -956,11 +1029,44 @@ router.post('/:id/approve', requirePermission('policies.manage'), async (req: Re
         org_id: orgId,
         error: resumeErr?.message,
       });
+      await recordApprovalExecutionDegraded({
+        orgId,
+        actorId: userId,
+        approvalId: id,
+        service: row.service,
+        action: row.action,
+        detail: `Approval was recorded, but governed action resume failed: ${resumeErr?.message || 'unknown error'}`,
+        req,
+        metadata: {
+          production_journey: { stage: 'approval_execution_failed', source: 'approval_api' },
+          note: parsed.data?.note || null,
+          error: resumeErr?.message || null,
+        },
+      });
       return res.status(500).json({
         success: false,
         error: resumeErr?.message || 'Approval recorded, but execution resume failed',
       });
     }
+
+    await recordApprovalActivity({
+      orgId,
+      actorId: userId,
+      approvalId: id,
+      service: row.service,
+      action: row.action,
+      status: 'approved',
+      auditAction: 'approval.approved',
+      detail: parsed.data?.note || 'Human approval resumed the governed action.',
+      req,
+      metadata: {
+        production_journey: { stage: 'approval_executed', source: 'approval_api' },
+        note: parsed.data?.note || null,
+        connector_id: resumed?.connectorId || row.service,
+        action: resumed?.action || row.action,
+        audit_ref: resumed?.auditRef || null,
+      },
+    });
 
     return res.json({
       success: true,
