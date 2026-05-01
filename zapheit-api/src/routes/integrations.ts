@@ -976,6 +976,7 @@ async function buildOAuthAuthorizeUrl(params: {
   else if (service === 'intercom') clientIdEnv = 'INTERCOM_CLIENT_ID';
   else if (service === 'quickbooks') clientIdEnv = 'QUICKBOOKS_CLIENT_ID';
   else if (service === 'github') clientIdEnv = 'GITHUB_CLIENT_ID';
+  else if (service === 'hubspot') clientIdEnv = 'HUBSPOT_CLIENT_ID';
   else throw new Error('OAuth provider not implemented');
 
   const clientId = process.env[clientIdEnv];
@@ -1044,6 +1045,8 @@ function oauthEnvKeysForService(service: string): string[] {
       return ['INTERCOM_CLIENT_ID', 'INTERCOM_CLIENT_SECRET'];
     case 'quickbooks':
       return ['QUICKBOOKS_CLIENT_ID', 'QUICKBOOKS_CLIENT_SECRET'];
+    case 'hubspot':
+      return ['HUBSPOT_CLIENT_ID', 'HUBSPOT_CLIENT_SECRET'];
     default:
       return [];
   }
@@ -3081,6 +3084,9 @@ router.get('/oauth/callback/:service', async (req, res) => {
       } else if (service === 'github') {
         clientIdEnv = 'GITHUB_CLIENT_ID';
         clientSecretEnv = 'GITHUB_CLIENT_SECRET';
+      } else if (service === 'hubspot') {
+        clientIdEnv = 'HUBSPOT_CLIENT_ID';
+        clientSecretEnv = 'HUBSPOT_CLIENT_SECRET';
       } else {
         throw new Error('OAuth provider not implemented');
       }

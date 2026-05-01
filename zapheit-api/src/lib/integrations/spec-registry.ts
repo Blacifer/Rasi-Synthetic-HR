@@ -812,17 +812,24 @@ export const PHASE4_INTEGRATIONS: IntegrationSpec[] = [
     name: 'HubSpot',
     category: 'CRM',
     description: 'CRM for leads, contacts, and deals (enrichment and pipeline automation).',
-    authType: 'api_key',
+    authType: 'oauth2',
     tags: ['CRM', 'GLOBAL'],
     status: 'READY',
     color: '#FF7A59',
     priority: 4,
-    apiKeyConfig: {
-      requiredFields: [
-        { name: 'private_app_token', label: 'Private App Token', type: 'password', placeholder: 'pat-...', required: true, description: 'HubSpot private app token' },
+    oauthConfig: {
+      authorizationUrl: 'https://app.hubspot.com/oauth/authorize',
+      tokenUrl: 'https://api.hubapi.com/oauth/v1/token',
+      scopes: [
+        'crm.objects.contacts.read',
+        'crm.objects.contacts.write',
+        'crm.objects.deals.read',
+        'crm.objects.deals.write',
+        'crm.objects.companies.read',
+        'crm.objects.companies.write',
+        'tickets',
       ],
-      testEndpoint: 'https://api.hubapi.com/account-info/v3/details',
-      baseUrl: 'https://api.hubapi.com',
+      redirectPath: `${API_CALLBACK_BASE}/hubspot`,
     },
     endpoints: {
       details: { method: 'GET', path: 'https://api.hubapi.com/account-info/v3/details' },
