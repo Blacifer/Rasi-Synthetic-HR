@@ -1,0 +1,64 @@
+name: Deploy API via Cloud Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'zapheit-api/**'
+      - 'deploy/gcp/**'
+      - '.github/workflows/deploy-api-cloudbuild.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-api-cloudbuild
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1044003479182/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: cloudbuild-deployer@rasisynthetichr.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: rasisynthetichr
+
+      - name: Run deploy-api Cloud Build trigger
+        run: |
+          BUILD_ID="$(gcloud builds triggers run deploy-api \
+            --region=asia-south1 \
+            --substitutions=COMMIT_SHA=${GITHUB_SHA} \
+            --format='value(metadata.build.id)')"
+
+          echo "Cloud Build trigger build: ${BUILD_ID}"
+
+          while true; do
+            STATUS="$(gcloud builds describe "${BUILD_ID}" \
+              --region=asia-south1 \
+              --format='value(status)')"
+
+            echo "Cloud Build status: ${STATUS}"
+
+            case "${STATUS}" in
+              SUCCESS)
+                exit 0
+                ;;
+              FAILURE|CANCELLED|TIMEOUT|EXPIRED)
+                exit 1
+                ;;
+              *)
+                sleep 10
+                ;;
+            esac
+          done
