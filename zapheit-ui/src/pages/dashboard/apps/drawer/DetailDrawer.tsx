@@ -207,10 +207,11 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
       {/* Backdrop */}
       <button className="flex-1 bg-black/40 backdrop-blur-[2px]" onClick={onClose} aria-label="Close" />
 
-      {/* Panel */}
+      {/* Panel — full-screen on mobile, fixed width on desktop */}
       <div className={cn(
-        'h-full max-w-[95vw] bg-[#0e1117] border-l border-white/10 flex flex-col',
-        hasWorkspaceTab ? 'w-[920px]' : 'w-[480px]'
+        'h-full bg-[#0e1117] border-l border-white/10 flex flex-col',
+        'w-full sm:max-w-[95vw]',
+        hasWorkspaceTab ? 'sm:w-[920px]' : 'sm:w-[480px]'
       )}>
 
         {/* Header */}
