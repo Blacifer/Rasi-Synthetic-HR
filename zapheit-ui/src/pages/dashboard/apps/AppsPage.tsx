@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import Fuse from 'fuse.js';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Loader2, ChevronDown, X, ExternalLink,
   Search, CheckCircle2, AlertCircle, Clock, ArrowRight, RefreshCw,
+  Shield, BarChart3,
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { api } from '../../../lib/api-client';
@@ -103,6 +104,7 @@ interface AppsPageProps {
 }
 
 export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeCategory, setActiveCategory] = useState('all');
   const [search, setSearch] = useState('');
@@ -365,6 +367,22 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
           <p className="text-sm text-slate-400 mt-1">
             Connect once — every action governed, every approval tracked, every audit logged automatically.
           </p>
+        </div>
+
+        {/* Quick-access links */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => navigate('/dashboard/apps/permissions')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-500/25 bg-violet-500/10 text-violet-300 text-xs font-medium hover:bg-violet-500/20 transition-colors"
+          >
+            <Shield className="w-3.5 h-3.5" /> Permission Matrix
+          </button>
+          <button
+            onClick={() => navigate('/dashboard/apps/analytics')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-500/25 bg-blue-500/10 text-blue-300 text-xs font-medium hover:bg-blue-500/20 transition-colors"
+          >
+            <BarChart3 className="w-3.5 h-3.5" /> Analytics
+          </button>
         </div>
 
         {/* Stats bar */}

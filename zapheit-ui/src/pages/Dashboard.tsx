@@ -51,6 +51,8 @@ const ConversationsPage = lazy(() => import('./dashboard/ConversationsPage'));
 const CoverageStatusPage = lazy(() => import('./dashboard/CoverageStatusPage'));
 const DeveloperPage = lazy(() => import('./dashboard/DeveloperPage'));
 const AppsPage = lazy(() => import('./dashboard/apps'));
+const PermissionMatrix = lazy(() => import('./dashboard/apps/PermissionMatrix'));
+const AppAnalytics = lazy(() => import('./dashboard/apps/AppAnalytics'));
 const ApprovalsPage = lazy(() => import('./dashboard/ApprovalsPage'));
 const GovernedActionsPage = lazy(() => import('./dashboard/GovernedActionsPage'));
 const AuditLogPage = lazy(() => import('./dashboard/AuditLogPage'));
@@ -1200,6 +1202,16 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="apps" element={
                     <SectionErrorBoundary fallbackMessage="Apps failed to load">
                       <AppsPage onNavigate={navigateTo} agents={enrichedAgents} />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="apps/permissions" element={
+                    <SectionErrorBoundary fallbackMessage="Permission matrix failed to load">
+                      <PermissionMatrix />
+                    </SectionErrorBoundary>
+                  } />
+                  <Route path="apps/analytics" element={
+                    <SectionErrorBoundary fallbackMessage="Analytics failed to load">
+                      <AppAnalytics />
                     </SectionErrorBoundary>
                   } />
                   <Route path="apps/slack/workspace" element={<WorkspaceErrorBoundary><SlackWorkspace /></WorkspaceErrorBoundary>} />
