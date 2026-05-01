@@ -71,9 +71,13 @@ export default function GoogleWorkspace() {
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_emails', { maxResults: 50 });
       const payload = res.data as any;
-      if (res.success && payload?.data) {
-        setEmails(Array.isArray(payload.data) ? payload.data : []);
-        setEmailsNextPageToken(payload.nextPageToken ?? null);
+      const emailList = payload?.data?.data ?? payload?.data;
+      if (res.success && Array.isArray(emailList)) {
+        setEmails(emailList);
+        setEmailsNextPageToken(payload?.data?.nextPageToken ?? null);
+        setConnectionStatus('connected');
+      } else if (res.success) {
+        setEmails([]);
         setConnectionStatus('connected');
       } else {
         setConnectionStatus('disconnected');
@@ -92,8 +96,9 @@ export default function GoogleWorkspace() {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_emails', { maxResults: 50, pageToken: emailsNextPageToken });
       const payload = res.data as any;
       if (res.success && payload?.data) {
-        setEmails((prev) => [...prev, ...(Array.isArray(payload.data) ? payload.data : [])]);
-        setEmailsNextPageToken(payload.nextPageToken ?? null);
+        const moreEmails = payload?.data?.data ?? payload?.data;
+        setEmails((prev) => [...prev, ...(Array.isArray(moreEmails) ? moreEmails : [])]);
+        setEmailsNextPageToken(payload?.data?.nextPageToken ?? null);
       }
     } catch { /* empty */ }
     finally { setLoadingMoreEmails(false); }
@@ -103,7 +108,9 @@ export default function GoogleWorkspace() {
     setLoadingEvents(true);
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_events', { maxResults: 50 });
-      if (res.success && res.data?.data) setEvents(Array.isArray(res.data.data) ? res.data.data : []);
+      const evtPayload = res.data as any;
+      const evtList = evtPayload?.data?.data ?? evtPayload?.data;
+      if (res.success && Array.isArray(evtList)) setEvents(evtList);
     } catch { /* empty */ }
     finally { setLoadingEvents(false); }
   }, []);
@@ -114,8 +121,9 @@ export default function GoogleWorkspace() {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_files', { pageSize: 50 });
       const payload = res.data as any;
       if (res.success && payload?.data) {
-        setFiles(Array.isArray(payload.data) ? payload.data : []);
-        setFilesNextPageToken(payload.nextPageToken ?? null);
+        const fileList = payload?.data?.data ?? payload?.data;
+        setFiles(Array.isArray(fileList) ? fileList : []);
+        setFilesNextPageToken(payload?.data?.nextPageToken ?? null);
       }
     } catch { /* empty */ }
     finally { setLoadingFiles(false); }
@@ -128,7 +136,8 @@ export default function GoogleWorkspace() {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_files', { pageSize: 50, pageToken: filesNextPageToken });
       const payload = res.data as any;
       if (res.success && payload?.data) {
-        setFiles((prev) => [...prev, ...(Array.isArray(payload.data) ? payload.data : [])]);
+        const moreFiles = payload?.data?.data ?? payload?.data;
+        setFiles((prev) => [...prev, ...(Array.isArray(moreFiles) ? moreFiles : [])]);
         setFilesNextPageToken(payload.nextPageToken ?? null);
       }
     } catch { /* empty */ }
