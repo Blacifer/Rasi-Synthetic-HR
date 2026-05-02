@@ -256,7 +256,7 @@ export function AppCard({
           {isConnected && (liveMetric || usageCount != null) && (
             <div className="flex items-center gap-2 flex-wrap mt-1.5">
               {liveMetric && (
-                <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border border-amber-400/25 bg-amber-500/[0.08] text-amber-300 font-medium">
+                <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border border-amber-400/25 bg-amber-500/[0.08] text-amber-300 font-medium metric-badge-pulse">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                   {liveMetric}
                 </span>

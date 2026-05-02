@@ -23,6 +23,7 @@ import type { AuthType, ProductionStatus, CredField, AppDef, AppStack } from './
 import { APP_CATALOG, CATEGORY_TABS, STACKS, INDIA_POPULAR_IDS } from './data/catalog';
 import { AppCardSkeleton } from './components/AppCardSkeleton';
 import { RequestAccessModal } from './components/RequestAccessModal';
+import { fireConfetti } from '../../../lib/confetti';
 
 /* ─────────────────────────────────────────────────────────────────────────
    Helpers
@@ -114,6 +115,7 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
   const [wizardApp, setWizardApp] = useState<{ def: AppDef; unified: UnifiedApp } | null>(null);
 
   const { allApps, loading, reload, markDisconnected } = useAppsData(agents);
+  const hasEverConnected = useRef(false);
 
   // Handle OAuth callback — supports both integrations flow (?status=&service=)
   // and marketplace flow (?marketplace_connected=&marketplace_app= / ?marketplace_error=)
@@ -343,6 +345,10 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
 
     const res = await api.integrations.connect(def.serviceId, creds);
     if (!res.success) throw new Error((res as any).error || 'Connection failed');
+    if (!hasEverConnected.current) {
+      hasEverConnected.current = true;
+      fireConfetti();
+    }
     void reload();
   }, [wizardApp, reload]);
 
@@ -662,7 +668,8 @@ export default function AppsPage({ agents = [], onNavigate }: AppsPageProps) {
                 <div
                   key={def.appId}
                   ref={(el) => { appCardRefs.current[def.appId] = el; }}
-                  className={cn('rounded-2xl transition-colors', cursor === globalIdx && 'ring-1 ring-blue-500/50 bg-blue-500/5')}
+                  className={cn('rounded-2xl transition-colors card-fadein', cursor === globalIdx && 'ring-1 ring-blue-500/50 bg-blue-500/5')}
+                  style={{ animationDelay: `${Math.min(idx, 20) * 30}ms` }}
                 >
                   <AppCard
                     app={def}

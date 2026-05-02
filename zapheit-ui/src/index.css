@@ -492,6 +492,23 @@
 .animate-slide-up { animation: slideUp 0.6s ease-out forwards; }
 .animate-fade-in  { animation: fadeIn  0.8s ease-out forwards; }
 
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.card-fadein {
+  opacity: 0;
+  animation: cardFadeIn 0.25s ease-out forwards;
+}
+
+@keyframes metricPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0); }
+  50%       { box-shadow: 0 0 0 4px rgba(251,191,36,0.12); }
+}
+.metric-badge-pulse {
+  animation: metricPulse 2.5s ease-in-out infinite;
+}
+
 /* Staggered delays */
 .delay-100 { animation-delay: 100ms; }
 .delay-200 { animation-delay: 200ms; }
