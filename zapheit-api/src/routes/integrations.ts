@@ -1047,6 +1047,46 @@ function oauthEnvKeysForService(service: string): string[] {
       return ['QUICKBOOKS_CLIENT_ID', 'QUICKBOOKS_CLIENT_SECRET'];
     case 'hubspot':
       return ['HUBSPOT_CLIENT_ID', 'HUBSPOT_CLIENT_SECRET'];
+    case 'github':
+      return ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET'];
+    case 'zoom':
+      return ['ZOOM_CLIENT_ID', 'ZOOM_CLIENT_SECRET'];
+    case 'gitlab':
+      return ['GITLAB_CLIENT_ID', 'GITLAB_CLIENT_SECRET'];
+    case 'xero':
+      return ['XERO_CLIENT_ID', 'XERO_CLIENT_SECRET'];
+    case 'figma':
+      return ['FIGMA_CLIENT_ID', 'FIGMA_CLIENT_SECRET'];
+    case 'asana':
+      return ['ASANA_CLIENT_ID', 'ASANA_CLIENT_SECRET'];
+    case 'monday':
+      return ['MONDAY_CLIENT_ID', 'MONDAY_CLIENT_SECRET'];
+    case 'mailchimp':
+      return ['MAILCHIMP_CLIENT_ID', 'MAILCHIMP_CLIENT_SECRET'];
+    case 'box':
+      return ['BOX_CLIENT_ID', 'BOX_CLIENT_SECRET'];
+    case 'dropbox_business':
+      return ['DROPBOX_CLIENT_ID', 'DROPBOX_CLIENT_SECRET'];
+    case 'google_chat':
+      return ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'];
+    case 'calendly':
+      return ['CALENDLY_CLIENT_ID', 'CALENDLY_CLIENT_SECRET'];
+    case 'miro':
+      return ['MIRO_CLIENT_ID', 'MIRO_CLIENT_SECRET'];
+    case 'canva':
+      return ['CANVA_CLIENT_ID', 'CANVA_CLIENT_SECRET'];
+    case 'zoho_crm':
+      return ['ZOHO_CLIENT_ID', 'ZOHO_CLIENT_SECRET'];
+    case 'aircall':
+      return ['AIRCALL_CLIENT_ID', 'AIRCALL_CLIENT_SECRET'];
+    case 'loom':
+      return ['LOOM_CLIENT_ID', 'LOOM_CLIENT_SECRET'];
+    case 'gorgias':
+      return ['GORGIAS_CLIENT_ID', 'GORGIAS_CLIENT_SECRET'];
+    case 'azure':
+    case 'microsoft_entra':
+    case 'power_bi':
+      return ['MICROSOFT_CLIENT_ID', 'MICROSOFT_CLIENT_SECRET'];
     default:
       return [];
   }

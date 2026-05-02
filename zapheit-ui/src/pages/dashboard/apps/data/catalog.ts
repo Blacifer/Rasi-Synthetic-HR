@@ -123,7 +123,7 @@ export const APP_CATALOG: AppDef[] = [
     appId: 'gusto', serviceId: 'gusto', name: 'Gusto',
     description: 'Full-service payroll, benefits, and HR management for modern teams.',
     category: 'hr', auth: 'oauth', logoLetter: 'GU', colorHex: '#F45D48',
-    productionStatus: 'coming_soon', suggestedAgent: 'HR Assistant',
+    productionStatus: 'production_ready', suggestedAgent: 'HR Assistant',
   },
   {
     appId: 'workday', serviceId: 'workday', name: 'Workday',
@@ -141,7 +141,7 @@ export const APP_CATALOG: AppDef[] = [
     appId: 'deel', serviceId: 'deel', name: 'Deel',
     description: 'Global payroll, compliance, and HR for remote and international teams.',
     category: 'hr', auth: 'oauth', logoLetter: 'DL', colorHex: '#FF6B35',
-    productionStatus: 'coming_soon', suggestedAgent: 'HR Assistant',
+    productionStatus: 'production_ready', suggestedAgent: 'HR Assistant',
   },
   {
     appId: 'hibob', serviceId: 'hibob', name: 'HiBob',
@@ -151,10 +151,10 @@ export const APP_CATALOG: AppDef[] = [
     fields: [{ key: 'service_user_id', label: 'Service user ID', type: 'text' }, { key: 'token', label: 'Token', type: 'password' }],
   },
   {
-    appId: 'zoho-people-oauth', serviceId: 'zoho_people_oauth', name: 'Zoho People (OAuth)',
+    appId: 'zoho-people-oauth', serviceId: 'zoho_people', name: 'Zoho People (OAuth)',
     description: 'Connect Zoho People via OAuth for automated employee data sync.',
     category: 'hr', auth: 'oauth', logoLetter: 'ZO', colorHex: '#E42527',
-    productionStatus: 'coming_soon', isIndiaNative: true, suggestedAgent: 'HR Assistant',
+    productionStatus: 'production_ready', isIndiaNative: true, suggestedAgent: 'HR Assistant',
   },
 
   /* ── Recruitment & Hiring ─────────────────────────────────────────── */
@@ -255,7 +255,7 @@ export const APP_CATALOG: AppDef[] = [
     appId: 'zoho-recruit', serviceId: 'zoho_recruit', name: 'Zoho Recruit',
     description: 'Applicant tracking system with AI sourcing, video interviews, and onboarding.',
     category: 'recruitment', auth: 'oauth', logoLetter: 'ZR', colorHex: '#E42527',
-    productionStatus: 'coming_soon', isIndiaNative: true, suggestedAgent: 'Hiring Agent',
+    productionStatus: 'production_ready', isIndiaNative: true, suggestedAgent: 'Hiring Agent',
   },
 
   /* ── Finance & Accounting ─────────────────────────────────────────── */
@@ -342,7 +342,7 @@ export const APP_CATALOG: AppDef[] = [
     appId: 'xero', serviceId: 'xero', name: 'Xero',
     description: 'Cloud accounting software for small businesses — invoicing, payroll, and reporting.',
     category: 'finance', auth: 'oauth', logoLetter: 'XR', colorHex: '#13B5EA',
-    productionStatus: 'coming_soon', suggestedAgent: 'Finance Ops Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'Finance Ops Agent',
   },
   {
     appId: 'chargebee', serviceId: 'chargebee', name: 'Chargebee',
@@ -398,22 +398,22 @@ export const APP_CATALOG: AppDef[] = [
     workspaceRoute: 'apps/google-workspace/workspace', suggestedAgent: 'Email Assistant',
   },
   {
-    appId: 'microsoft-teams', serviceId: 'microsoft_teams', name: 'Microsoft Teams',
+    appId: 'microsoft-teams', serviceId: 'teams', name: 'Microsoft Teams',
     description: 'Send notifications, create channels, and post agent updates in Microsoft Teams.',
     category: 'communication', auth: 'oauth', logoLetter: 'MT', colorHex: '#5059C9',
-    productionStatus: 'coming_soon', suggestedAgent: 'Team Communication Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'Team Communication Agent',
   },
   {
     appId: 'zoom', serviceId: 'zoom', name: 'Zoom',
     description: 'Schedule meetings, generate transcripts, and automate follow-ups via Zoom.',
     category: 'communication', auth: 'oauth', logoLetter: 'ZM', colorHex: '#2D8CFF',
-    productionStatus: 'coming_soon', suggestedAgent: 'Team Communication Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'Team Communication Agent',
   },
   {
     appId: 'google-chat', serviceId: 'google_chat', name: 'Google Chat',
     description: 'Send messages and notifications to Google Chat spaces and DMs.',
     category: 'communication', auth: 'oauth', logoLetter: 'GC', colorHex: '#00897B',
-    productionStatus: 'coming_soon', suggestedAgent: 'Team Communication Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'Team Communication Agent',
   },
   {
     appId: 'twilio', serviceId: 'twilio', name: 'Twilio',
@@ -426,7 +426,7 @@ export const APP_CATALOG: AppDef[] = [
     appId: 'loom', serviceId: 'loom', name: 'Loom',
     description: 'Record and share screen videos — automate onboarding videos and tutorials.',
     category: 'communication', auth: 'oauth', logoLetter: 'LO', colorHex: '#625DF5',
-    productionStatus: 'coming_soon', suggestedAgent: 'Team Communication Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'Team Communication Agent',
   },
 
   /* ── Support & CX ─────────────────────────────────────────────────── */
@@ -470,7 +470,7 @@ export const APP_CATALOG: AppDef[] = [
     appId: 'intercom', serviceId: 'intercom', name: 'Intercom',
     description: 'Customer messaging platform — live chat, product tours, and support automation.',
     category: 'support', auth: 'oauth', logoLetter: 'IC', colorHex: '#1F8DED',
-    productionStatus: 'coming_soon', suggestedAgent: 'Support Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'Support Agent',
   },
   {
     appId: 'help-scout', serviceId: 'help_scout', name: 'Help Scout',
@@ -483,13 +483,13 @@ export const APP_CATALOG: AppDef[] = [
     appId: 'gorgias', serviceId: 'gorgias', name: 'Gorgias',
     description: 'Customer support helpdesk built for e-commerce — Shopify, WooCommerce, and more.',
     category: 'support', auth: 'oauth', logoLetter: 'GG', colorHex: '#1B4DFF',
-    productionStatus: 'coming_soon', suggestedAgent: 'Support Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'Support Agent',
   },
   {
     appId: 'aircall', serviceId: 'aircall', name: 'Aircall',
     description: 'Cloud phone system for support and sales teams — call routing, IVR, and analytics.',
     category: 'support', auth: 'oauth', logoLetter: 'AC', colorHex: '#00D55B',
-    productionStatus: 'coming_soon', suggestedAgent: 'Support Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'Support Agent',
   },
 
   /* ── Sales & CRM ──────────────────────────────────────────────────── */
@@ -514,7 +514,7 @@ export const APP_CATALOG: AppDef[] = [
     appId: 'zoho-crm', serviceId: 'zoho_crm', name: 'Zoho CRM',
     description: 'Complete CRM for Indian businesses — leads, deals, and customer lifecycle management.',
     category: 'sales', auth: 'oauth', logoLetter: 'ZC', colorHex: '#E42527',
-    productionStatus: 'coming_soon', isIndiaNative: true, suggestedAgent: 'Sales Agent',
+    productionStatus: 'production_ready', isIndiaNative: true, suggestedAgent: 'Sales Agent',
   },
   {
     appId: 'leadsquared', serviceId: 'leadsquared', name: 'LeadSquared',
@@ -579,7 +579,7 @@ export const APP_CATALOG: AppDef[] = [
     appId: 'gitlab', serviceId: 'gitlab', name: 'GitLab',
     description: 'DevOps platform — source code management, CI/CD, and security scanning.',
     category: 'it', auth: 'oauth', logoLetter: 'GL', colorHex: '#FC6D26',
-    productionStatus: 'coming_soon', suggestedAgent: 'DevOps Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'DevOps Agent',
   },
   {
     appId: 'pagerduty', serviceId: 'pagerduty', name: 'PagerDuty',
@@ -612,8 +612,13 @@ export const APP_CATALOG: AppDef[] = [
   {
     appId: 'servicenow', serviceId: 'servicenow', name: 'ServiceNow',
     description: 'Enterprise ITSM platform — incident, change, and service request management.',
-    category: 'it', auth: 'oauth', logoLetter: 'SN', colorHex: '#62D84E',
-    productionStatus: 'coming_soon', suggestedAgent: 'DevOps Agent',
+    category: 'it', auth: 'api_key', logoLetter: 'SN', colorHex: '#62D84E',
+    productionStatus: 'production_ready', suggestedAgent: 'DevOps Agent',
+    fields: [
+      { key: 'instance', label: 'Instance name', type: 'text', helpText: 'Your instance name from yourcompany.service-now.com' },
+      { key: 'username', label: 'Username', type: 'text' },
+      { key: 'password', label: 'Password', type: 'password' },
+    ],
   },
   {
     appId: 'freshservice', serviceId: 'freshservice', name: 'Freshservice',
@@ -626,7 +631,7 @@ export const APP_CATALOG: AppDef[] = [
     appId: 'azure', serviceId: 'azure', name: 'Azure',
     description: 'Microsoft Azure cloud services — VMs, storage, databases, and DevOps pipelines.',
     category: 'it', auth: 'oauth', logoLetter: 'AZ', colorHex: '#0089D6',
-    productionStatus: 'coming_soon', suggestedAgent: 'DevOps Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'DevOps Agent',
   },
   {
     appId: 'aws', serviceId: 'aws', name: 'AWS',
@@ -646,13 +651,13 @@ export const APP_CATALOG: AppDef[] = [
     appId: 'flock', serviceId: 'flock', name: 'Flock',
     description: 'Team messaging and collaboration built in India — messaging, video calls, and productivity tools.',
     category: 'it', auth: 'oauth', logoLetter: 'FL', colorHex: '#6557FF',
-    productionStatus: 'coming_soon', isIndiaNative: true, suggestedAgent: 'Team Communication Agent',
+    productionStatus: 'production_ready', isIndiaNative: true, suggestedAgent: 'Team Communication Agent',
   },
   {
     appId: 'microsoft-entra', serviceId: 'microsoft_entra', name: 'Microsoft Entra ID',
     description: 'Azure Active Directory rebranded — identity, access management, and conditional access.',
     category: 'it', auth: 'oauth', logoLetter: 'ME', colorHex: '#0078D4',
-    productionStatus: 'coming_soon', suggestedAgent: 'DevOps Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'DevOps Agent',
   },
   {
     appId: 'kissflow', serviceId: 'kissflow', name: 'Kissflow',
@@ -695,7 +700,7 @@ export const APP_CATALOG: AppDef[] = [
     appId: 'mailchimp', serviceId: 'mailchimp', name: 'Mailchimp',
     description: 'Email marketing platform — campaigns, automations, and audience management.',
     category: 'marketing', auth: 'oauth', logoLetter: 'MC', colorHex: '#FFE01B',
-    productionStatus: 'coming_soon', suggestedAgent: 'Sales Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'Sales Agent',
   },
   {
     appId: 'klaviyo', serviceId: 'klaviyo', name: 'Klaviyo',
@@ -716,8 +721,9 @@ export const APP_CATALOG: AppDef[] = [
   {
     appId: 'posthog', serviceId: 'posthog', name: 'PostHog',
     description: 'Product analytics, session recordings, and feature flags — all in one open-source platform.',
-    category: 'analytics', auth: 'oauth', logoLetter: 'PH', colorHex: '#F54E00',
-    productionStatus: 'coming_soon', suggestedAgent: 'Sales Agent',
+    category: 'analytics', auth: 'api_key', logoLetter: 'PH', colorHex: '#F54E00',
+    productionStatus: 'production_ready', suggestedAgent: 'Sales Agent',
+    fields: [{ key: 'api_key', label: 'Personal API key', type: 'password', helpText: 'PostHog → Settings → Personal API Keys → Create key' }],
   },
   {
     appId: 'mixpanel', serviceId: 'mixpanel', name: 'Mixpanel',
@@ -758,7 +764,7 @@ export const APP_CATALOG: AppDef[] = [
     appId: 'power-bi', serviceId: 'power_bi', name: 'Power BI',
     description: 'Microsoft\'s BI tool — connect, visualize, and share business intelligence.',
     category: 'analytics', auth: 'oauth', logoLetter: 'PB', colorHex: '#F2C811',
-    productionStatus: 'coming_soon', suggestedAgent: 'Finance Ops Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'Finance Ops Agent',
   },
   {
     appId: 'looker', serviceId: 'looker', name: 'Looker',
@@ -836,7 +842,7 @@ export const APP_CATALOG: AppDef[] = [
     appId: 'digilocker', serviceId: 'digilocker', name: 'DigiLocker',
     description: 'India\'s official digital document wallet — verify Aadhaar, PAN, driving license instantly.',
     category: 'compliance', auth: 'oauth', logoLetter: 'DL', colorHex: '#0066B3',
-    productionStatus: 'coming_soon', isIndiaNative: true,
+    productionStatus: 'production_ready', isIndiaNative: true,
   },
 
   /* ── Productivity ─────────────────────────────────────────────────── */
@@ -852,37 +858,37 @@ export const APP_CATALOG: AppDef[] = [
     appId: 'asana', serviceId: 'asana', name: 'Asana',
     description: 'Project management and task tracking — organize work, automate workflows, and hit deadlines.',
     category: 'productivity', auth: 'oauth', logoLetter: 'AS', colorHex: '#F06A6A',
-    productionStatus: 'coming_soon', suggestedAgent: 'DevOps Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'DevOps Agent',
   },
   {
     appId: 'monday', serviceId: 'monday', name: 'Monday.com',
     description: 'Work OS — manage projects, teams, and workflows in one visual platform.',
     category: 'productivity', auth: 'oauth', logoLetter: 'MN', colorHex: '#FF3D57',
-    productionStatus: 'coming_soon', suggestedAgent: 'DevOps Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'DevOps Agent',
   },
   {
     appId: 'figma', serviceId: 'figma', name: 'Figma',
     description: 'Collaborative design platform — access designs, comments, and prototypes.',
     category: 'productivity', auth: 'oauth', logoLetter: 'FG', colorHex: '#F24E1E',
-    productionStatus: 'coming_soon', suggestedAgent: 'Team Communication Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'Team Communication Agent',
   },
   {
     appId: 'canva', serviceId: 'canva', name: 'Canva',
     description: 'Design and visual content creation — generate branded assets at scale.',
     category: 'productivity', auth: 'oauth', logoLetter: 'CA', colorHex: '#00C4CC',
-    productionStatus: 'coming_soon', suggestedAgent: 'Team Communication Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'Team Communication Agent',
   },
   {
     appId: 'calendly', serviceId: 'calendly', name: 'Calendly',
     description: 'Automated scheduling — book meetings without back-and-forth emails.',
     category: 'productivity', auth: 'oauth', logoLetter: 'CL', colorHex: '#006BFF',
-    productionStatus: 'coming_soon', suggestedAgent: 'HR Assistant',
+    productionStatus: 'production_ready', suggestedAgent: 'HR Assistant',
   },
   {
     appId: 'miro', serviceId: 'miro', name: 'Miro',
     description: 'Online collaborative whiteboard — brainstorm, plan, and collaborate visually.',
     category: 'productivity', auth: 'oauth', logoLetter: 'MI', colorHex: '#FFD02F',
-    productionStatus: 'coming_soon', suggestedAgent: 'Team Communication Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'Team Communication Agent',
   },
   {
     appId: 'shopify', serviceId: 'shopify', name: 'Shopify',
@@ -908,13 +914,13 @@ export const APP_CATALOG: AppDef[] = [
     appId: 'dropbox-business', serviceId: 'dropbox_business', name: 'Dropbox Business',
     description: 'Cloud storage and collaboration — secure file sharing and team folders.',
     category: 'productivity', auth: 'oauth', logoLetter: 'DB', colorHex: '#0061FF',
-    productionStatus: 'coming_soon', suggestedAgent: 'Team Communication Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'Team Communication Agent',
   },
   {
     appId: 'box', serviceId: 'box', name: 'Box',
     description: 'Cloud content management — secure file storage, sharing, and collaboration.',
     category: 'productivity', auth: 'oauth', logoLetter: 'BX', colorHex: '#0061D5',
-    productionStatus: 'coming_soon', suggestedAgent: 'Team Communication Agent',
+    productionStatus: 'production_ready', suggestedAgent: 'Team Communication Agent',
   },
   {
     appId: 'woocommerce', serviceId: 'woocommerce', name: 'WooCommerce',
