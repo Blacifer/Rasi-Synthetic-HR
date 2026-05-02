@@ -7,6 +7,7 @@ import {
 import { cn } from '../../../lib/utils';
 import { api } from '../../../lib/api-client';
 import type { AuditLogEntry } from '../../../lib/api/governance';
+import type { ApprovalRequest } from '../../../lib/api/approvals';
 import { APP_CATALOG } from './data/catalog';
 
 /* ------------------------------------------------------------------ */
@@ -153,7 +154,7 @@ function StatCard({ label, value, sub, icon: Icon, color }: {
 export default function AppAnalytics() {
   const navigate = useNavigate();
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
-  const [approvals, setApprovals] = useState<any[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -167,9 +168,9 @@ export default function AppAnalytics() {
           api.approvals.list({ limit: 200 }),
         ]);
         setLogs(Array.isArray(logRes.data) ? logRes.data : []);
-        const appData = (approvalRes as any)?.data;
-        setApprovals(Array.isArray(appData) ? appData : Array.isArray(appData?.approvals) ? appData.approvals : []);
+        setApprovals(Array.isArray(approvalRes.data) ? approvalRes.data : []);
       } catch (err: any) {
+        console.error('[AppAnalytics] load failed:', err);
         setError(err?.message || 'Failed to load analytics');
       } finally {
         setLoading(false);

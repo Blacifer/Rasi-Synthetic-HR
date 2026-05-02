@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, CheckCircle2, Eye, Loader2, Save, Shield, X, Zap,
+  AlertCircle, ArrowLeft, CheckCircle2, Eye, Loader2, Save, Shield, X, Zap,
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { api } from '../../../lib/api-client';
@@ -83,6 +83,8 @@ export default function PermissionMatrix() {
   const [agents, setAgents] = useState<AIAgent[]>([]);
   const [connectedAppIds, setConnectedAppIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
@@ -125,14 +127,14 @@ export default function PermissionMatrix() {
           fm[agent.id] = new Set(agent.integrationIds ?? []);
         });
         setFullMap(fm);
-      } catch (err) {
-        console.warn('[PermissionMatrix] load failed:', err);
-        toast.error('Failed to load permission data');
+      } catch (err: any) {
+        console.error('[PermissionMatrix] load failed:', err);
+        setLoadError(err?.message || 'Failed to load permission data');
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [retryCount]);
 
   /* ---- Derive permission level for a cell ---- */
   const getLevel = useCallback((agentId: string, appId: string): PermLevel => {
@@ -174,15 +176,22 @@ export default function PermissionMatrix() {
   const save = useCallback(async () => {
     setSaving(true);
     try {
-      await Promise.all(
+      const results = await Promise.allSettled(
         agents.map((agent) => {
           const connectorIds = [...(fullMap[agent.id] ?? [])];
           return api.unifiedConnectors.updateAgentConnectors(agent.id, connectorIds);
         }),
       );
-      toast.success('Permissions saved');
-      setDirty(false);
-    } catch {
+      const failures = results.filter((r) => r.status === 'rejected');
+      if (failures.length > 0) {
+        console.error('[PermissionMatrix] save partial failure:', failures);
+        toast.error(`Saved with errors: ${failures.length} agent${failures.length > 1 ? 's' : ''} failed to update`);
+      } else {
+        toast.success('Permissions saved');
+        setDirty(false);
+      }
+    } catch (err) {
+      console.error('[PermissionMatrix] save failed:', err);
       toast.error('Failed to save permissions');
     } finally {
       setSaving(false);
@@ -236,6 +245,22 @@ export default function PermissionMatrix() {
           <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
           <p className="text-sm text-slate-400">Loading permission matrix…</p>
         </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-[#080f1a] flex flex-col items-center justify-center gap-4 px-6">
+        <AlertCircle className="w-10 h-10 text-rose-400" />
+        <p className="text-sm font-semibold text-white">Failed to load permission matrix</p>
+        <p className="text-xs text-slate-400 text-center max-w-sm">{loadError}</p>
+        <button
+          onClick={() => { setLoadError(null); setLoading(true); setRetryCount((c) => c + 1); }}
+          className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold transition-colors"
+        >
+          Retry
+        </button>
       </div>
     );
   }

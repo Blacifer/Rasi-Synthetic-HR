@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, Check, Sparkles, Building2,
-  Briefcase, ShoppingCart, Cpu, Zap, X,
+  Briefcase, Loader2, ShoppingCart, Cpu, Zap, X,
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { api } from '../../../lib/api-client';
@@ -323,7 +323,7 @@ function Step4({
 
 /* ─── Step 5: Connect one-by-one ─────────────────────────────────────────── */
 
-function Step5({ apps, agents, onDone }: { apps: AppDef[]; agents: AIAgent[]; onDone: () => void }) {
+function Step5({ apps, agents, agentsLoading, onDone }: { apps: AppDef[]; agents: AIAgent[]; agentsLoading: boolean; onDone: () => void }) {
   const [idx, setIdx] = useState(0);
   const [done, setDone] = useState<Set<string>>(new Set());
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
@@ -337,15 +337,16 @@ function Step5({ apps, agents, onDone }: { apps: AppDef[]; agents: AIAgent[]; on
     if (!current) return;
     if (current.auth === 'oauth') {
       const res = await api.integrations.initOAuth(current.serviceId, '/dashboard/apps/build-stack');
-      if (res.success && (res.data as any)?.url) {
-        window.location.href = (res.data as any).url;
+      const oauthUrl = (res.data as any)?.url as string | undefined;
+      if (res.success && oauthUrl) {
+        window.location.href = oauthUrl;
       } else {
-        throw new Error((res as any).error || 'OAuth failed');
+        throw new Error(res.error || 'Failed to start OAuth flow');
       }
       return;
     }
     const res = await api.integrations.connect(current.serviceId, creds);
-    if (!res.success) throw new Error((res as any).error || 'Connection failed');
+    if (!res.success) throw new Error(res.error || 'Connection failed');
     setDone((d) => new Set([...d, current.appId]));
     setWizardApp(null);
     if (idx + 1 < total) setIdx((i) => i + 1);
@@ -415,9 +416,10 @@ function Step5({ apps, agents, onDone }: { apps: AppDef[]; agents: AIAgent[]; on
           className="flex-1 px-4 py-2.5 rounded-xl border border-white/10 text-slate-400 text-sm hover:bg-white/[0.04] transition-colors">
           Skip for now
         </button>
-        <button onClick={() => setWizardApp(current)}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors">
-          <Zap className="w-3.5 h-3.5" /> Connect
+        <button onClick={() => setWizardApp(current)} disabled={agentsLoading}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors disabled:opacity-50">
+          {agentsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+          {agentsLoading ? 'Loading…' : 'Connect'}
         </button>
       </div>
 
@@ -443,9 +445,16 @@ export default function BuildStackWizard() {
   const [intent, setIntent] = useState('');
   const [appsToConnect, setAppsToConnect] = useState<AppDef[]>([]);
   const [agents, setAgents] = useState<AIAgent[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(true);
 
   useEffect(() => {
-    api.agents.getAll().then((r) => { if (r.success) setAgents((r.data as any) ?? []); });
+    api.agents.getAll()
+      .then((r) => {
+        if (r.success && Array.isArray(r.data)) setAgents(r.data);
+        else if (!r.success) console.error('[BuildStackWizard] agents fetch failed:', r.error);
+      })
+      .catch((err) => console.error('[BuildStackWizard] agents fetch error:', err))
+      .finally(() => setAgentsLoading(false));
   }, []);
 
   function toggleExisting(id: string) {
@@ -493,7 +502,7 @@ export default function BuildStackWizard() {
               />
             )}
             {step === 4 && (
-              <Step5 apps={appsToConnect} agents={agents} onDone={() => navigate('/dashboard/apps')} />
+              <Step5 apps={appsToConnect} agents={agents} agentsLoading={agentsLoading} onDone={() => navigate('/dashboard/apps')} />
             )}
           </div>
 
