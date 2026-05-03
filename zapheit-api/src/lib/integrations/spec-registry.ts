@@ -1880,7 +1880,7 @@ export const PHASE5_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://miro.com/oauth/authorize',
       tokenUrl: 'https://api.miro.com/v1/oauth/token',
-      scopes: ['boards:read', 'boards:write'],
+      scopes: ['boards:read', 'boards:write', 'identity:read', 'team:read'],
       redirectPath: `${API_CALLBACK_BASE}/miro`,
     },
     endpoints: {
