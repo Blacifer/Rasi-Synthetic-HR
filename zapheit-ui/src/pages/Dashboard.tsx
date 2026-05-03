@@ -67,6 +67,7 @@ const ExecutionHistoryPage = lazy(() => import('./dashboard/ExecutionHistoryPage
 const SlackWorkspace = lazy(() => import('./dashboard/apps/workspaces/slack/SlackWorkspace'));
 const JiraWorkspace = lazy(() => import('./dashboard/apps/workspaces/jira/JiraWorkspace'));
 const GitHubWorkspace = lazy(() => import('./dashboard/apps/workspaces/github/GitHubWorkspace'));
+const GitLabWorkspace = lazy(() => import('./dashboard/apps/workspaces/gitlab/GitLabWorkspace'));
 const HubSpotWorkspace = lazy(() => import('./dashboard/apps/workspaces/hubspot/HubSpotWorkspace'));
 const QuickBooksWorkspace = lazy(() => import('./dashboard/apps/workspaces/quickbooks/QuickBooksWorkspace'));
 const GoogleWorkspace = lazy(() => import('./dashboard/apps/workspaces/google-workspace/GoogleWorkspace'));
@@ -1229,6 +1230,7 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="apps/slack/workspace" element={<WorkspaceErrorBoundary><SlackWorkspace /></WorkspaceErrorBoundary>} />
                   <Route path="apps/jira/workspace" element={<WorkspaceErrorBoundary><JiraWorkspace /></WorkspaceErrorBoundary>} />
                   <Route path="apps/github/workspace" element={<WorkspaceErrorBoundary><GitHubWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/gitlab/workspace" element={<WorkspaceErrorBoundary><GitLabWorkspace /></WorkspaceErrorBoundary>} />
                   <Route path="apps/hubspot/workspace" element={<WorkspaceErrorBoundary><HubSpotWorkspace /></WorkspaceErrorBoundary>} />
                   <Route path="apps/quickbooks/workspace" element={<WorkspaceErrorBoundary><QuickBooksWorkspace /></WorkspaceErrorBoundary>} />
                   <Route path="apps/google-workspace/workspace" element={<WorkspaceErrorBoundary><GoogleWorkspace /></WorkspaceErrorBoundary>} />

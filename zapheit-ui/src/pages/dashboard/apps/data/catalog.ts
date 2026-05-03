@@ -580,6 +580,7 @@ export const APP_CATALOG: AppDef[] = [
     description: 'DevOps platform — source code management, CI/CD, and security scanning.',
     category: 'it', auth: 'oauth', logoLetter: 'GL', colorHex: '#FC6D26',
     productionStatus: 'production_ready', suggestedAgent: 'DevOps Agent',
+    workspaceRoute: 'apps/gitlab/workspace',
   },
   {
     appId: 'pagerduty', serviceId: 'pagerduty', name: 'PagerDuty',
