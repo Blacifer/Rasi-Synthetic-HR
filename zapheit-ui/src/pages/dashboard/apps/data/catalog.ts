@@ -868,7 +868,7 @@ export const APP_CATALOG: AppDef[] = [
   },
   {
     appId: 'figma', serviceId: 'figma', name: 'Figma',
-    description: 'Collaborative design platform — access designs, comments, and prototypes.',
+    description: 'Read designs, audit brand consistency, and post review comments. Note: Figma\'s API is read-only for canvas content — agents cannot create or edit designs.',
     category: 'productivity', auth: 'oauth', logoLetter: 'FG', colorHex: '#F24E1E',
     productionStatus: 'production_ready', suggestedAgent: 'Team Communication Agent',
   },
