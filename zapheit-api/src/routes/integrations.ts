@@ -960,7 +960,7 @@ async function buildOAuthAuthorizeUrl(params: {
   const authUrl = new URL(oauthResolvedAuthUrl);
 
   let clientIdEnv = '';
-  const needsOffline = ['zoho_people', 'zoho_recruit', 'zoho_learn', 'google_workspace', 'microsoft_365', 'teams', 'deel', 'gusto', 'flock', 'okta', 'digilocker'].includes(service);
+  const needsOffline = ['zoho_people', 'zoho_recruit', 'zoho_learn', 'zoho_crm', 'google_workspace', 'google_chat', 'microsoft_365', 'teams', 'azure', 'microsoft_entra', 'power_bi', 'deel', 'gusto', 'flock', 'okta', 'digilocker', 'asana', 'gitlab', 'xero', 'box', 'dropbox_business', 'zoom'].includes(service);
 
   if (service === 'zoho_people' || service === 'zoho_recruit' || service === 'zoho_learn') clientIdEnv = 'ZOHO_CLIENT_ID';
   else if (service === 'linkedin') clientIdEnv = 'LINKEDIN_CLIENT_ID';
@@ -977,6 +977,24 @@ async function buildOAuthAuthorizeUrl(params: {
   else if (service === 'quickbooks') clientIdEnv = 'QUICKBOOKS_CLIENT_ID';
   else if (service === 'github') clientIdEnv = 'GITHUB_CLIENT_ID';
   else if (service === 'hubspot') clientIdEnv = 'HUBSPOT_CLIENT_ID';
+  else if (service === 'zoom') clientIdEnv = 'ZOOM_CLIENT_ID';
+  else if (service === 'gitlab') clientIdEnv = 'GITLAB_CLIENT_ID';
+  else if (service === 'xero') clientIdEnv = 'XERO_CLIENT_ID';
+  else if (service === 'figma') clientIdEnv = 'FIGMA_CLIENT_ID';
+  else if (service === 'asana') clientIdEnv = 'ASANA_CLIENT_ID';
+  else if (service === 'monday') clientIdEnv = 'MONDAY_CLIENT_ID';
+  else if (service === 'mailchimp') clientIdEnv = 'MAILCHIMP_CLIENT_ID';
+  else if (service === 'box') clientIdEnv = 'BOX_CLIENT_ID';
+  else if (service === 'dropbox_business') clientIdEnv = 'DROPBOX_CLIENT_ID';
+  else if (service === 'google_chat') clientIdEnv = 'GOOGLE_CLIENT_ID';
+  else if (service === 'calendly') clientIdEnv = 'CALENDLY_CLIENT_ID';
+  else if (service === 'miro') clientIdEnv = 'MIRO_CLIENT_ID';
+  else if (service === 'canva') clientIdEnv = 'CANVA_CLIENT_ID';
+  else if (service === 'zoho_crm') clientIdEnv = 'ZOHO_CLIENT_ID';
+  else if (service === 'aircall') clientIdEnv = 'AIRCALL_CLIENT_ID';
+  else if (service === 'loom') clientIdEnv = 'LOOM_CLIENT_ID';
+  else if (service === 'gorgias') clientIdEnv = 'GORGIAS_CLIENT_ID';
+  else if (service === 'azure' || service === 'microsoft_entra' || service === 'power_bi') clientIdEnv = 'MICROSOFT_CLIENT_ID';
   else throw new Error('OAuth provider not implemented');
 
   const clientId = process.env[clientIdEnv];
@@ -995,12 +1013,20 @@ async function buildOAuthAuthorizeUrl(params: {
     authUrl.searchParams.set('prompt', 'consent');
     authUrl.searchParams.set('include_granted_scopes', 'true');
   }
-  if (service === 'zoho_people' || service === 'zoho_recruit' || service === 'zoho_learn') {
+  if (service === 'zoho_people' || service === 'zoho_recruit' || service === 'zoho_learn' || service === 'zoho_crm') {
     authUrl.searchParams.set('access_type', 'offline');
     authUrl.searchParams.set('prompt', 'consent');
   }
-  if (needsOffline && (service === 'microsoft_365' || service === 'teams')) {
+  if (service === 'google_chat') {
+    authUrl.searchParams.set('access_type', 'offline');
     authUrl.searchParams.set('prompt', 'consent');
+    authUrl.searchParams.set('include_granted_scopes', 'true');
+  }
+  if (service === 'microsoft_365' || service === 'teams' || service === 'azure' || service === 'microsoft_entra' || service === 'power_bi') {
+    authUrl.searchParams.set('prompt', 'consent');
+  }
+  if (service === 'gitlab' || service === 'zoom' || service === 'xero' || service === 'box' || service === 'dropbox_business') {
+    authUrl.searchParams.set('access_type', 'offline');
   }
   if (service === 'okta') {
     authUrl.searchParams.set('nonce', crypto.randomUUID());
