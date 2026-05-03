@@ -505,6 +505,11 @@ export function isItWorkspaceApp(connectorId?: string | null) {
   ].some((candidate) => value.includes(candidate));
 }
 
+export function isDevOpsWorkspaceApp(connectorId?: string | null) {
+  const value = String(connectorId || '').toLowerCase();
+  return ['github', 'gitlab'].some((candidate) => value.includes(candidate));
+}
+
 export function isSlackRail(connectorId?: string | null) {
   return String(connectorId || '').toLowerCase().includes('slack');
 }

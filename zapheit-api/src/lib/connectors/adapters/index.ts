@@ -7,6 +7,7 @@
 import './slack';
 import './jira';
 import './github';
+import './gitlab';
 import './hubspot';
 import './quickbooks';
 import './google-workspace';

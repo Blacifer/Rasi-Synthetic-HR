@@ -5,7 +5,7 @@ import { toast } from '../../../../lib/toast';
 import { cn } from '../../../../lib/utils';
 import type { AIAgent } from '../../../../types';
 import type { UnifiedApp, ConnectionLog, ConnectorExecution, DrawerTab } from '../types';
-import { getAppServiceId, getSetupModeLabel, isCollaborationWorkspaceApp, isComplianceWorkspaceApp, isFinanceWorkspaceApp, isHrWorkspaceApp, isItWorkspaceApp, isMarketingWorkspaceApp, isRecruitmentWorkspaceApp, isSalesWorkspaceApp, isSlackRail, isSupportWorkspaceApp } from '../helpers';
+import { getAppServiceId, getSetupModeLabel, isCollaborationWorkspaceApp, isComplianceWorkspaceApp, isDevOpsWorkspaceApp, isFinanceWorkspaceApp, isHrWorkspaceApp, isItWorkspaceApp, isMarketingWorkspaceApp, isRecruitmentWorkspaceApp, isSalesWorkspaceApp, isSlackRail, isSupportWorkspaceApp } from '../helpers';
 import { AppLogo } from '../components/AppLogo';
 import { OverviewTab } from './OverviewTab';
 import { AgentsTab } from './AgentsTab';
@@ -23,6 +23,7 @@ const ComplianceWorkspaceTab = lazy(() => import('./ComplianceWorkspaceTab').the
 const SalesWorkspaceTab = lazy(() => import('./SalesWorkspaceTab').then((m) => ({ default: m.SalesWorkspaceTab })));
 const MarketingWorkspaceTab = lazy(() => import('./MarketingWorkspaceTab').then((m) => ({ default: m.MarketingWorkspaceTab })));
 const ItWorkspaceTab = lazy(() => import('./ItWorkspaceTab').then((m) => ({ default: m.ItWorkspaceTab })));
+const DevOpsWorkspaceTab = lazy(() => import('./DevOpsWorkspaceTab').then((m) => ({ default: m.DevOpsWorkspaceTab })));
 
 interface DetailDrawerProps {
   app: UnifiedApp;
@@ -45,7 +46,8 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
   const isSalesWorkspace = isSalesWorkspaceApp(rawConnectorId);
   const isMarketingWorkspace = isMarketingWorkspaceApp(rawConnectorId);
   const isItWorkspace = isItWorkspaceApp(rawConnectorId);
-  const hasWorkspaceTab = app.connected && (isCollaborationWorkspace || isHrWorkspace || isRecruitmentWorkspace || isSupportWorkspace || isFinanceWorkspace || isComplianceWorkspace || isSalesWorkspace || isMarketingWorkspace || isItWorkspace);
+  const isDevOpsWorkspace = isDevOpsWorkspaceApp(rawConnectorId);
+  const hasWorkspaceTab = app.connected && (isCollaborationWorkspace || isHrWorkspace || isRecruitmentWorkspace || isSupportWorkspace || isFinanceWorkspace || isComplianceWorkspace || isSalesWorkspace || isMarketingWorkspace || isItWorkspace || isDevOpsWorkspace);
 
   const [tab, setTab] = useState<DrawerTab>(initialTab);
   const [logs, setLogs] = useState<ConnectionLog[]>([]);
@@ -191,8 +193,10 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
                   : isMarketingWorkspace
                     ? 'Marketing Workspace'
                     : isItWorkspace
-                      ? 'IT Workspace'
-                : 'HR Workspace'
+                    ? 'IT Workspace'
+                    : isDevOpsWorkspace
+                      ? 'DevOps Workspace'
+                      : 'HR Workspace'
     }] : []),
     ...(app.connected ? [{ id: 'agents' as DrawerTab, label: `Linked Agents (${linkedAgentIds.size})` }] : []),
     ...(app.connected ? [{ id: 'capabilities' as DrawerTab, label: `Capabilities (${app.agentCapabilities?.length || catalog.length || 0})` }] : []),
@@ -394,6 +398,9 @@ export function DetailDrawer({ app, agents, onClose, onConfigure, onDisconnect, 
                 app={app}
                 agentNames={agentNames}
               />
+            )}
+            {tab === 'workspace' && isDevOpsWorkspace && rawConnectorId && (
+              <DevOpsWorkspaceTab connectorId={rawConnectorId} />
             )}
           </Suspense>
           {tab === 'history' && (
