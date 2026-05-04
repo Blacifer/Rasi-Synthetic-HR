@@ -1004,7 +1004,7 @@ async function buildOAuthAuthorizeUrl(params: {
   authUrl.searchParams.set('client_id', clientId);
   authUrl.searchParams.set('redirect_uri', redirectUri);
   authUrl.searchParams.set('state', state);
-  if (spec.oauthConfig.scopes.length > 0) {
+  if (spec.oauthConfig.scopes.length > 0 && service !== 'calendly') {
     authUrl.searchParams.set('scope', spec.oauthConfig.scopes.join(' '));
   }
 

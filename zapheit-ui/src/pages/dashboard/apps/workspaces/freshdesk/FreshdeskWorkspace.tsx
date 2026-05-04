@@ -10,6 +10,20 @@ import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
 import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import { ProductionTruthBanner } from '../shared';
+import { SharedAutomationTab } from '../shared/SharedAutomationTab';
+
+const FRESHDESK_TRIGGERS = {
+  ticket_created:   { label: 'Ticket created',   description: 'Agent triages and routes new support tickets',         Icon: Ticket },
+  ticket_escalated: { label: 'Ticket escalated', description: 'Agent handles or alerts on high-priority escalations', Icon: AlertCircle },
+  ticket_resolved:  { label: 'Ticket resolved',  description: 'Agent sends satisfaction survey or follow-up',         Icon: CheckCircle2 },
+  sla_breach:       { label: 'SLA breach',       description: 'Agent alerts team when ticket breaches response SLA',  Icon: Clock },
+};
+const FRESHDESK_EXAMPLES = [
+  'List all open tickets assigned to the support team',
+  'Assign ticket #1042 to the billing team',
+  'Send satisfaction survey for ticket #998',
+  'Escalate all tickets breaching SLA in the last hour',
+];
 
 /* ─────────────────────────────────────────────────────────────────────────
    Types
@@ -371,10 +385,11 @@ function ActivityTab() {
 ──────────────────────────────────────────────────────────────────────────── */
 
 const TABS = [
-  { id: 'tickets',   label: 'Tickets',   Icon: Ticket },
-  { id: 'responses', label: 'Responses', Icon: MessageSquare },
-  { id: 'analytics', label: 'Analytics', Icon: BarChart2 },
-  { id: 'activity',  label: 'Activity',  Icon: Activity },
+  { id: 'tickets',    label: 'Tickets',    Icon: Ticket },
+  { id: 'responses',  label: 'Responses',  Icon: MessageSquare },
+  { id: 'analytics',  label: 'Analytics',  Icon: BarChart2 },
+  { id: 'activity',   label: 'Activity',   Icon: Activity },
+  { id: 'automation', label: 'Automation', Icon: Activity },
 ] as const;
 
 type TabId = typeof TABS[number]['id'];
@@ -463,7 +478,8 @@ export default function FreshdeskWorkspace() {
             {tab === 'tickets'   && <TicketsTab tickets={tickets} />}
             {tab === 'responses' && <ResponsesTab drafts={drafts} setDrafts={setDrafts} />}
             {tab === 'analytics' && <AnalyticsTab />}
-            {tab === 'activity'  && <ActivityTab />}
+            {tab === 'activity'   && <ActivityTab />}
+            {tab === 'automation' && <SharedAutomationTab connectorId="freshdesk" triggerTypes={FRESHDESK_TRIGGERS} nlExamples={FRESHDESK_EXAMPLES} accentColor="rose" />}
           </>
         )}
       </div>

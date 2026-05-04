@@ -8,6 +8,19 @@ import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
 import { StatusBadge, EmptyState, ProductionTruthBanner } from '../shared';
+import { SharedAutomationTab } from '../shared/SharedAutomationTab';
+
+const WHATSAPP_TRIGGERS = {
+  message_received:   { label: 'Message received',   description: 'Agent responds to incoming customer messages', Icon: MessageCircle },
+  approval_requested: { label: 'Approval requested', description: 'Agent forwards approval requests via WhatsApp', Icon: Bot },
+  broadcast_sent:     { label: 'Broadcast sent',     description: 'Agent tracks delivery status of broadcasts',   Icon: Send },
+};
+const WHATSAPP_EXAMPLES = [
+  'Send a message to +91-9876543210: "Your order is confirmed"',
+  'List all unread messages in the last 24 hours',
+  'Send approval request to manager for expense EXP-042',
+  'Broadcast payment reminder to overdue customers',
+];
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -547,6 +560,11 @@ export default function WhatsAppWorkspace() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+        {activeTab === 'automation' && (
+          <div className="flex-1 overflow-y-auto">
+            <SharedAutomationTab connectorId="whatsapp" triggerTypes={WHATSAPP_TRIGGERS} nlExamples={WHATSAPP_EXAMPLES} accentColor="emerald" />
           </div>
         )}
       </div>

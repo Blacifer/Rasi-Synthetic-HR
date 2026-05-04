@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bot, GitMerge, CircleDot, FolderGit2, Activity, RefreshCw, Loader2, Link2Off, Plus, X } from 'lucide-react';
+import { ArrowLeft, GitMerge, CircleDot, FolderGit2, Activity, RefreshCw, Loader2, Link2Off, Plus, X } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
@@ -8,6 +8,21 @@ import { StatusBadge, EmptyState } from '../shared';
 import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import { ProjectList, type GitLabProject } from './ProjectList';
 import { MRList, type GitLabMR } from './MRList';
+import { SharedAutomationTab } from '../shared/SharedAutomationTab';
+
+const GITLAB_TRIGGERS = {
+  push_to_branch: { label: 'Push to branch',  description: 'Agent reviews commits when code is pushed',                Icon: Activity },
+  mr_opened:      { label: 'MR opened',        description: 'Agent triages or reviews new merge requests',             Icon: GitMerge },
+  issue_created:  { label: 'Issue created',    description: 'Agent triages or responds to new issues',                 Icon: CircleDot },
+  mr_approved:    { label: 'MR approved',      description: 'Agent auto-merges or notifies when MR is fully approved', Icon: GitMerge },
+  pipeline_failed:{ label: 'Pipeline failed',  description: 'Agent alerts or retries when a CI pipeline fails',        Icon: Activity },
+};
+const GITLAB_EXAMPLES = [
+  'Create an issue in group/project: "Login page crash on mobile"',
+  'Merge MR !15 in group/project after all checks pass',
+  'Comment on issue #42: "Fixed in commit abc123"',
+  'Close issue #7 in group/project',
+];
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -440,27 +455,15 @@ export default function GitLabWorkspace() {
           </div>
         </div>
       ) : activeTab === 'automation' ? (
-        <div className="flex-1 overflow-y-auto p-5">
-          <div className="space-y-3">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Available Automations</h3>
-            {[
-              { label: 'Auto-assign MR reviewer', desc: 'Assign reviewers based on code ownership rules', soon: false },
-              { label: 'MR merge on approval', desc: 'Merge MRs automatically when all approvals received', soon: false },
-              { label: 'Close stale issues', desc: 'Close issues with no activity after N days', soon: true },
-              { label: 'Pipeline failure alert', desc: 'Notify on Slack when a pipeline fails on main', soon: true },
-            ].map((item) => (
-              <div key={item.label} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/5">
-                <Bot className="w-4 h-4 text-orange-400 mt-0.5 shrink-0" />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-white">{item.label}</span>
-                    {item.soon && <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400">Soon</span>}
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-0.5">{item.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="flex-1 overflow-y-auto">
+          <SharedAutomationTab
+            connectorId="gitlab"
+            triggerTypes={GITLAB_TRIGGERS}
+            nlExamples={GITLAB_EXAMPLES}
+            scopeLabel="Project"
+            scopePlaceholder="group/project or leave blank for all"
+            accentColor="orange"
+          />
         </div>
       ) : null}
     </div>

@@ -10,6 +10,21 @@ import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
 import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import { ProductionTruthBanner } from '../shared';
+import { SharedAutomationTab } from '../shared/SharedAutomationTab';
+import { IndianRupee as PaymentIcon, XCircle, RefreshCw as RetryIcon, Star } from 'lucide-react';
+
+const CASHFREE_TRIGGERS = {
+  payment_received:     { label: 'Payment received',     description: 'Agent processes or logs a new successful payment', Icon: PaymentIcon },
+  payment_failed:       { label: 'Payment failed',       description: 'Agent retries or notifies on failed payment',       Icon: XCircle },
+  refund_requested:     { label: 'Refund requested',     description: 'Agent validates and processes refund requests',     Icon: RetryIcon },
+  subscription_created: { label: 'Subscription created', description: 'Agent onboards or notifies new subscribers',        Icon: Star },
+};
+const CASHFREE_EXAMPLES = [
+  'Initiate refund for order ORD-1234',
+  'List all failed payments in the last 7 days',
+  'Create a payment link for ₹5000',
+  'Send payment reminder to customer@email.com',
+];
 
 /* ─────────────────────────────────────────────────────────────────────────
    Types
@@ -363,6 +378,7 @@ const TABS = [
   { id: 'payouts',      label: 'Payouts',         Icon: Send },
   { id: 'links',        label: 'Payment Links',   Icon: Link2 },
   { id: 'activity',    label: 'Activity',         Icon: Activity },
+  { id: 'automation',  label: 'Automation',       Icon: Activity },
 ] as const;
 
 type TabId = typeof TABS[number]['id'];
@@ -452,6 +468,7 @@ export default function CashfreeWorkspace() {
             {tab === 'payouts'      && <PayoutsTab payouts={payouts} />}
             {tab === 'links'        && <PaymentLinksTab />}
             {tab === 'activity'     && <ActivityTab />}
+            {tab === 'automation'   && <SharedAutomationTab connectorId="cashfree" triggerTypes={CASHFREE_TRIGGERS} nlExamples={CASHFREE_EXAMPLES} accentColor="emerald" />}
           </>
         )}
       </div>

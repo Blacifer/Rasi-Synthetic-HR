@@ -7,6 +7,20 @@ import {
 } from 'lucide-react';
 import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import { ProductionTruthBanner } from '../shared';
+import { SharedAutomationTab } from '../shared/SharedAutomationTab';
+
+const GREYTHR_TRIGGERS = {
+  employee_onboarded:  { label: 'Employee onboarded',   description: 'Agent triggers onboarding checklist and notifications', Icon: Users },
+  leave_requested:     { label: 'Leave requested',      description: 'Agent routes leave for manager approval',               Icon: CalendarDays },
+  payroll_processed:   { label: 'Payroll processed',    description: 'Agent sends payslip notifications to employees',        Icon: IndianRupee },
+  attendance_anomaly:  { label: 'Attendance anomaly',   description: 'Agent flags irregular attendance patterns',             Icon: AlertCircle },
+};
+const GREYTHR_EXAMPLES = [
+  'List all pending leave requests for this week',
+  'Approve leave request for employee EMP-204',
+  'Send payslip to all employees for March 2026',
+  'Show attendance report for the engineering team',
+];
 import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
@@ -385,15 +399,16 @@ function ActivityTab({ entries }: { entries: AuditEntry[] }) {
 ──────────────────────────────────────────────────────────────────────────── */
 
 const TABS = [
-  { id: 'employees' as const, label: 'Employees',      Icon: Users },
-  { id: 'leave' as const,     label: 'Leave Requests', Icon: CalendarDays },
-  { id: 'payroll' as const,   label: 'Payroll',        Icon: IndianRupee },
-  { id: 'activity' as const,  label: 'Activity',       Icon: Activity },
+  { id: 'employees' as const,  label: 'Employees',      Icon: Users },
+  { id: 'leave' as const,      label: 'Leave Requests', Icon: CalendarDays },
+  { id: 'payroll' as const,    label: 'Payroll',        Icon: IndianRupee },
+  { id: 'activity' as const,   label: 'Activity',       Icon: Activity },
+  { id: 'automation' as const, label: 'Automation',     Icon: Activity },
 ];
 
 export default function GreythrWorkspace() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'employees' | 'leave' | 'payroll' | 'activity'>('employees');
+  const [activeTab, setActiveTab] = useState<'employees' | 'leave' | 'payroll' | 'activity' | 'automation'>('employees');
   const [showBanner, setShowBanner] = useState(true);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -615,7 +630,8 @@ export default function GreythrWorkspace() {
           {activeTab === 'employees' && <EmployeesTab employees={employees} loading={loading.employees} />}
           {activeTab === 'leave'     && <LeaveTab leaves={leaves} loading={loading.leave} onApprove={handleApprove} onReject={handleReject} />}
           {activeTab === 'payroll'   && <PayrollTab summary={payroll} loading={loading.payroll} onRequestDisbursement={handleRequestPayrollDisbursement} />}
-          {activeTab === 'activity'  && <ActivityTab entries={auditLog} />}
+          {activeTab === 'activity'   && <ActivityTab entries={auditLog} />}
+          {activeTab === 'automation' && <SharedAutomationTab connectorId="greythr" triggerTypes={GREYTHR_TRIGGERS} nlExamples={GREYTHR_EXAMPLES} accentColor="blue" />}
         </div>
       </div>
     </div>

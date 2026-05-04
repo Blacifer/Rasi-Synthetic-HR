@@ -9,6 +9,19 @@ import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import { ProductionTruthBanner } from '../shared';
+import { SharedAutomationTab } from '../shared/SharedAutomationTab';
+
+const NAUKRI_TRIGGERS = {
+  application_received:  { label: 'Application received',  description: 'Agent screens and scores new job applicants',         Icon: Users },
+  candidate_shortlisted: { label: 'Candidate shortlisted', description: 'Agent schedules interview or sends invite',            Icon: CheckCircle2 },
+  job_posted:            { label: 'Job posted',            description: 'Agent promotes or shares newly posted job listings',   Icon: Briefcase },
+};
+const NAUKRI_EXAMPLES = [
+  'List all applications received for the "Senior Engineer" role',
+  'Shortlist top 5 candidates for job JD-2024',
+  'Schedule interview for candidate Rahul Sharma',
+  'Post a new job listing for Data Analyst',
+];
 
 /* ─────────────────────────────────────────────────────────────────────────
    Types
@@ -310,9 +323,10 @@ function ActivityTab() {
 ──────────────────────────────────────────────────────────────────────────── */
 
 const TABS = [
-  { id: 'jobs',       label: 'Job Postings', Icon: Briefcase },
-  { id: 'candidates', label: 'Candidates',   Icon: Users },
-  { id: 'activity',   label: 'Activity',     Icon: Activity },
+  { id: 'jobs',        label: 'Job Postings', Icon: Briefcase },
+  { id: 'candidates',  label: 'Candidates',   Icon: Users },
+  { id: 'activity',    label: 'Activity',     Icon: Activity },
+  { id: 'automation',  label: 'Automation',   Icon: Activity },
 ] as const;
 
 type TabId = typeof TABS[number]['id'];
@@ -405,6 +419,7 @@ export default function NaukriWorkspace() {
             {tab === 'jobs'       && <JobPostingsTab jobs={jobs} />}
             {tab === 'candidates' && <CandidatesTab candidates={candidates} />}
             {tab === 'activity'   && <ActivityTab />}
+            {tab === 'automation' && <SharedAutomationTab connectorId="naukri" triggerTypes={NAUKRI_TRIGGERS} nlExamples={NAUKRI_EXAMPLES} accentColor="amber" />}
           </>
         )}
       </div>

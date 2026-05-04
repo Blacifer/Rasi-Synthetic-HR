@@ -7,6 +7,20 @@ import {
 } from 'lucide-react';
 import AgentSuggestionBanner from '../../../../../components/AgentSuggestionBanner';
 import { ProductionTruthBanner } from '../shared';
+import { SharedAutomationTab } from '../shared/SharedAutomationTab';
+
+const TALLY_TRIGGERS = {
+  invoice_created:      { label: 'Invoice created',      description: 'Agent sends invoice to client automatically',          Icon: FileText },
+  payment_overdue:      { label: 'Payment overdue',      description: 'Agent sends payment reminder to debtor',               Icon: Clock },
+  expense_submitted:    { label: 'Expense submitted',    description: 'Agent routes expense for manager approval',            Icon: Receipt },
+  bank_reconciliation:  { label: 'Bank reconciliation',  description: 'Agent flags discrepancies in bank reconciliation',     Icon: AlertCircle },
+};
+const TALLY_EXAMPLES = [
+  'List all overdue invoices older than 30 days',
+  'Send payment reminder to ABC Corp for INV-1042',
+  'Generate GST report for Q1 2026',
+  'Approve expense claim EXP-0204 for Rahul Sharma',
+];
 import { cn } from '../../../../../lib/utils';
 import { api } from '../../../../../lib/api-client';
 import { toast } from '../../../../../lib/toast';
@@ -513,11 +527,12 @@ const TABS = [
   { id: 'gst'          as const, label: 'GST',          Icon: Shield },
   { id: 'approvals'    as const, label: 'Approvals',    Icon: CheckCircle2 },
   { id: 'activity'     as const, label: 'Activity',     Icon: Activity },
+  { id: 'automation'   as const, label: 'Automation',   Icon: Activity },
 ];
 
 export default function TallyWorkspace() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'transactions' | 'invoices' | 'gst' | 'approvals' | 'activity'>('transactions');
+  const [activeTab, setActiveTab] = useState<'transactions' | 'invoices' | 'gst' | 'approvals' | 'activity' | 'automation'>('transactions');
   const [showBanner, setShowBanner] = useState(true);
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -759,6 +774,7 @@ export default function TallyWorkspace() {
           {activeTab === 'gst'          && <GSTTab gst={gst} loading={loading.gst} onRequestFiling={handleRequestGstFiling} />}
           {activeTab === 'approvals'    && <ApprovalsTab items={pendingApprovals} loading={loading.approvals} onApprove={handleApprovePayment} onReject={handleRejectPayment} />}
           {activeTab === 'activity'     && <ActivityTab entries={auditLog} />}
+          {activeTab === 'automation'   && <SharedAutomationTab connectorId="tally" triggerTypes={TALLY_TRIGGERS} nlExamples={TALLY_EXAMPLES} accentColor="indigo" />}
         </div>
       </div>
     </div>
