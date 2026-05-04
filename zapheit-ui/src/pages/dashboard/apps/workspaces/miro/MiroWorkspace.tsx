@@ -70,7 +70,7 @@ export default function MiroWorkspace() {
     setLoadingBoards(true);
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_boards', { limit: 25 });
-      if (res.success && res.data?.data) setBoards(res.data.data);
+      if (res.success && (res.data as any)?.data) setBoards((res.data as any).data);
       else if (res.success && Array.isArray(res.data)) setBoards(res.data);
     } catch {
       /* silent */

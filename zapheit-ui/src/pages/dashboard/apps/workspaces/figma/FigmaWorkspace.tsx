@@ -78,7 +78,7 @@ export default function FigmaWorkspace() {
     setLoadingFiles(true);
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_files', { limit: 20 });
-      if (res.success && res.data?.files) setFiles(res.data.files);
+      if (res.success && (res.data as any)?.files) setFiles((res.data as any).files);
       else if (res.success && Array.isArray(res.data)) setFiles(res.data);
     } catch {
       /* silent */
@@ -91,7 +91,7 @@ export default function FigmaWorkspace() {
     setLoadingComments(true);
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_comments', { limit: 20 });
-      if (res.success && res.data?.comments) setComments(res.data.comments);
+      if (res.success && (res.data as any)?.comments) setComments((res.data as any).comments);
       else if (res.success && Array.isArray(res.data)) setComments(res.data);
     } catch {
       /* silent */

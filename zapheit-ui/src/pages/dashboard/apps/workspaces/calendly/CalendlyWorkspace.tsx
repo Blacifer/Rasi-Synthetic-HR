@@ -81,7 +81,7 @@ export default function CalendlyWorkspace() {
     setLoadingEvents(true);
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_events', { count: 20, status: 'active' });
-      if (res.success && res.data?.collection) setEvents(res.data.collection);
+      if (res.success && (res.data as any)?.collection) setEvents((res.data as any).collection);
     } catch {
       /* silent */
     } finally {
@@ -93,7 +93,7 @@ export default function CalendlyWorkspace() {
     setLoadingTypes(true);
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_event_types', { count: 20 });
-      if (res.success && res.data?.collection) setEventTypes(res.data.collection);
+      if (res.success && (res.data as any)?.collection) setEventTypes((res.data as any).collection);
     } catch {
       /* silent */
     } finally {

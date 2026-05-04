@@ -82,7 +82,7 @@ export default function AsanaWorkspace() {
     setLoadingProjects(true);
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_projects', { limit: 25 });
-      if (res.success && res.data?.data) setProjects(res.data.data);
+      if (res.success && (res.data as any)?.data) setProjects((res.data as any).data);
       else if (res.success && Array.isArray(res.data)) setProjects(res.data);
     } catch {
       /* silent */
@@ -95,7 +95,7 @@ export default function AsanaWorkspace() {
     setLoadingTasks(true);
     try {
       const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_my_tasks', { limit: 25 });
-      if (res.success && res.data?.data) setTasks(res.data.data);
+      if (res.success && (res.data as any)?.data) setTasks((res.data as any).data);
       else if (res.success && Array.isArray(res.data)) setTasks(res.data);
     } catch {
       /* silent */
