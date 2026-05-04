@@ -1,4 +1,5 @@
 import { AlertCircle, Unplug, RefreshCw, Inbox, Search } from 'lucide-react';
+import { isValidElement } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 
 export interface EmptyStateProps {
@@ -29,7 +30,10 @@ export function EmptyState({ type = 'no-data', title, description, icon, action,
 
   const iconNode = (() => {
     if (!icon) return <defaults.Icon className="w-7 h-7 text-slate-400" />;
-    if (typeof icon === 'function') {
+    // Already a rendered element — pass through
+    if (isValidElement(icon)) return icon;
+    // Function component or forwardRef/memo object — instantiate it
+    if (typeof icon === 'function' || (typeof icon === 'object' && icon !== null)) {
       const IconComp = icon as ComponentType<{ className?: string }>;
       return <IconComp className="w-7 h-7 text-slate-400" />;
     }
