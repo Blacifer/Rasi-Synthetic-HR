@@ -1550,7 +1550,7 @@ export const PHASE5_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://zoom.us/oauth/authorize',
       tokenUrl: 'https://zoom.us/oauth/token',
-      scopes: ['meeting:read:admin', 'recording:read:admin', 'user:read:admin'],
+      scopes: ['meeting:read:meeting', 'meeting:write:meeting', 'cloud_recording:read:recording', 'user:read:user'],
       redirectPath: `${API_CALLBACK_BASE}/zoom`,
     },
     endpoints: {
