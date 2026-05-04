@@ -1730,7 +1730,7 @@ export const PHASE5_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://auth.monday.com/oauth2/authorize',
       tokenUrl: 'https://auth.monday.com/oauth2/token',
-      scopes: ['boards:read', 'boards:write', 'users:read', 'teams:read'],
+      scopes: ['me:read', 'boards:read', 'boards:write', 'workspaces:read', 'workspaces:write', 'users:read', 'updates:read', 'updates:write'],
       redirectPath: `${API_CALLBACK_BASE}/monday`,
     },
     endpoints: {
