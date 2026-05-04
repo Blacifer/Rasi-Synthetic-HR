@@ -1473,11 +1473,8 @@ export const PARTNER_APP_CATALOG: MarketplaceApp[] = [
     actionsUnlocked: ['Send email campaigns', 'Add/remove subscribers', 'Read open rates', 'Trigger automation'],
     setupTimeMinutes: 4,
     bundleIds: ['marketing-stack'],
-    installMethod: 'api_key',
-    requiredFields: [
-      { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-us1', required: true },
-      { name: 'server_prefix', label: 'Server Prefix', type: 'text', placeholder: 'us1 (last part of your API key)', required: false },
-    ],
+    installMethod: 'oauth2',
+    requiredFields: [],
     installCount: 5400,
     featured: false,
     badge: 'Popular',
