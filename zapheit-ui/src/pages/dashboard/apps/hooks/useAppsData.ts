@@ -8,8 +8,17 @@ import { FEATURED_IDS, CATEGORIES } from '../constants';
 export function useAppsData(agents: AIAgent[] = []) {
   const [rawCatalog, setRawCatalog] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  // Tracks services just connected via OAuth — survives subsequent reloads for 15 s
-  const pinnedConnected = useRef<Set<string>>(new Set());
+  // Tracks services just connected via OAuth — survives subsequent reloads for 15 s.
+  // Initialized from sessionStorage so the pin is already set before the first loadData fires
+  // (the OAuth redirect HTML writes the service name to sessionStorage before navigating back).
+  const pinnedConnected = useRef<Set<string>>((() => {
+    const s = new Set<string>();
+    try {
+      const v = sessionStorage.getItem('zapheit_just_connected');
+      if (v) { sessionStorage.removeItem('zapheit_just_connected'); s.add(v); }
+    } catch (_) {}
+    return s;
+  })());
 
   const applyPins = useCallback((entries: any[]) =>
     entries.map((entry) => {

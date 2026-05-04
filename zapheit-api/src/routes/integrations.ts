@@ -877,6 +877,12 @@ function oauthRedirectHtml(target: string, status: 'connected' | 'error'): strin
       <p><a href="${target}">Continue</a></p>
     </div>
     <script>
+      try {
+        var _t = ${safeTarget};
+        var _u = new URL(_t);
+        var _svc = _u.searchParams.get('service');
+        if (_svc) { try { sessionStorage.setItem('zapheit_just_connected', _svc); } catch(_e){} }
+      } catch(_e) {}
       window.location.replace(${safeTarget});
     </script>
   </body>
