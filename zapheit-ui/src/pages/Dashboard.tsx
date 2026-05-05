@@ -86,6 +86,9 @@ const CalendlyWorkspace = lazy(() => import('./dashboard/apps/workspaces/calendl
 const FigmaWorkspace = lazy(() => import('./dashboard/apps/workspaces/figma/FigmaWorkspace'));
 const MiroWorkspace = lazy(() => import('./dashboard/apps/workspaces/miro/MiroWorkspace'));
 const AsanaWorkspace = lazy(() => import('./dashboard/apps/workspaces/asana/AsanaWorkspace'));
+const MailchimpWorkspace = lazy(() => import('./dashboard/apps/workspaces/mailchimp/MailchimpWorkspace'));
+const MondayWorkspace = lazy(() => import('./dashboard/apps/workspaces/monday/MondayWorkspace'));
+const BoxWorkspace = lazy(() => import('./dashboard/apps/workspaces/box/BoxWorkspace'));
 const NotificationsPage = lazy(() => import('./dashboard/NotificationsPage'));
 const SessionRecordingPage = lazy(() => import('./dashboard/SessionRecordingPage'));
 
@@ -1253,6 +1256,9 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="apps/figma/workspace" element={<WorkspaceErrorBoundary><FigmaWorkspace /></WorkspaceErrorBoundary>} />
                   <Route path="apps/miro/workspace" element={<WorkspaceErrorBoundary><MiroWorkspace /></WorkspaceErrorBoundary>} />
                   <Route path="apps/asana/workspace" element={<WorkspaceErrorBoundary><AsanaWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/mailchimp/workspace" element={<WorkspaceErrorBoundary><MailchimpWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/monday/workspace" element={<WorkspaceErrorBoundary><MondayWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/box/workspace" element={<WorkspaceErrorBoundary><BoxWorkspace /></WorkspaceErrorBoundary>} />
                   {/* Unified Hubs Page — replaces individual hub pages */}
                   <Route path="hubs" element={
                     <SectionErrorBoundary fallbackMessage="Hubs failed to load">

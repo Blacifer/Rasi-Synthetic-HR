@@ -702,6 +702,7 @@ export const APP_CATALOG: AppDef[] = [
     description: 'Email marketing platform — campaigns, automations, and audience management.',
     category: 'marketing', auth: 'oauth', logoLetter: 'MC', colorHex: '#FFE01B',
     productionStatus: 'production_ready', suggestedAgent: 'Sales Agent',
+    workspaceRoute: 'apps/mailchimp/workspace',
   },
   {
     appId: 'klaviyo', serviceId: 'klaviyo', name: 'Klaviyo',
@@ -867,6 +868,7 @@ export const APP_CATALOG: AppDef[] = [
     description: 'Work OS — manage projects, teams, and workflows in one visual platform.',
     category: 'productivity', auth: 'oauth', logoLetter: 'MN', colorHex: '#FF3D57',
     productionStatus: 'production_ready', suggestedAgent: 'DevOps Agent',
+    workspaceRoute: 'apps/monday/workspace',
   },
   {
     appId: 'figma', serviceId: 'figma', name: 'Figma',
@@ -926,6 +928,7 @@ export const APP_CATALOG: AppDef[] = [
     description: 'Cloud content management — secure file storage, sharing, and collaboration.',
     category: 'productivity', auth: 'oauth', logoLetter: 'BX', colorHex: '#0061D5',
     productionStatus: 'production_ready', suggestedAgent: 'Team Communication Agent',
+    workspaceRoute: 'apps/box/workspace',
   },
   {
     appId: 'woocommerce', serviceId: 'woocommerce', name: 'WooCommerce',
