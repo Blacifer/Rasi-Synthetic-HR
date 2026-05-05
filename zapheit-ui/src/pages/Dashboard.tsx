@@ -89,6 +89,14 @@ const AsanaWorkspace = lazy(() => import('./dashboard/apps/workspaces/asana/Asan
 const MailchimpWorkspace = lazy(() => import('./dashboard/apps/workspaces/mailchimp/MailchimpWorkspace'));
 const MondayWorkspace = lazy(() => import('./dashboard/apps/workspaces/monday/MondayWorkspace'));
 const BoxWorkspace = lazy(() => import('./dashboard/apps/workspaces/box/BoxWorkspace'));
+const ZoomWorkspace = lazy(() => import('./dashboard/apps/workspaces/zoom/ZoomWorkspace'));
+const ZohoCRMWorkspace = lazy(() => import('./dashboard/apps/workspaces/zoho-crm/ZohoCRMWorkspace'));
+const ZohoRecruitWorkspace = lazy(() => import('./dashboard/apps/workspaces/zoho-recruit/ZohoRecruitWorkspace'));
+const XeroWorkspace = lazy(() => import('./dashboard/apps/workspaces/xero/XeroWorkspace'));
+const MicrosoftTeamsWorkspace = lazy(() => import('./dashboard/apps/workspaces/microsoft-teams/MicrosoftTeamsWorkspace'));
+const DropboxWorkspace = lazy(() => import('./dashboard/apps/workspaces/dropbox/DropboxWorkspace'));
+const FlockWorkspace = lazy(() => import('./dashboard/apps/workspaces/flock/FlockWorkspace'));
+const IntercomWorkspace = lazy(() => import('./dashboard/apps/workspaces/intercom/IntercomWorkspace'));
 const NotificationsPage = lazy(() => import('./dashboard/NotificationsPage'));
 const SessionRecordingPage = lazy(() => import('./dashboard/SessionRecordingPage'));
 
@@ -1259,6 +1267,14 @@ export default function Dashboard({ isDemoMode, onSignUp }: DashboardProps) {
                   <Route path="apps/mailchimp/workspace" element={<WorkspaceErrorBoundary><MailchimpWorkspace /></WorkspaceErrorBoundary>} />
                   <Route path="apps/monday/workspace" element={<WorkspaceErrorBoundary><MondayWorkspace /></WorkspaceErrorBoundary>} />
                   <Route path="apps/box/workspace" element={<WorkspaceErrorBoundary><BoxWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/zoom/workspace" element={<WorkspaceErrorBoundary><ZoomWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/zoho-crm/workspace" element={<WorkspaceErrorBoundary><ZohoCRMWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/zoho-recruit/workspace" element={<WorkspaceErrorBoundary><ZohoRecruitWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/xero/workspace" element={<WorkspaceErrorBoundary><XeroWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/microsoft-teams/workspace" element={<WorkspaceErrorBoundary><MicrosoftTeamsWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/dropbox/workspace" element={<WorkspaceErrorBoundary><DropboxWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/flock/workspace" element={<WorkspaceErrorBoundary><FlockWorkspace /></WorkspaceErrorBoundary>} />
+                  <Route path="apps/intercom/workspace" element={<WorkspaceErrorBoundary><IntercomWorkspace /></WorkspaceErrorBoundary>} />
                   {/* Unified Hubs Page — replaces individual hub pages */}
                   <Route path="hubs" element={
                     <SectionErrorBoundary fallbackMessage="Hubs failed to load">

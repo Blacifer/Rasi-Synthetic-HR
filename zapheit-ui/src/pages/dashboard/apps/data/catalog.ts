@@ -248,6 +248,7 @@ export const APP_CATALOG: AppDef[] = [
     description: 'Applicant tracking system with AI sourcing, video interviews, and onboarding.',
     category: 'recruitment', auth: 'oauth', logoLetter: 'ZR', colorHex: '#E42527',
     productionStatus: 'production_ready', isIndiaNative: true, suggestedAgent: 'Hiring Agent',
+    workspaceRoute: 'apps/zoho-recruit/workspace',
   },
 
   /* ── Finance & Accounting ─────────────────────────────────────────── */
@@ -335,6 +336,7 @@ export const APP_CATALOG: AppDef[] = [
     description: 'Cloud accounting software for small businesses — invoicing, payroll, and reporting.',
     category: 'finance', auth: 'oauth', logoLetter: 'XR', colorHex: '#13B5EA',
     productionStatus: 'production_ready', suggestedAgent: 'Finance Ops Agent',
+    workspaceRoute: 'apps/xero/workspace',
   },
   {
     appId: 'chargebee', serviceId: 'chargebee', name: 'Chargebee',
@@ -394,12 +396,14 @@ export const APP_CATALOG: AppDef[] = [
     description: 'Send notifications, create channels, and post agent updates in Microsoft Teams.',
     category: 'communication', auth: 'oauth', logoLetter: 'MT', colorHex: '#5059C9',
     productionStatus: 'production_ready', suggestedAgent: 'Team Communication Agent',
+    workspaceRoute: 'apps/microsoft-teams/workspace',
   },
   {
     appId: 'zoom', serviceId: 'zoom', name: 'Zoom',
     description: 'Schedule meetings, generate transcripts, and automate follow-ups via Zoom.',
     category: 'communication', auth: 'oauth', logoLetter: 'ZM', colorHex: '#2D8CFF',
     productionStatus: 'production_ready', suggestedAgent: 'Team Communication Agent',
+    workspaceRoute: 'apps/zoom/workspace',
   },
   {
     appId: 'google-chat', serviceId: 'google_chat', name: 'Google Chat',
@@ -463,6 +467,7 @@ export const APP_CATALOG: AppDef[] = [
     description: 'Customer messaging platform — live chat, product tours, and support automation.',
     category: 'support', auth: 'oauth', logoLetter: 'IC', colorHex: '#1F8DED',
     productionStatus: 'production_ready', suggestedAgent: 'Support Agent',
+    workspaceRoute: 'apps/intercom/workspace',
   },
   {
     appId: 'help-scout', serviceId: 'help_scout', name: 'Help Scout',
@@ -507,6 +512,7 @@ export const APP_CATALOG: AppDef[] = [
     description: 'Complete CRM for Indian businesses — leads, deals, and customer lifecycle management.',
     category: 'sales', auth: 'oauth', logoLetter: 'ZC', colorHex: '#E42527',
     productionStatus: 'production_ready', isIndiaNative: true, suggestedAgent: 'Sales Agent',
+    workspaceRoute: 'apps/zoho-crm/workspace',
   },
   {
     appId: 'leadsquared', serviceId: 'leadsquared', name: 'LeadSquared',
@@ -645,6 +651,7 @@ export const APP_CATALOG: AppDef[] = [
     description: 'Team messaging and collaboration built in India — messaging, video calls, and productivity tools.',
     category: 'it', auth: 'oauth', logoLetter: 'FL', colorHex: '#6557FF',
     productionStatus: 'production_ready', isIndiaNative: true, suggestedAgent: 'Team Communication Agent',
+    workspaceRoute: 'apps/flock/workspace',
   },
   {
     appId: 'microsoft-entra', serviceId: 'microsoft_entra', name: 'Microsoft Entra ID',
@@ -914,6 +921,7 @@ export const APP_CATALOG: AppDef[] = [
     description: 'Cloud storage and collaboration — secure file sharing and team folders.',
     category: 'productivity', auth: 'oauth', logoLetter: 'DB', colorHex: '#0061FF',
     productionStatus: 'production_ready', suggestedAgent: 'Team Communication Agent',
+    workspaceRoute: 'apps/dropbox/workspace',
   },
   {
     appId: 'box', serviceId: 'box', name: 'Box',
