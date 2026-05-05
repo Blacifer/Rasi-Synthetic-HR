@@ -211,7 +211,7 @@ export const PHASE1_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://accounts.zoho.com/oauth/v2/auth',
       tokenUrl: 'https://accounts.zoho.com/oauth/v2/token',
-      scopes: ['ZohoPeople.employee.ALL', 'ZohoPeople.forms.READ'],
+      scopes: ['ZohoPeople.employee.ALL', 'ZohoPeople.forms.READ', 'offline_access'],
       redirectPath: `${API_CALLBACK_BASE}/zoho_people`,
     },
     endpoints: {
@@ -1954,7 +1954,7 @@ export const PHASE5_INTEGRATIONS: IntegrationSpec[] = [
     oauthConfig: {
       authorizationUrl: 'https://accounts.zoho.com/oauth/v2/auth',
       tokenUrl: 'https://accounts.zoho.com/oauth/v2/token',
-      scopes: ['ZohoCRM.modules.ALL', 'ZohoCRM.settings.ALL'],
+      scopes: ['ZohoCRM.modules.ALL', 'ZohoCRM.settings.ALL', 'offline_access'],
       redirectPath: `${API_CALLBACK_BASE}/zoho_crm`,
     },
     endpoints: {

@@ -2532,7 +2532,7 @@ export async function getInstalledAppHealth(orgId: string): Promise<Map<string, 
     const rows = (await supabaseRestAsService('integrations', new URLSearchParams({
       organization_id: eq(orgId),
       status: 'neq.waitlisted',
-      select: 'service_type,status,connected_at,last_sync_at,last_error_at,last_error_msg,metadata',
+      select: 'service_type,status,connected_at,last_sync_at,last_error_at,last_error_msg',
     }))) as Array<{
       service_type: string;
       status: string;
@@ -2540,7 +2540,6 @@ export async function getInstalledAppHealth(orgId: string): Promise<Map<string, 
       last_sync_at: string | null;
       last_error_at: string | null;
       last_error_msg: string | null;
-      metadata?: Record<string, unknown> | null;
     }>;
     const map = new Map<string, InstalledAppHealth>();
     (rows || []).forEach((r) => {
@@ -2549,8 +2548,10 @@ export async function getInstalledAppHealth(orgId: string): Promise<Map<string, 
       // OAuth initiation/callback failures can persist an `error` row before the app has ever
       // been connected. Those should not be shown as installed/fixable connections in the apps UI.
       if ((normalizedStatus === 'error' || normalizedStatus === 'expired') && !r.connected_at) return;
-      // Prefer marketplace rows when both exist for the same service_type.
-      const isMarketplace = r.metadata?.marketplace_app === 'true';
+      // All spec-driven connections are treated as non-marketplace (marketplace_app flag is set
+      // only via the marketplace install flow which sets metadata.marketplace_app='true').
+      // We no longer select metadata here to avoid query failures when the column is missing.
+      const isMarketplace = false;
       const nextValue: InstalledAppHealth = {
         service_type: r.service_type,
         status: r.status,

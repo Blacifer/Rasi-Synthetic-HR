@@ -3784,7 +3784,7 @@ router.get('/catalog/unified', authenticateToken, async (req, res) => {
     const agents = (await supabaseRestAsService('ai_agents', new URLSearchParams({
       organization_id: eqFilter(orgId),
       select: 'id,metadata',
-    }))) as Array<{ id: string; metadata?: any }>;
+    })).catch(() => [])) as Array<{ id: string; metadata?: any }>;
 
     // Build a map: connectorId → count of agents using it
     const agentCountMap = new Map<string, number>();
