@@ -87,8 +87,10 @@ export default function BoxWorkspace() {
   const checkConnection = useCallback(async () => {
     setChecking(true);
     try {
-      const res = await api.unifiedConnectors.executeAction(CONNECTOR_ID, 'list_folder_items', { folder_id: '0', limit: 1 });
-      setConnected(res.success);
+      const res = await api.integrations.getAll();
+      const items = Array.isArray(res.data) ? res.data : [];
+      const entry = items.find((i: any) => i.service_type === CONNECTOR_ID || i.id === CONNECTOR_ID);
+      setConnected(entry?.status === 'connected');
     } catch {
       setConnected(false);
     } finally {

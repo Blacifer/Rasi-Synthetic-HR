@@ -63,10 +63,9 @@ export const APP_CATALOG: AppDef[] = [
   {
     appId: 'zoho-people', serviceId: 'zoho_people', name: 'Zoho People',
     description: 'Employee directory, leave management, and attendance tracking for HR agents.',
-    category: 'hr', auth: 'api_key', logoLetter: 'ZP', colorHex: '#E42527',
+    category: 'hr', auth: 'oauth', logoLetter: 'ZP', colorHex: '#E42527',
     productionStatus: 'production_ready', isIndiaNative: true,
     workspaceRoute: 'apps/zoho/workspace', suggestedAgent: 'HR Assistant',
-    fields: [{ key: 'api_key', label: 'API key', type: 'password', helpText: 'Zoho People → Settings → Developer Space → API Keys' }],
   },
   {
     appId: 'microsoft-365', serviceId: 'microsoft_365', name: 'Microsoft 365',
@@ -150,13 +149,6 @@ export const APP_CATALOG: AppDef[] = [
     productionStatus: 'production_ready', suggestedAgent: 'HR Assistant',
     fields: [{ key: 'service_user_id', label: 'Service user ID', type: 'text' }, { key: 'token', label: 'Token', type: 'password' }],
   },
-  {
-    appId: 'zoho-people-oauth', serviceId: 'zoho_people', name: 'Zoho People (OAuth)',
-    description: 'Connect Zoho People via OAuth for automated employee data sync.',
-    category: 'hr', auth: 'oauth', logoLetter: 'ZO', colorHex: '#E42527',
-    productionStatus: 'production_ready', isIndiaNative: true, suggestedAgent: 'HR Assistant',
-  },
-
   /* ── Recruitment & Hiring ─────────────────────────────────────────── */
   {
     appId: 'naukri', serviceId: 'naukri', name: 'Naukri RMS',
